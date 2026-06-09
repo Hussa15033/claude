@@ -1,0 +1,7 @@
+<transform sourceClass='EnsLib.HL7.Message' targetClass='EnsLib.HL7.Message' sourceDocType='2.3:ADT_A01' targetDocType='2.5:ADT_A01' create='copy' language='objectscript'>
+<assign value='"EPIC"' property='target.{MSH:3.1}' action='set'/>
+<assign value='"001"' property='target.{MSH:4.1}' action='set'/>
+<assign value='"2.5"' property='target.{MSH:12}' action='set'/>
+<assign value='"001"' property='target.{PID:3(1).4}' action='set'/>
+<assign value='"001"' property='target.{PV1:3.4}' action='set'/>
+</transform>

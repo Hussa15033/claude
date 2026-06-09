@@ -1,0 +1,5 @@
+<transform sourceClass='EnsLib.HL7.Message' targetClass='EnsLib.HL7.Message' sourceDocType='2.3:ADT_A01' targetDocType='2.5:ADT_A01' create='copy' language='objectscript'>
+<assign value='"2.5"' property='target.{MSH:12}' action='set'/>
+<if condition='source.{PID:8}="F"'><true><assign value='"2"' property='target.{PID:8}' action='set'/></true></if>
+<if condition='source.{PID:8}="M"'><true><assign value='"1"' property='target.{PID:8}' action='set'/></true></if>
+</transform>

@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ISC DTL Generator</title>
+<link rel="icon" href="https://i.pinimg.com/736x/11/2a/b3/112ab34c423c70caa37e7f8a83d9c2a7.jpg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  /* Material Design palette, matte light surfaces, FLAT: borders not shadows,
+     SHARP corners (small radius). InterSystems green = primary, IRIS blue =
+     secondary. The right pane is tabbed (Progress / Outputs / Live / Classes /
+     History); the Build form is a fixed left pane. */
+  :root{
+    --primary:#1a8f6c; --primary-d:#136b51; --primary-c:#ffffff;
+    --primary-cont:#d6efe5; --on-primary-cont:#00391f;
+    --secondary:#1f7d9c; --secondary-cont:#dbeef6; --on-secondary-cont:#001f29;
+    --bg:#eef1f0; --surface:#ffffff; --surface-2:#f3f5f4; --surface-3:#e7ebe9;
+    --txt:#1a1c1b; --muted:#5b6360; --outline:#b7c0bc; --outline-v:#d6ddd9;
+    --warn:#9a6700; --warn-cont:#ffe7b8;
+    --bad:#ba1a1a; --bad-cont:#ffe2de;
+    --ok:#1a8f6c;
+    --mono:'Roboto Mono','SFMono-Regular',Consolas,Menlo,monospace;
+    --rad:4px;          /* sharp corners */
+    --e1:0 1px 2px rgba(0,0,0,.12);   /* single subtle shadow, used sparingly */
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;color:var(--txt);background:var(--bg);
+    font:14px/1.55 Roboto,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+  .panel{background:var(--surface);border:1px solid var(--outline-v);border-radius:var(--rad)}
+  /* header — flat top app bar */
+  header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:12px 24px;
+    background:var(--primary);color:var(--primary-c);border-bottom:1px solid var(--primary-d)}
+  header .mark{width:36px;height:36px;border-radius:var(--rad);object-fit:cover;animation:floaty 6s ease-in-out infinite}
+  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+  header h1{font-size:20px;margin:0;font-weight:500;letter-spacing:.15px;color:var(--primary-c)}
+  header .tag{color:rgba(255,255,255,.82);font-size:12px;letter-spacing:.2px}
+  header .health{margin-left:auto;font-size:12.5px;display:flex;align-items:center;gap:8px;cursor:pointer;
+    padding:7px 14px;border-radius:var(--rad);background:rgba(255,255,255,.16);color:var(--primary-c);transition:background .2s}
+  header .health:hover{background:rgba(255,255,255,.26)}
+  .dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.55)}
+  .dot.ok{background:#9ff5cd;box-shadow:0 0 0 0 rgba(159,245,205,.7);animation:pulse 2.2s infinite}
+  .dot.bad{background:#ffb4ab}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(159,245,205,.6)}70%{box-shadow:0 0 0 7px rgba(159,245,205,0)}100%{box-shadow:0 0 0 0 rgba(159,245,205,0)}}
+  /* two persistent columns: Build form (left) + tabbed pane (right) */
+  main{display:grid;grid-template-columns:minmax(420px,1fr) minmax(560px,1.3fr);gap:18px;padding:18px 24px;align-items:start}
+  .col{padding:22px;max-height:calc(100vh - 110px);overflow:auto}
+  .rpane{padding:0;max-height:calc(100vh - 110px);display:flex;flex-direction:column;overflow:hidden}
+  /* right-pane tab bar */
+  .rtabs{display:flex;gap:0;border-bottom:1px solid var(--outline-v);background:var(--surface-2);flex:0 0 auto}
+  .rtab{position:relative;padding:13px 18px;border:none;background:none;cursor:pointer;font-size:13.5px;font-weight:500;
+    color:var(--muted);transition:color .15s,background .15s;font-family:inherit;border-right:1px solid var(--outline-v)}
+  .rtab:hover{color:var(--txt);background:var(--surface-3)}
+  .rtab.active{color:var(--primary);background:var(--surface)}
+  .rtab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--primary)}
+  .rbody{padding:22px;overflow:auto;flex:1 1 auto}
+  .rview{display:none;animation:fade .22s ease}.rview.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.9px;color:var(--primary);margin:0 0 12px;font-weight:700}
+  label{display:block;font-size:12px;color:var(--muted);margin:16px 0 6px;font-weight:500}
+  /* flat text fields */
+  textarea,input,select{width:100%;color:var(--txt);background:var(--surface);border:1px solid var(--outline);
+    border-radius:var(--rad);padding:10px 12px;font-family:var(--mono);font-size:12.5px;resize:vertical;transition:border-color .15s}
+  textarea{min-height:58px}.spec{min-height:78px;font-family:inherit}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
+  select option{background:var(--surface)}
+  .ex{background:var(--surface-2);border:1px solid var(--outline-v);border-radius:var(--rad);padding:13px;margin-bottom:10px;animation:fade .3s ease}
+  .ex .ph{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px}
+  .ex .ph .rm{margin-left:auto;color:var(--bad);background:none;border:none;cursor:pointer;font-size:16px;border-radius:var(--rad);width:28px;height:28px;transition:background .15s}
+  .ex .ph .rm:hover{background:var(--bad-cont)}
+  .tagp{font-size:10px;background:var(--primary-cont);color:var(--on-primary-cont);padding:2px 9px;border-radius:var(--rad);font-weight:500}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px}
+  .note{font-size:12px;color:var(--on-primary-cont);background:var(--primary-cont);border:1px solid var(--outline-v);border-left:3px solid var(--primary);border-radius:var(--rad);padding:11px 14px;margin:12px 0}
+  button{font-family:inherit}
+  /* flat buttons, sharp corners */
+  button.primary{position:relative;background:var(--primary);color:var(--primary-c);border:none;border-radius:var(--rad);
+    padding:12px 26px;font-weight:500;cursor:pointer;font-size:14px;letter-spacing:.2px;transition:background .15s;overflow:hidden}
+  button.primary:hover{background:var(--primary-d)}
+  button.primary:disabled{background:var(--surface-3);color:var(--muted);cursor:not-allowed}
+  button.ghost{background:var(--surface);color:var(--primary);border:1px solid var(--outline);border-radius:var(--rad);padding:9px 16px;cursor:pointer;font-weight:500;transition:background .15s}
+  button.ghost:hover{background:var(--surface-2)}
+  button.ok{background:var(--primary);color:var(--primary-c);border:none;border-radius:var(--rad);padding:10px 18px;font-weight:500;cursor:pointer;transition:background .15s}
+  button.ok:hover{background:var(--primary-d)}
+  button.blue{background:var(--secondary);color:#fff;border:none;border-radius:var(--rad);padding:10px 18px;font-weight:500;cursor:pointer}
+  button.danger{background:var(--surface);color:var(--bad);border:1px solid var(--bad);border-radius:var(--rad);padding:10px 18px;font-weight:500;cursor:pointer;transition:background .15s}
+  button.danger:hover{background:var(--bad-cont)}
+  .badge{display:inline-block;padding:4px 11px;border-radius:var(--rad);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  .b-QUEUED,.b-PLANNING{background:var(--surface-3);color:var(--muted)}
+  .b-AWAITING_PLAN,.b-AWAITING_ATTEMPT{background:var(--warn-cont);color:var(--warn)}
+  .b-RUNNING,.b-GENERATING{background:var(--secondary-cont);color:var(--on-secondary-cont)}
+  .b-SUCCESS{background:var(--primary-cont);color:var(--on-primary-cont)}.b-FAILED,.b-REJECTED{background:var(--bad-cont);color:var(--bad)}
+  .att{display:flex;gap:12px;align-items:flex-start;padding:11px 13px;border:1px solid var(--outline-v);border-radius:var(--rad);margin-bottom:8px;background:var(--surface-2);animation:slidein .3s ease}
+  @keyframes slidein{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+  .att .n{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:0 0 auto;background:var(--primary);color:#fff}
+  .att.ph-SUCCESS .n{background:var(--primary)}.att.ph-COMPILE_FAIL .n,.att.ph-RUNTIME_FAIL .n,.att.ph-LLM_ERROR .n{background:var(--bad)}.att.ph-MISMATCH .n{background:var(--warn)}
+  .att .t{font-weight:500;font-size:13px}.att .m{color:var(--muted);font-size:12px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono)}
+  .meta{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:6px 0 12px}.meta b{color:var(--txt);font-weight:500}
+  .card{border-radius:var(--rad);padding:18px;margin-top:14px;background:var(--surface);border:1px solid var(--outline-v);border-left:3px solid var(--primary);animation:fade .3s ease}
+  .card.warn{border-left-color:var(--warn)} .card.blue{border-left-color:var(--secondary)}
+  .card h2{color:var(--txt)}
+  .plan{white-space:pre-wrap;font-size:13px;line-height:1.65}
+  .io{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--outline-v);border-radius:var(--rad);overflow:hidden;font-family:var(--mono);font-size:12px;background:var(--surface-2)}
+  .io .head{background:var(--surface-3);padding:7px 11px;font-weight:500;border-bottom:1px solid var(--outline-v);color:var(--primary)}
+  .io .side{overflow:auto;max-height:280px;white-space:pre-wrap;word-break:break-all;padding:9px 11px}.io .side.r{border-left:1px solid var(--outline-v)}
+  .dtl{background:#1b211f;color:#d4e7dd;border-radius:var(--rad);padding:14px;font-family:var(--mono);font-size:12px;white-space:pre;overflow:auto;max-height:420px}
+  .empty{color:var(--muted);text-align:center;padding:44px 0}
+  .err{background:var(--bad-cont);color:var(--bad);border:1px solid var(--bad);padding:11px 14px;border-radius:var(--rad);margin-top:12px;font-size:13px;white-space:pre-wrap;word-break:break-word}
+  .tabs{display:flex;gap:4px;margin:16px 0 12px;border-bottom:1px solid var(--outline-v)}
+  .tab{padding:9px 16px;border:none;cursor:pointer;background:none;font-size:13px;color:var(--muted);font-weight:500;border-bottom:3px solid transparent;transition:.15s}
+  .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+  .hidden{display:none}
+  .pill{font-family:var(--mono);font-size:11px;background:var(--surface-3);padding:3px 9px;border-radius:var(--rad);color:var(--muted)}
+  a{color:var(--secondary);font-weight:500;text-decoration:none}a:hover{text-decoration:underline}
+  .links{display:flex;gap:16px;font-size:13px}
+  .listcard{padding:13px 15px;border:1px solid var(--outline-v);border-radius:var(--rad);margin-bottom:10px;background:var(--surface);cursor:pointer;transition:background .15s;animation:fade .3s ease}
+  .listcard:hover{background:var(--surface-2);border-color:var(--outline)}
+  .filechip{display:inline-flex;align-items:center;gap:8px;background:var(--secondary-cont);color:var(--on-secondary-cont);border-radius:var(--rad);padding:8px 12px;margin-top:8px;font-size:12px}
+  .seg{display:inline-flex;background:var(--surface);border:1px solid var(--outline);border-radius:var(--rad);overflow:hidden}
+  .seg button{border:none;background:transparent;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--muted);font-weight:500;transition:.15s;border-right:1px solid var(--outline-v)}
+  .seg button:last-child{border-right:none}
+  .seg button.on{background:var(--primary);color:#fff}
+  .spinner{width:15px;height:15px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-2px}
+  .ghost .spinner,.tab .spinner,.rtab .spinner{border-color:rgba(26,143,108,.3);border-top-color:var(--primary)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  ::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-thumb{background:var(--outline);border-radius:var(--rad);border:3px solid var(--bg)}::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<header>
+  <img class="mark" src="https://i.pinimg.com/736x/11/2a/b3/112ab34c423c70caa37e7f8a83d9c2a7.jpg" alt="ISC" onerror="this.style.display='none'"/>
+  <div><h1>ISC DTL Generator</h1><div class="tag">Generate &amp; refine InterSystems HL7 DTLs from a specification</div></div>
+  <div class="health" id="health" title="Click to re-run the init/health check"><span class="dot" id="hdot"></span><span id="htxt">checking…</span></div>
+</header>
+<main>
+  <!-- LEFT: persistent Build form -->
+  <div class="col panel">
+    <h2>1 · Specification</h2>
+    <div class="note">The DTL is generated <b>from the specification</b>. Provide example <b>input</b> messages only — there are no expected outputs. The first input is the one the generated DTL is run on.</div>
+    <div class="seg" id="specmode"><button class="on" data-m="text">Type text</button><button data-m="file">Upload document</button></div>
+    <div id="specText"><label>Describe the transformation the DTL should perform</label>
+      <textarea class="spec" id="spec" placeholder="e.g. Inbound ADT^A01 from EPICADT (HL7 v2.3). Rename the sending application to EPIC, normalize facility SITEA to 001 across MSH/PID/PV1, and upgrade the message to v2.5."></textarea></div>
+    <div id="specFile" class="hidden"><label>Upload a specification document (.pdf, .docx, .txt, .md …)</label>
+      <input type="file" id="specfileinput" accept=".pdf,.docx,.txt,.md,.hl7,.csv,.json,.doc"/><div id="specfilestatus"></div></div>
+    <label>Job name (optional)</label><input id="jobname" placeholder="ADT_A01_Admit"/>
+
+    <h2 style="margin-top:22px">2 · Example input messages</h2>
+    <div id="inputs"></div>
+    <button class="ghost" id="addinput">＋ Add input message</button>
+
+    <h2 style="margin-top:22px">3 · LLM provider</h2>
+    <div class="opts">
+      <div><label>Provider</label><select id="provider"><option value="openai" selected>OpenAI (live API)</option><option value="mock">Mock (offline demo)</option></select></div>
+      <div><label>Model</label><div style="display:flex;gap:6px"><select id="model" style="flex:1"><option value="gpt-4o">gpt-4o</option></select><button class="ghost" id="refreshmodels" title="Load your account's models" style="padding:9px 11px">⟳</button></div></div>
+    </div>
+    <div id="openaibox">
+      <label>OpenAI API key <span style="color:var(--muted)">(kept in this browser; sent only to your IRIS server)</span></label>
+      <div style="display:flex;gap:6px"><input id="apikey" type="password" placeholder="sk-..." autocomplete="off" style="flex:1"/>
+        <label style="display:flex;align-items:center;gap:5px;white-space:nowrap;margin:0;color:var(--muted)"><input type="checkbox" id="remember" checked style="width:auto"/> remember</label></div>
+      <div id="modelhint" style="color:var(--muted);font-size:11px;margin-top:4px"></div>
+    </div>
+    <div class="row"><button class="primary" id="go">Plan &amp; Generate ▶</button><button class="ghost" id="sample">Load example</button><span id="jobid" class="pill hidden"></span></div>
+    <div id="formerr" class="err hidden"></div>
+  </div>
+
+  <!-- RIGHT: tabbed pane (Progress / Outputs / Live test / Classes / History) -->
+  <div class="rpane panel">
+    <div class="rtabs">
+      <button class="rtab active" data-view="progress">◷ Progress</button>
+      <button class="rtab" data-view="outputs">📤 Outputs</button>
+      <button class="rtab" data-view="live">⚡ Live test</button>
+      <button class="rtab" data-view="classes">📦 Classes</button>
+      <button class="rtab" data-view="history">🕮 History</button>
+    </div>
+    <div class="rbody">
+
+      <!-- PROGRESS -->
+      <div id="view-progress" class="rview active">
+        <div style="display:flex;align-items:center;gap:14px"><h2 style="margin:0">Current transformation</h2><div id="links" class="links" style="margin-left:auto"></div></div>
+        <div id="status"><div class="empty">Add a specification and at least one input message, then click <b>Plan &amp; Generate</b>. You'll review a plan, then approve the build. Failed compiles are auto-corrected and shown here.</div></div>
+        <div id="plangate" class="card hidden">
+          <h2>Proposed transformation plan</h2><div class="plan" id="plantext"></div>
+          <div class="row"><button class="ok" id="approveplan">✓ Approve &amp; build</button><button class="danger" id="rejectplan">✗ Revise plan…</button></div>
+        </div>
+        <div id="attemptgate" class="card warn hidden">
+          <h2>Attempt <span id="atnum"></span> — review</h2><div class="meta" id="atmeta"></div>
+          <div class="tabs"><div class="tab active" data-tab="out">Input → Output</div><div class="tab" data-tab="dtl">Generated DTL</div></div>
+          <div id="tab-out"><div class="io"><div class="side l"><div class="head">Primary input</div><div id="dexp"></div></div><div class="side r"><div class="head">Produced output</div><div id="dact"></div></div></div></div>
+          <div id="tab-dtl" class="hidden"><div class="dtl" id="dtlsrc">—</div></div>
+          <label style="margin-top:12px">Feedback (used if you reject this attempt)</label>
+          <textarea id="attfeedback" placeholder="e.g. PID-8 should map F→2; also set MSH-4 to 001…"></textarea>
+          <div class="row"><button class="ok" id="acceptattempt">✓ Accept &amp; transform all inputs</button><button class="danger" id="rejectattempt">✗ Reject &amp; regenerate</button></div>
+        </div>
+      </div>
+
+      <!-- OUTPUTS -->
+      <div id="view-outputs" class="rview">
+        <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0">Transformed outputs</h2><span id="outjob" class="pill"></span><button class="ghost" id="refreshout" style="margin-left:auto">⟳ Refresh</button></div>
+        <p style="color:var(--muted);font-size:13px">Every input message run through the built DTL. Correct an output and/or add feedback — the DTL is rebuilt and all inputs re-transformed.</p>
+        <div id="outlist"></div>
+      </div>
+
+      <!-- LIVE -->
+      <div id="view-live" class="rview">
+        <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0">Live test</h2><span id="livejob" class="pill"></span></div>
+        <p style="color:var(--muted);font-size:13px">Paste any input message and run it through the built DTL. Correct the output and give feedback to improve the DTL.</p>
+        <label>Input message</label><textarea id="liveinput" style="min-height:90px"></textarea>
+        <div class="row"><button class="blue" id="runlive">⚡ Transform</button></div>
+        <div id="liveresult" class="hidden">
+          <div class="io" style="margin-top:14px"><div class="side l"><div class="head">Input</div><div id="liveIn"></div></div><div class="side r"><div class="head">Produced output (editable)</div><textarea id="liveOut" style="border:none;background:transparent;min-height:200px;border-radius:0"></textarea></div></div>
+          <label>Feedback</label><textarea id="livefb" placeholder="What's wrong / what should change…"></textarea>
+          <div class="row"><button class="ok" id="livecorrect">✓ Apply correction + feedback to the DTL</button></div>
+          <div id="livemsg" style="color:var(--muted);font-size:12px;margin-top:8px"></div>
+        </div>
+      </div>
+
+      <!-- CLASSES -->
+      <div id="view-classes" class="rview">
+        <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0">Generated DTL classes</h2><button class="ghost" id="refreshcls" style="margin-left:auto">⟳ Refresh</button></div>
+        <p style="color:var(--muted);font-size:13px">All DTL classes generated in this session. Click one to view its source.</p>
+        <div style="display:grid;grid-template-columns:260px 1fr;gap:14px"><div id="clslist"></div><div><div class="dtl" id="clssrc">Select a class…</div></div></div>
+      </div>
+
+      <!-- HISTORY -->
+      <div id="view-history" class="rview">
+        <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0">History</h2><button class="ghost" id="refreshhist" style="margin-left:auto">⟳ Refresh</button></div>
+        <p style="color:var(--muted);font-size:13px">Every job, newest first. Refinements nest under their parent.</p>
+        <div id="histlist"></div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<script>
+function deriveApiBase(){let p=location.pathname;if(/\/[^/]*\.[^/]*$/.test(p))p=p.replace(/\/[^/]*$/,"/");p=p.replace(/\/+$/,"");return p.replace(/\/ui$/,"/api");}
+const APIBASE=deriveApiBase();const api=p=>APIBASE+p;
+const $=s=>document.querySelector(s);
+const el=(t,c,txt)=>{const e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e;};
+async function jget(p){const r=await fetch(api(p));return[r.ok,await r.json()];}
+async function jpost(p,b){const r=await fetch(api(p),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});let j;try{j=await r.json()}catch(e){j={}}return[r.ok,j];}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const fmtScore=x=>(x==null||x==="")?"—":(Math.round(x*1000)/1000).toFixed(3);
+const norm=s=>(s||"").replace(/\r/g,"\n").replace(/\n+$/,"");
+
+// Right-pane tab switching (Progress / Outputs / Live test / Classes / History).
+function showView(v){
+  document.querySelectorAll(".rtab").forEach(x=>x.classList.toggle("active",x.dataset.view===v));
+  document.querySelectorAll(".rview").forEach(x=>x.classList.toggle("active",x.id==="view-"+v));
+  if(v==="outputs")loadOutputs();
+  if(v==="classes")loadClasses();
+  if(v==="history")loadHistory();
+  if(v==="live")$("#livejob").textContent=currentJob?("job "+currentJob):"(build a DTL first)";
+}
+document.querySelectorAll(".rtab").forEach(b=>b.onclick=()=>showView(b.dataset.view));
+
+// spec mode
+let specReady=null;
+$("#specmode").querySelectorAll("button").forEach(b=>b.onclick=()=>{$("#specmode").querySelectorAll("button").forEach(x=>x.classList.remove("on"));b.classList.add("on");const f=b.dataset.m==="file";$("#specFile").classList.toggle("hidden",!f);$("#specText").classList.toggle("hidden",f);});
+$("#specfileinput").onchange=async e=>{const f=e.target.files[0];if(!f)return;$("#specfilestatus").innerHTML="";
+  const chip=el("div","filechip");chip.appendChild(el("span",null,"📄 "+f.name));const st=el("span",null," — uploading…");st.style.color="var(--muted)";chip.appendChild(st);$("#specfilestatus").appendChild(chip);
+  const b64=await fileToB64(f);const [ok,d]=await jpost("/upload",{filename:f.name,dataBase64:b64});
+  if(!ok){st.textContent=" — upload failed: "+(d.error||"");st.style.color="var(--bad)";return;}
+  specReady=null;
+  for(let i=0;i<25;i++){await sleep(1200);const [o2,sp]=await jget("/specs/"+d.token);if(o2&&sp.status!=="PENDING"){if(sp.status==="READY"){specReady=sp.text;st.textContent=" — extracted "+sp.text.length+" chars ✓";st.style.color="var(--ok)";}else{st.textContent=" — extraction error: "+(sp.error||"");st.style.color="var(--bad)";}return;}}
+  st.textContent=" — still processing…";};
+function fileToB64(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.readAsDataURL(f);});}
+
+// input list
+function addInput(val=""){const box=$("#inputs");const wrap=el("div","ex");const ph=el("div","ph");ph.appendChild(el("b",null,"Input message"));const ptag=el("span","tagp","primary");ph.appendChild(ptag);const rm=el("button","rm","✕");rm.onclick=()=>{wrap.remove();renumber()};ph.appendChild(rm);wrap.appendChild(ph);const ta=el("textarea");ta.placeholder="Example input HL7 v2 message…";ta.value=val;wrap.appendChild(ta);box.appendChild(wrap);renumber();}
+function renumber(){[...document.querySelectorAll("#inputs .ex")].forEach((p,i)=>{p.querySelector("b").textContent="Input "+(i+1);p.querySelector(".tagp").style.display=i===0?"":"none";});}
+function collectInputs(){return [...document.querySelectorAll("#inputs .ex textarea")].map(t=>t.value).filter(v=>v.trim());}
+$("#addinput").onclick=()=>addInput();
+
+// provider/model/key
+const LS_KEY="iscdtl.apikey",LS_REM="iscdtl.remember",LS_MODEL="iscdtl.model";
+const isOpenAI=()=>$("#provider").value==="openai";
+function syncProvider(){$("#openaibox").style.display=isOpenAI()?"":"none";}
+$("#provider").onchange=syncProvider;
+function persistKey(){if($("#remember").checked&&$("#apikey").value){localStorage.setItem(LS_KEY,$("#apikey").value);localStorage.setItem(LS_REM,"1");}else{localStorage.removeItem(LS_KEY);localStorage.setItem(LS_REM,$("#remember").checked?"1":"0");}}
+$("#apikey").addEventListener("change",persistKey);$("#remember").addEventListener("change",persistKey);
+function setModels(ids,sel){const s=$("#model");s.innerHTML="";(ids&&ids.length?ids:["gpt-4o","gpt-4o-mini","gpt-4.1","gpt-4.1-mini","o3","o4-mini"]).forEach(id=>{const o=document.createElement("option");o.value=id;o.textContent=id;s.appendChild(o)});const w=sel||localStorage.getItem(LS_MODEL)||"gpt-4o";if([...s.options].some(o=>o.value===w))s.value=w;}
+$("#model").addEventListener("change",()=>localStorage.setItem(LS_MODEL,$("#model").value));
+async function refreshModels(){if(!isOpenAI()){$("#modelhint").textContent="Mock provider uses the bundled scripted model.";return;}const key=$("#apikey").value.trim();if(!key){$("#modelhint").textContent="Enter your API key, then click ⟳ to load your models.";return;}$("#modelhint").innerHTML="<span class=spinner></span> loading models…";const [ok,j]=await jpost("/models",{apiKey:key});if(!ok){$("#modelhint").textContent="Could not load models: "+(j.error||"");return;}setModels(j.models,$("#model").value);$("#modelhint").textContent=(j.models?j.models.length:0)+" chat models available.";}
+$("#refreshmodels").onclick=refreshModels;
+
+async function checkHealth(){$("#htxt").textContent="checking…";$("#hdot").className="dot";try{const [ok,j]=await jget("/health");$("#hdot").className="dot "+(j.ok?"ok":"bad");$("#htxt").textContent=(j.ok?"healthy":"degraded")+" · "+j.passed+"/"+j.total;$("#health").title=(j.checks||[]).map(c=>(c.ok?"✓ ":"✗ ")+c.name+(c.detail?" — "+c.detail:"")).join("\n");}catch(e){$("#hdot").className="dot bad";$("#htxt").textContent="API unreachable";}}
+$("#health").onclick=checkHealth;
+
+let currentJob=null,pollTimer=null;
+$("#go").onclick=async()=>{
+  $("#formerr").className="err hidden";
+  const inputs=collectInputs();
+  let spec=$("#spec").value;
+  if($("#specmode").querySelector("button.on").dataset.m==="file"){if(!specReady)return showErr("Upload a spec document and wait for extraction (or switch to Type text).");spec=specReady;}
+  if(!spec.trim())return showErr("Provide a specification (text or document).");
+  if(!inputs.length)return showErr("Add at least one example input message.");
+  if(isOpenAI()&&!$("#apikey").value.trim())return showErr("Enter your OpenAI API key (or switch Provider to Mock).");
+  persistKey();
+  const body={inputSpec:spec,inputName:$("#jobname").value.trim(),provider:$("#provider").value,model:$("#model").value,apiKey:isOpenAI()?$("#apikey").value.trim():"",autoApprove:false,inputs};
+  $("#go").disabled=true;$("#go").innerHTML='<span class=spinner></span> Planning…';
+  const [ok,j]=await jpost("/generate",body);
+  if(!ok){showErr(j.error||"generate failed");resetGo();return;}
+  currentJob=j.jobId;$("#jobid").textContent="job "+j.jobId;$("#jobid").classList.remove("hidden");loadLinks(currentJob);showView("progress");startPolling();
+};
+function resetGo(){$("#go").disabled=false;$("#go").textContent="Plan & Generate ▶";}
+function showErr(m){const e=$("#formerr");e.textContent=m;e.className="err";}
+function startPolling(){if(pollTimer)clearInterval(pollTimer);const tick=async()=>{const [ok,j]=await jget("/jobs/"+currentJob);if(ok)render(j);};tick();pollTimer=setInterval(tick,1200);}
+function render(j){renderStatus(j);
+  $("#plangate").classList.toggle("hidden",j.status!=="AWAITING_PLAN");
+  if(j.status==="AWAITING_PLAN"){$("#plantext").textContent=j.plan||"(no plan text)";resetGo();}
+  const sa=j.status==="AWAITING_ATTEMPT";$("#attemptgate").classList.toggle("hidden",!sa);
+  if(sa){resetGo();renderAttempt(j);}
+  if(j.status==="SUCCESS"||j.status==="FAILED"||j.status==="REJECTED"){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}resetGo();loadLinks(currentJob);}
+}
+function renderStatus(j){const s=$("#status");s.innerHTML="";
+  const head=el("div");head.style.cssText="display:flex;align-items:center;gap:10px";head.appendChild(el("span","badge b-"+j.status,j.status));if(j.verdict)head.appendChild(el("span","pill",j.verdict));const c=el("span",null,"attempt "+(j.attemptsUsed||0)+" / "+j.maxAttempts);c.style.cssText="color:var(--muted);font-size:12px";head.appendChild(c);s.appendChild(head);
+  const meta=el("div","meta");meta.innerHTML="<span>doctype: <b>"+(j.sourceDocType||"?")+"</b></span><span>model: <b>"+(j.model||"?")+"</b></span><span>class: <b>"+(j.generatedClassName||"—")+"</b></span>";s.appendChild(meta);
+  const atts=j.attempts||[];
+  const list=el("div");atts.forEach((a,i)=>{const d=el("div","att ph-"+(a.phase||""));d.appendChild(el("div","n",a.number));const b=el("div");b.style.flex="1";
+    let lbl=phaseLabel(a.phase);
+    // Mark a failed attempt that was auto-followed by another attempt as auto-corrected.
+    if((a.phase==="COMPILE_FAIL"||a.phase==="RUNTIME_FAIL")&&i<atts.length-1)lbl+=" — auto-correcting →";
+    b.appendChild(el("div","t",lbl));if(a.message)b.appendChild(el("div","m",a.message));d.appendChild(b);list.appendChild(d);});
+  if(j.status==="PLANNING"||j.status==="GENERATING"||j.status==="QUEUED"){const d=el("div","att");d.appendChild(el("div","n","…"));const b=el("div");
+    const lastFail=atts.length&&(atts[atts.length-1].phase==="COMPILE_FAIL"||atts[atts.length-1].phase==="RUNTIME_FAIL");
+    const msg=j.status==="PLANNING"?"Drafting a plan…":(lastFail?"Auto-correcting from the compiler errors…":"Generating the DTL…");
+    b.innerHTML='<div class=t><span class=spinner></span> '+msg+'</div>';d.appendChild(b);list.appendChild(d);}
+  s.appendChild(list);
+  if(j.lastError){const e=el("div","err");e.appendChild(el("b",null,"Error: "));e.appendChild(document.createTextNode(j.lastError));s.appendChild(e);}
+}
+function phaseLabel(p){return{GENERATING:"Asked the model",COMPILE_FAIL:"Did not compile",RUNTIME_FAIL:"Compiled, failed at runtime",MISMATCH:"Compiled & ran",SUCCESS:"Compiled & ran cleanly ✓",LLM_ERROR:"LLM call problem"}[p]||p;}
+function renderAttempt(j){$("#atnum").textContent=j.attemptsUsed;$("#atmeta").innerHTML="<span>verdict: <b>"+(j.verdict||"")+"</b></span><span>class: <b>"+(j.generatedClassName||"—")+"</b></span>";
+  $("#dexp").textContent=norm(j.sourceHL7||j.expectedHL7);$("#dact").textContent=norm(j.actualHL7)||"(no output)";$("#dtlsrc").textContent=j.finalDTL||"(none)";}
+document.querySelectorAll("#attemptgate .tab").forEach(t=>t.onclick=()=>{document.querySelectorAll("#attemptgate .tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");$("#tab-out").classList.toggle("hidden",t.dataset.tab!=="out");$("#tab-dtl").classList.toggle("hidden",t.dataset.tab!=="dtl");});
+
+$("#approveplan").onclick=async()=>{await jpost("/jobs/"+currentJob+"/continue",{action:"approve"});startPolling();};
+$("#rejectplan").onclick=async()=>{const fb=prompt("How should the plan change?");if(fb==null)return;await jpost("/jobs/"+currentJob+"/continue",{action:"reject",feedback:"Revise the plan: "+fb});startPolling();};
+$("#acceptattempt").onclick=async()=>{await jpost("/jobs/"+currentJob+"/continue",{action:"accept"});startPolling();showView("outputs");};
+$("#rejectattempt").onclick=async()=>{const fb=$("#attfeedback").value.trim();await jpost("/jobs/"+currentJob+"/continue",{action:"reject",feedback:fb||"Please improve the transformation."});$("#attfeedback").value="";startPolling();};
+
+async function loadLinks(jobId){try{const [ok,j]=await jget("/links"+(jobId?("/"+jobId):""));const box=$("#links");box.innerHTML="";const mk=(h,l,t)=>{const a=el("a",null,l);a.href=h;a.target="_blank";a.title=t||l;box.appendChild(a)};if(j.production)mk(j.production,"⚙ Production");if(j.visualTrace)mk(j.visualTrace,"🔍 Visual Trace");else if(j.messages)mk(j.messages,"🔍 Messages");}catch(e){}}
+
+// OUTPUTS view
+async function loadOutputs(){$("#outjob").textContent=currentJob?("job "+currentJob):"";const box=$("#outlist");box.innerHTML="";if(!currentJob){box.appendChild(el("div","empty","Build a DTL first."));return;}
+  const [ok,j]=await jget("/jobs/"+currentJob+"/outputs");if(!ok||!j.outputs.length){box.appendChild(el("div","empty","No outputs yet — accept a build on the Build tab."));return;}
+  j.outputs.forEach(r=>{const c=el("div","card");c.style.borderTopColor=r.error?"var(--bad)":"var(--primary)";
+    c.appendChild(el("div",null,"Input "+r.index)).style.fontWeight="600";
+    const io=el("div","io");io.innerHTML="<div class=side><div class=head>Input</div>"+esc(norm(r.input))+"</div><div class='side r'><div class=head>Output</div>"+esc(r.error?("⚠ "+r.error):norm(r.output))+"</div>";c.appendChild(io);
+    const lbl=el("label",null,"Correct this output / give feedback");c.appendChild(lbl);
+    const ta=el("textarea");ta.value=norm(r.output);ta.style.minHeight="70px";c.appendChild(ta);
+    const fb=el("textarea");fb.placeholder="Feedback (optional)…";fb.style.minHeight="40px";c.appendChild(fb);
+    const btn=el("button","ok","✓ Apply correction + feedback");btn.style.marginTop="8px";
+    btn.onclick=async()=>{btn.disabled=true;btn.innerHTML='<span class=spinner></span> rebuilding…';await jpost("/jobs/"+currentJob+"/correct",{input:r.input,produced:r.output,corrected:ta.value,feedback:fb.value});await loadOutputs();};
+    c.appendChild(btn);box.appendChild(c);});
+}
+function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");}
+$("#refreshout").onclick=loadOutputs;
+
+// LIVE view
+$("#runlive").onclick=async()=>{if(!currentJob){$("#livemsg").textContent="Build a DTL first.";return;}const inp=$("#liveinput").value;if(!inp.trim())return;
+  $("#runlive").innerHTML='<span class=spinner></span> transforming…';const [ok,j]=await jpost("/jobs/"+currentJob+"/transform",{input:inp});$("#runlive").textContent="⚡ Transform";
+  $("#liveresult").classList.remove("hidden");$("#liveIn").textContent=norm(inp);$("#liveOut").value=j.error?("⚠ "+j.error):norm(j.output);$("#livemsg").textContent="";};
+$("#livecorrect").onclick=async()=>{const inp=$("#liveinput").value;$("#livecorrect").innerHTML='<span class=spinner></span> rebuilding…';
+  const [ok,j]=await jpost("/jobs/"+currentJob+"/correct",{input:inp,produced:"",corrected:$("#liveOut").value,feedback:$("#livefb").value});
+  $("#livecorrect").textContent="✓ Apply correction + feedback to the DTL";$("#livemsg").textContent=ok?("DTL rebuilt — class "+(j.generatedClassName||"")+". Re-run to see the new output."):("Failed: "+(j.error||""));};
+
+// CLASSES view
+async function loadClasses(){const box=$("#clslist");box.innerHTML="";const [ok,j]=await jget("/classes");if(!ok||!j.classes.length){box.appendChild(el("div","empty","No classes yet."));return;}
+  j.classes.forEach(c=>{const card=el("div","listcard");card.appendChild(el("div",null,c.className)).style.cssText="font-weight:600;font-family:var(--mono);font-size:12px;word-break:break-all";card.onclick=()=>{$("#clssrc").textContent=c.source||"(no source)";};box.appendChild(card);});
+  $("#clssrc").textContent=j.classes[0].source||"Select a class…";
+}
+$("#refreshcls").onclick=loadClasses;
+
+// HISTORY view
+async function loadHistory(){const [ok,j]=await jget("/history");const box=$("#histlist");box.innerHTML="";if(!ok||!j.history||!j.history.length){box.appendChild(el("div","empty","No transformations yet."));return;}
+  j.history.forEach(h=>{const row=el("div","listcard");row.style.cssText+=";display:flex;align-items:center;gap:12px";if(h.parentJobId)row.style.marginLeft="26px";
+    row.appendChild(el("span","badge b-"+h.status,h.status));const info=el("div");info.style.flex="1";info.appendChild(el("div",null,h.inputName||h.jobId)).style.fontWeight="600";
+    const sub=el("div",null,(h.attemptsUsed||0)+" attempts · "+(h.model||"")+(h.parentJobId?(" · ↳ refines "+h.parentJobId):"")+" · "+(h.updatedAt||""));sub.style.cssText="color:var(--muted);font-size:12px";info.appendChild(sub);row.appendChild(info);
+    row.onclick=()=>{currentJob=h.jobId;showView("outputs");};box.appendChild(row);});}
+$("#refreshhist").onclick=loadHistory;
+
+$("#sample").onclick=()=>{
+  $("#spec").value="Inbound ADT^A01 admit from EPICADT (HL7 v2.3). Rename the sending application to EPIC, normalize the facility code SITEA to 001 across MSH/PID/PV1, and upgrade the message to v2.5.";
+  $("#jobname").value="ADT_A01_Admit";
+  document.querySelectorAll("#inputs .ex").forEach(p=>p.remove());
+  addInput("MSH|^~\\&|EPICADT|SITEA|CANONICAL|ENTERPRISE|20260608120000||ADT^A01|MSG00001|P|2.3\nEVN|A01|20260608115500\nPID|1||12345^^^SITEA^MR||DOE^JOHN^Q||19800101|M|||123 MAIN ST^^METROPOLIS^NY^10001||(555)555-1234|||M|CAT|987654321\nPV1|1|I|WEST^389^1^SITEA||||1234^SMITH^JANE^A^^^MD|||SUR||||ADM|A0");
+};
+
+(function init(){
+  if(localStorage.getItem(LS_REM)==="0")$("#remember").checked=false;
+  const k=localStorage.getItem(LS_KEY);if(k)$("#apikey").value=k;
+  setModels(null,localStorage.getItem(LS_MODEL));syncProvider();
+  if(isOpenAI()&&$("#apikey").value.trim())refreshModels();else if(!isOpenAI())$("#modelhint").textContent="Mock provider uses the bundled scripted model.";
+  addInput();checkHealth();loadLinks();
+})();
+</script>
+</body>
+</html>

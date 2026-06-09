@@ -1,0 +1,390 @@
+/// REST API for the DTL GenAI framework, served at the /dtl/api web application.
+///
+/// Routes:
+///   GET  /health            - init/health check (the test hook), 200 if all green
+///   GET  /schemas           - list installed HL7 schema categories (versions)
+///   POST /generate          - start a generation job; returns {jobId}
+///   GET  /jobs/{id}          - full job status incl. live attempts + diff messages
+///   GET  /jobs/{id}/dtl      - the final generated DTL class source (text/plain)
+///   GET  /jobs               - list recent jobs (id/status/score)
+///
+/// All JSON; permissive CORS so a separately-hosted UI can call it too (the
+/// bundled UI is same-origin under /dtl/ui).
+Class DTL.REST.Dispatch Extends %CSP.REST
+{
+
+Parameter CONTENTTYPE = "application/json";
+
+Parameter CHARSET = "utf-8";
+
+/// Allow cross-origin calls (handy during UI development).
+Parameter HandleCorsRequest = 1;
+
+XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
+{
+<Routes>
+  <Route Url="/health"          Method="GET"  Call="Health"   Cors="true"/>
+  <Route Url="/schemas"         Method="GET"  Call="Schemas"  Cors="true"/>
+  <Route Url="/models"          Method="POST" Call="Models"   Cors="true"/>
+  <Route Url="/upload"          Method="POST" Call="Upload"   Cors="true"/>
+  <Route Url="/specs/:token"    Method="GET"  Call="GetSpec"  Cors="true"/>
+  <Route Url="/generate"        Method="POST" Call="Generate" Cors="true"/>
+  <Route Url="/jobs"            Method="GET"  Call="ListJobs" Cors="true"/>
+  <Route Url="/jobs/:id"        Method="GET"  Call="GetJob"   Cors="true"/>
+  <Route Url="/jobs/:id/dtl"    Method="GET"  Call="GetDTL"   Cors="true"/>
+  <Route Url="/jobs/:id/continue" Method="POST" Call="ContinueJob" Cors="true"/>
+  <Route Url="/jobs/:id/refine" Method="POST" Call="RefineJob" Cors="true"/>
+  <Route Url="/jobs/:id/outputs" Method="GET" Call="JobOutputs" Cors="true"/>
+  <Route Url="/jobs/:id/transform" Method="POST" Call="JobTransform" Cors="true"/>
+  <Route Url="/jobs/:id/correct" Method="POST" Call="CorrectJob" Cors="true"/>
+  <Route Url="/classes"         Method="GET"  Call="Classes"  Cors="true"/>
+  <Route Url="/history"         Method="GET"  Call="History"  Cors="true"/>
+  <Route Url="/links"           Method="GET"  Call="Links"    Cors="true"/>
+  <Route Url="/links/:id"       Method="GET"  Call="Links"    Cors="true"/>
+</Routes>
+}
+
+/// GET /health - run the init/health test hook and return its structured result.
+ClassMethod Health() As %Status
+{
+	set tRes = ##class(DTL.Test.HealthCheck).RunJSON()
+	set %response.Status = $select(tRes.ok:"200 OK", 1:"503 Service Unavailable")
+	do ..Json(tRes)
+	quit $$$OK
+}
+
+/// GET /schemas - installed HL7 schema categories (e.g. 2.3, 2.5, 2.5.1).
+ClassMethod Schemas() As %Status
+{
+	set tArr = []
+	set k = ""
+	for {
+		set k = $order(^EnsHL7.Schema(k))
+		quit:k=""
+		do tArr.%Push(k)
+	}
+	do ..Json({"schemas": (tArr)})
+	quit $$$OK
+}
+
+/// POST /models - body {apiKey}. Server-side proxy to OpenAI GET /v1/models so
+/// the browser never has to call OpenAI directly (no CORS, key stays same-origin).
+/// Returns {models:[ids...]} filtered to chat-capable models, newest-ish first.
+ClassMethod Models() As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	set tKey = $select($$$ISOK(tSC):tPayload.apiKey, 1:"")
+	if tKey = "" quit ..ErrJson(400, "An OpenAI API key is required to list models.")
+	try {
+		set http = ##class(%Net.HttpRequest).%New()
+		set http.Server = "api.openai.com", http.Port = 443, http.Https = 1, http.Timeout = 20
+		set http.SSLConfiguration = "DTLOpenAISSL"
+		do http.SetHeader("Authorization", "Bearer " _ tKey)
+		set sc = http.Get("/v1/models")
+		if $$$ISERR(sc) return ..ErrJson(502, "Could not reach OpenAI: " _ $system.Status.GetErrorText(sc))
+		set tBody = http.HttpResponse.Data.Read(3600000)
+		if (http.HttpResponse.StatusCode '= 200) {
+			return ..ErrJson(http.HttpResponse.StatusCode, "OpenAI /v1/models returned HTTP " _ http.HttpResponse.StatusCode _ ": " _ $extract(tBody, 1, 500))
+		}
+		set tJson = {}.%FromJSON(tBody)
+		set tIds = []
+		set it = tJson.data.%GetIterator()
+		while it.%GetNext(.k, .m) {
+			set id = m.id
+			// keep chat/reasoning families, drop embeddings/audio/image/tts/whisper/etc.
+			continue:'..IsChatModel(id)
+			do tIds.%Push(id)
+		}
+		do ..Json({"models": (tIds)})
+	} catch ex {
+		return ..ErrJson(500, "models error: " _ ex.DisplayString())
+	}
+	quit $$$OK
+}
+
+/// Heuristic: is this OpenAI model id usable for chat completions?
+ClassMethod IsChatModel(pId As %String) As %Boolean
+{
+	set l = $zconvert(pId, "L")
+	// exclude obvious non-chat families
+	if (l["embedding")||(l["whisper")||(l["tts")||(l["audio")||(l["dall-e")||(l["image")||(l["moderation")||(l["realtime")||(l["transcribe")||(l["search")||(l["babbage")||(l["davinci")||(l["instruct") quit 0
+	// include the chat/reasoning families
+	quit (l["gpt-4")||(l["gpt-3.5")||(l["chatgpt")||($extract(l)="o")
+}
+
+/// GET /links  or  /links/:id - deep links into the IRIS Management Portal:
+/// the production config page, and (when :id given) the Visual Trace for that
+/// job's interop session. Returns absolute, same-host URLs the UI can render.
+ClassMethod Links(pId As %String = "") As %Status
+{
+	set tBase = ..PortalBase()
+	set o = {}
+	set o.production = tBase _ "EnsPortal.ProductionConfig.zen?PRODUCTION=DTL.Setup.Production"
+	set o.messages = tBase _ "EnsPortal.MessageViewer.zen"
+	if pId '= "" {
+		set tJob = ##class(DTL.Data.Job).OpenByJobId(pId, .sc)
+		if $isobject(tJob), tJob.SessionId '= "" {
+			set o.sessionId = tJob.SessionId
+			set o.visualTrace = tBase _ "EnsPortal.VisualTrace.zen?SESSIONID=" _ tJob.SessionId
+		}
+	}
+	do ..Json(o)
+	quit $$$OK
+}
+
+/// Base URL for EnsPortal pages in this namespace, derived from the request host
+/// so links work regardless of host/port. e.g. http://host:52773/csp/user/
+/// Defensive: %request CGI vars are read inside a try so a missing var can never
+/// 500 the endpoint; falls back to localhost:52773.
+ClassMethod PortalBase() As %String
+{
+	set tHost = "", tPort = "", tScheme = "http"
+	try {
+		if $isobject($get(%request)) {
+			set tHost = %request.GetCgiEnv("SERVER_NAME", "")
+			set tPort = %request.GetCgiEnv("SERVER_PORT", "")
+			set tHttps = %request.GetCgiEnv("HTTPS", "")
+			if (tHttps = "on") || (tHttps = "ON") set tScheme = "https"
+		}
+	} catch {
+	}
+	if tHost = "" set tHost = "localhost"
+	if tPort = "" set tPort = "52773"
+	set tNs = $zconvert($namespace, "L")
+	quit tScheme _ "://" _ tHost _ ":" _ tPort _ "/csp/" _ tNs _ "/"
+}
+
+/// POST /generate - body: {inputSpec, inputName, maxAttempts, successPolicy,
+/// matchThreshold, pairs:[{input,output},...]}. Returns {jobId, status}.
+ClassMethod Generate() As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body: " _ $system.Status.GetErrorText(tSC))
+
+	set tSC = ##class(DTL.Service.JobManager).StartJob(tPayload, .tJobId, .tStartSC)
+	if $$$ISERR(tSC) || $$$ISERR(tStartSC) {
+		set tErr = $select($$$ISERR(tSC):tSC, 1:tStartSC)
+		quit ..ErrJson(400, $system.Status.GetErrorText(tErr))
+	}
+	set %response.Status = "202 Accepted"
+	do ..Json({"jobId": (tJobId), "status": "QUEUED"})
+	quit $$$OK
+}
+
+/// GET /jobs/:id - full job document including live attempts + diff messages.
+ClassMethod GetJob(pId As %String) As %Status
+{
+	set tJob = ##class(DTL.Data.Job).OpenByJobId(pId, .sc)
+	if '$isobject(tJob) quit ..ErrJson(404, "No job with id '" _ pId _ "'")
+	do ..Json(tJob.ToDynamic(1))
+	quit $$$OK
+}
+
+/// GET /jobs/:id/dtl - the final generated DTL class source as text/plain.
+ClassMethod GetDTL(pId As %String) As %Status
+{
+	set tJob = ##class(DTL.Data.Job).OpenByJobId(pId, .sc)
+	if '$isobject(tJob) quit ..ErrJson(404, "No job with id '" _ pId _ "'")
+	set %response.ContentType = "text/plain"
+	do tJob.FinalDTL.Rewind()
+	while 'tJob.FinalDTL.AtEnd { write tJob.FinalDTL.Read(16000) }
+	quit $$$OK
+}
+
+/// POST /upload - body {filename, dataBase64}. Decodes the upload, writes it to
+/// the watched specs/ directory as "<token>.<ext>", and returns {token}. The
+/// DTL.Svc.SpecFileService (FileInboundAdapter) then extracts the text; the UI
+/// polls GET /specs/{token}.
+ClassMethod Upload() As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
+	set tName = tPayload.filename
+	set tB64 = tPayload.dataBase64
+	if tB64 = "" quit ..ErrJson(400, "dataBase64 is required")
+	try {
+		set tSpecsDir = $get(^DTL.Config("specsDir"))
+		if tSpecsDir = "" return ..ErrJson(503, "Spec directory not configured (run the installer).")
+		set tToken = ##class(DTL.Service.JobManager).RandHex()
+		set tExt = $zconvert($piece(tName, ".", *), "L")
+		if (tExt = "") || (tExt = tName) set tExt = "txt"
+		// Pre-create the SpecDoc as PENDING so the UI can poll immediately.
+		set tDoc = ##class(DTL.Data.SpecDoc).%New()
+		set tDoc.Token = tToken, tDoc.FileName = tName, tDoc.Status = "PENDING"
+		set tDoc.CreatedAt = ##class(DTL.Data.Job).Now()
+		do tDoc.%Save()
+		// Decode base64 -> binary stream -> file in the watched dir.
+		set tBin = $system.Encryption.Base64Decode(tB64)
+		set tFile = ##class(%Stream.FileBinary).%New()
+		set tFile.Filename = tSpecsDir _ tToken _ "." _ tExt
+		do tFile.Write(tBin)
+		set sc = tFile.%Save()
+		if $$$ISERR(sc) return ..ErrJson(500, "Could not write upload: " _ $system.Status.GetErrorText(sc))
+		set %response.Status = "202 Accepted"
+		do ..Json({"token": (tToken), "status": "PENDING"})
+	} catch ex {
+		return ..ErrJson(500, "upload error: " _ ex.DisplayString())
+	}
+	quit $$$OK
+}
+
+/// GET /specs/:token - the extraction status + text for an uploaded spec.
+ClassMethod GetSpec(pToken As %String) As %Status
+{
+	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
+	if '$isobject(tDoc) quit ..ErrJson(404, "No spec '" _ pToken _ "'")
+	do ..Json({"token": (tDoc.Token), "fileName": (tDoc.FileName), "status": (tDoc.Status), "text": (tDoc.TextStr()), "error": (tDoc.Error)})
+	quit $$$OK
+}
+
+/// POST /jobs/:id/continue - body {action: approve|accept|reject, feedback}.
+/// Advances a gated job one step (plan-approve / accept attempt / reject+regen).
+ClassMethod ContinueJob(pId As %String) As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	set tAction = $select($$$ISOK(tSC):tPayload.action, 1:"")
+	set tFeedback = $select($$$ISOK(tSC):tPayload.feedback, 1:"")
+	set tSC = ##class(DTL.Service.JobManager).Continue(pId, tAction, tFeedback, .tcSC)
+	if $$$ISERR(tSC) || $$$ISERR(tcSC) {
+		quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
+	}
+	set tJob = ##class(DTL.Data.Job).OpenByJobId(pId, .sc)
+	do ..Json(tJob.ToDynamic(1))
+	quit $$$OK
+}
+
+/// POST /jobs/:id/refine - body {feedback}. Spawns a refinement job seeded with
+/// the parent's DTL + feedback. Returns {jobId}.
+ClassMethod RefineJob(pId As %String) As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	set tFeedback = $select($$$ISOK(tSC):tPayload.feedback, 1:"")
+	if tFeedback = "" quit ..ErrJson(400, "feedback is required to refine")
+	set tSC = ##class(DTL.Service.JobManager).Refine(pId, tFeedback, .tNewId, .trSC)
+	if $$$ISERR(tSC) || $$$ISERR(trSC) {
+		quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:trSC)))
+	}
+	set %response.Status = "202 Accepted"
+	do ..Json({"jobId": (tNewId)})
+	quit $$$OK
+}
+
+/// GET /jobs/:id/outputs - all stored inputs transformed by the job's final DTL.
+ClassMethod JobOutputs(pId As %String) As %Status
+{
+	do ..Json({"outputs": (##class(DTL.Service.JobManager).Outputs(pId))})
+	quit $$$OK
+}
+
+/// POST /jobs/:id/transform - body {input}. Live: run the job's DTL on an
+/// arbitrary input and return {output, error}.
+ClassMethod JobTransform(pId As %String) As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	set tIn = $select($$$ISOK(tSC):tPayload.input, 1:"")
+	if tIn = "" quit ..ErrJson(400, "input is required")
+	set sc = ##class(DTL.Service.JobManager).Transform(pId, tIn, .tOut, .tErr)
+	do ..Json({"output": (tOut), "error": ($select($$$ISOK(sc):"", 1:tErr))})
+	quit $$$OK
+}
+
+/// POST /jobs/:id/correct - body {input, produced, corrected, feedback}. Feed the
+/// correction back, rebuild the DTL, re-transform all inputs. Returns the job.
+ClassMethod CorrectJob(pId As %String) As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, "invalid JSON")
+	set tSC = ##class(DTL.Service.JobManager).CorrectJob(pId, tPayload.input, tPayload.produced, tPayload.corrected, tPayload.feedback, .tcSC)
+	if $$$ISERR(tSC) || $$$ISERR(tcSC) quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
+	set tJob = ##class(DTL.Data.Job).OpenByJobId(pId, .sc)
+	do ..Json(tJob.ToDynamic(1))
+	quit $$$OK
+}
+
+/// GET /classes - all DTL classes generated this session, with source.
+ClassMethod Classes() As %Status
+{
+	do ..Json({"classes": (##class(DTL.Service.JobManager).Classes())})
+	quit $$$OK
+}
+
+/// GET /history - all jobs newest-first with lineage (parentJobId), for the
+/// History tab: the culmination of transformations + refinements.
+ClassMethod History() As %Status
+{
+	set tArr = []
+	set tStmt = ##class(%SQL.Statement).%New()
+	set sc = tStmt.%Prepare("SELECT JobId,Status,Verdict,InputName,AttemptsUsed,FinalScore,Model,SessionId,ParentJobId,GeneratedClassName,UpdatedAt FROM DTL_Data.Job ORDER BY ID DESC")
+	if $$$ISOK(sc) {
+		set rs = tStmt.%Execute()
+		while rs.%Next() {
+			set o = {}
+			set o.jobId = rs.%Get("JobId"), o.status = rs.%Get("Status"), o.verdict = rs.%Get("Verdict")
+			set o.inputName = rs.%Get("InputName"), o.attemptsUsed = rs.%Get("AttemptsUsed")
+			set o.finalScore = rs.%Get("FinalScore"), o.model = rs.%Get("Model")
+			set o.sessionId = rs.%Get("SessionId"), o.parentJobId = rs.%Get("ParentJobId")
+			set o.generatedClassName = rs.%Get("GeneratedClassName"), o.updatedAt = rs.%Get("UpdatedAt")
+			do tArr.%Push(o)
+		}
+	}
+	do ..Json({"history": (tArr)})
+	quit $$$OK
+}
+
+/// GET /jobs - recent jobs, newest first.
+ClassMethod ListJobs() As %Status
+{
+	set tArr = []
+	set tStmt = ##class(%SQL.Statement).%New()
+	set sc = tStmt.%Prepare("SELECT TOP 50 JobId,Status,Verdict,InputName,AttemptsUsed,FinalScore,UpdatedAt FROM DTL_Data.Job ORDER BY ID DESC")
+	if $$$ISOK(sc) {
+		set rs = tStmt.%Execute()
+		while rs.%Next() {
+			set o = {}
+			set o.jobId = rs.%Get("JobId")
+			set o.status = rs.%Get("Status")
+			set o.verdict = rs.%Get("Verdict")
+			set o.inputName = rs.%Get("InputName")
+			set o.attemptsUsed = rs.%Get("AttemptsUsed")
+			set o.finalScore = rs.%Get("FinalScore")
+			set o.updatedAt = rs.%Get("UpdatedAt")
+			do tArr.%Push(o)
+		}
+	}
+	do ..Json({"jobs": (tArr)})
+	quit $$$OK
+}
+
+// ---------------- helpers ----------------
+
+/// Parse the request body as JSON into a %DynamicObject.
+ClassMethod ReadBody(Output pSC As %Status) As %DynamicObject
+{
+	set pSC = $$$OK
+	try {
+		set tObj = ##class(%DynamicAbstractObject).%FromJSON(%request.Content)
+	} catch ex {
+		set pSC = ex.AsStatus()
+		set tObj = {}
+	}
+	quit tObj
+}
+
+/// Write a %DynamicObject as the JSON response body.
+ClassMethod Json(pObj As %DynamicObject) As %Status
+{
+	set %response.ContentType = "application/json"
+	write pObj.%ToJSON()
+	quit $$$OK
+}
+
+/// Emit a JSON error with an HTTP status code.
+ClassMethod ErrJson(pCode As %Integer, pMsg As %String) As %Status
+{
+	set %response.Status = pCode _ " " _ $case(pCode, 400:"Bad Request", 404:"Not Found", 503:"Service Unavailable", :"Error")
+	set %response.ContentType = "application/json"
+	write {"error": (pMsg), "code": (pCode)}.%ToJSON()
+	quit $$$OK
+}
+
+}

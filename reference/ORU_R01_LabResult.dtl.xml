@@ -1,0 +1,6 @@
+<transform sourceClass='EnsLib.HL7.Message' targetClass='EnsLib.HL7.Message' sourceDocType='2.3:ORU_R01' targetDocType='2.5:ORU_R01' create='copy' language='objectscript'>
+<assign value='"LIS"' property='target.{MSH:3.1}' action='set'/>
+<assign value='"GH"' property='target.{MSH:4.1}' action='set'/>
+<assign value='"2.5"' property='target.{MSH:12}' action='set'/>
+<assign value='"GH"' property='target.{PIDgrpgrp(1).PIDgrp.PID:3(1).4}' action='set'/>
+</transform>

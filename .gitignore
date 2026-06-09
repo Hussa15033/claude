@@ -1,0 +1,7 @@
+# Runtime data produced inside the container (not source)
+/dtldata/
+*.log
+
+# Editor / OS noise
+.DS_Store
+*.swp
