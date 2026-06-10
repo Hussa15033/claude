@@ -46,7 +46,9 @@ Method OnProcessInput(pInput As %Stream.Object, Output pOutput As %RegisteredObj
 			set tDoc.Token = tToken
 			set tDoc.CreatedAt = ##class(DTL.Data.Job).Now()
 		}
-		set tDoc.FileName = tBase
+		// Keep the ORIGINAL upload filename (set by /upload); only fall back to the
+		// on-disk name if none was recorded, so the saved-spec picker shows real names.
+		if tDoc.FileName = "" set tDoc.FileName = tBase
 
 		// Extract text.
 		set tText = ##class(DTL.Util.DocExtract).FromFile(tPath, .tErr)

@@ -1,6 +1,6 @@
 ---
 name: iris-interop-rest
-description: Building IRIS Interoperability productions and %CSP.REST APIs — business services/processes/operations, the HTTP outbound adapter, FileInboundAdapter, creating CSP web apps programmatically, async dispatch into a running production, unauthenticated access, and Visual Trace deep-links. Use when wiring an Ens.Production, exposing REST endpoints, calling an external HTTP/LLM API from IRIS, ingesting files, or driving a job from a UI.
+description: Building IRIS Interoperability productions and %CSP.REST APIs — business services/processes/operations, the HTTP outbound adapter (incl. parsing provider HTTP errors descriptively), FileInboundAdapter, creating CSP web apps programmatically, async dispatch into a running production, unauthenticated access, and Visual Trace deep-links. Use when wiring an Ens.Production, exposing REST endpoints, calling an external HTTP/LLM API from IRIS, ingesting/listing files, or driving a job from a UI.
 ---
 
 # IRIS Interoperability + REST
@@ -27,6 +27,84 @@ set sc=..Adapter.SendFormDataArray(.resp,"Post",req,"",.data,"/v1/chat/completio
 - Switch provider/target at call time: `set ..Adapter.HTTPServer=host, ..Adapter.HTTPPort=port, ..Adapter.SSLConfig=cfg` (all runtime-settable).
 - OpenAI over HTTPS needs an SSL config; the community image ships with **none** —
   create one: `##class(Security.SSLConfigs).Create("MySSL")` (in %SYS). `api.openai.com:443` is reachable.
+
+### One hosted adapter, many LLM providers (OpenAI + AWS Bedrock + mock)
+
+One `EnsLib.HTTP.OutboundAdapter` operation can serve several providers — switch
+`HTTPServer`/`HTTPPort`/`SSLConfig` and the body/path per request:
+
+- **OpenAI / mock** — `POST /v1/chat/completions`, body `{model, messages:[{role,content}], max_tokens}`, response `choices[0].message.content`. Auth: `Authorization: Bearer <key>`.
+  **Newer OpenAI models reject `max_tokens` AND `temperature`.** gpt-5*/o-series
+  (o1/o3/o4) reasoning models 400 with "Unsupported parameter: 'max_tokens' is not
+  supported with this model. Use 'max_completion_tokens' instead." — and only accept
+  the default temperature. Detect them by model-id prefix (`gpt-5`/`gpt-6`/`o1`/`o3`/
+  `o4`) and switch the body: emit `max_completion_tokens` instead of `max_tokens` and
+  OMIT `temperature` entirely. Legacy models (gpt-4o, gpt-4-turbo, gpt-3.5) keep
+  `max_tokens`+`temperature`. Bedrock is unaffected (it uses its own `max_tokens`).
+- **AWS Bedrock (Claude)** — host `bedrock-runtime.<region>.amazonaws.com`, path
+  `POST /model/<url-encoded-model-id>/invoke`, **Anthropic Messages** body
+  (`{anthropic_version:"bedrock-2023-05-31", max_tokens, system:"…", messages:[…]}`
+  — system is a TOP-LEVEL string, NOT a message), response is a content-block array
+  → concatenate the `type=="text"` blocks; usage is `input_tokens+output_tokens`.
+  Auth: a **Bedrock long-lived API key** as `Authorization: Bearer <key>` (no SigV4
+  needed — set one with `aws bedrock create-api-key` or in the console). URL-encode
+  the model id — inference-profile ids contain colons (`us.anthropic.claude-opus-4-8-v1:0`).
+  Allow `bedrock-runtime.<region>.amazonaws.com` in the network policy; reuse the
+  same `SSLConfig` as OpenAI. A bad key returns a clean Bedrock 403
+  (`{"Message":"Invalid API Key format…"}`) through the descriptive-error path below.
+
+Thread per-request provider config (provider, model, key, region) on the request
+message, not just operation settings, so one running operation serves every job.
+
+**Bedrock model ids — list, don't guess.** A bare foundation-model id
+(`anthropic.claude-opus-4-7`) returns 400 "on-demand throughput isn't supported";
+you must invoke a **regional inference-profile id**. But those ids carry account-
+and region-specific suffixes, so hardcoded guesses also 400 ("provided model
+identifier is invalid"). List them from the **control plane** (a different host
+from runtime): `GET https://bedrock.<region>.amazonaws.com/inference-profiles`
+(and `/foundation-models?byProvider=anthropic&byInferenceType=ON_DEMAND`) with the
+same `Authorization: Bearer <key>`. Surface those exact ids in the UI and let the
+user paste one — never ship a hardcoded profile id as a working default.
+
+**Token usage + cost.** Both providers report usage: OpenAI `usage.{prompt_tokens,
+completion_tokens,total_tokens}`, Bedrock `usage.{input_tokens,output_tokens}`.
+Capture the in/out split (not just a total) on the response, attach it to the
+record that produced it, and cost it from a per-model price table (USD/1M tokens,
+substring-keyed, unknown→0 rather than guessing) so you can show per-request and
+running totals.
+
+### Timeouts for a slow LLM operation (don't fail a slow completion)
+The defaults are far too short for an LLM call. An `Ens.BusinessOperation` retries
+until its **`FailureTimeout`** (Host setting, default **15s**) elapses, and the
+`EnsLib.HTTP.OutboundAdapter` waits **`ResponseTimeout`** (default **30s**) for one
+HTTP read — both well under the minutes a reasoning model (gpt-5.x, o-series) can
+take, so the request fails mid-flight. Raise all THREE layers that bound the call:
+`FailureTimeout` (e.g. 600) on the operation, `ResponseTimeout` (e.g. 300) on the
+adapter, AND the BP→operation `SendRequestSync(...,timeout)` wait (e.g. 600) — the
+sync wait must exceed the operation's own budget or the BP gives up first. Set the
+first two as production `<Setting>`s; a Production.cls settings change needs a
+stop/start (not just UpdateProduction) to take effect.
+
+### Surface HTTP errors descriptively (a 400 is not a transport failure)
+
+A non-2xx response (bad model, bad key, rate limit) comes back through
+`SendFormDataArray` as an **error %Status** (`<Ens>ErrHTTPStatus: non-OK status
+400`) — but the populated `pResp` object usually still carries the provider's error
+**body**. Don't surface the raw transport text; in the `$$$ISERR` branch read the
+body off the response and parse the provider's JSON:
+
+```objectscript
+set tCode=$select($isobject($get(tResp)):+tResp.StatusCode,1:0)
+set tBody="" try { set tBody=tResp.Data.Read(3600000) } catch {}
+// OpenAI: {"error":{"message","type","code"}} -> build an actionable message,
+// keyed by STATUS code first (401 auth, 403 access, 404 model/path, 429 rate/quota,
+// 5xx transient), THEN the model case (code="model_not_found").
+```
+
+Branch on the **HTTP status, not `error.type`** — OpenAI tags a bad-model 400 AND a
+401 both as `invalid_request_error`, so keying off the type mislabels auth failures.
+A genuine transport error (DNS/TLS/refused) has `tCode=0`; describe that separately
+(SSL/host/firewall hints).
 
 ## %CSP.REST dispatch class
 
@@ -95,6 +173,10 @@ A business service `Extends Ens.BusinessService` with
 
 - Get the file path from **`pInput.Filename`** (the adapter passes a
   `%Library.FileCharacterStream`); `pHint` is not reliably populated.
+- If the REST upload pre-created a record with the ORIGINAL filename, do NOT
+  overwrite it in `OnProcessInput` — the adapter only knows the on-disk
+  `<token>.ext` name, so a blind `set rec.FileName=onDiskName` makes any
+  "pick a saved file" UI show opaque token names. Only set it when blank.
 - **The adapter must BOOT with its `FilePath` already set.** `SetItemSettingValue`
   did NOT reliably persist the path to the definition (`GetItemSettingValue` kept
   returning `""`), so the service polled nothing. The robust fix is a service

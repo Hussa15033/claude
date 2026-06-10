@@ -16,6 +16,9 @@ Property Provider As %String(MAXLEN = 16);
 /// Model id; blank means use the business operation's configured default.
 Property Model As %String(MAXLEN = 128);
 
+/// AWS region for the Bedrock provider (e.g. "us-east-1"). Ignored for openai/mock.
+Property BedrockRegion As %String(MAXLEN = 32);
+
 /// Per-call API key (from the user). Blank = use the operation's configured
 /// credentials. Transient: not persisted to the Job record.
 Property ApiKey As %String(MAXLEN = 512);

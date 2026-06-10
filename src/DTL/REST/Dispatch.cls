@@ -26,7 +26,9 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
   <Route Url="/health"          Method="GET"  Call="Health"   Cors="true"/>
   <Route Url="/schemas"         Method="GET"  Call="Schemas"  Cors="true"/>
   <Route Url="/models"          Method="POST" Call="Models"   Cors="true"/>
+  <Route Url="/bedrock-models"  Method="POST" Call="BedrockModels" Cors="true"/>
   <Route Url="/upload"          Method="POST" Call="Upload"   Cors="true"/>
+  <Route Url="/specs"           Method="GET"  Call="ListSpecs" Cors="true"/>
   <Route Url="/specs/:token"    Method="GET"  Call="GetSpec"  Cors="true"/>
   <Route Url="/generate"        Method="POST" Call="Generate" Cors="true"/>
   <Route Url="/jobs"            Method="GET"  Call="ListJobs" Cors="true"/>
@@ -34,6 +36,7 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
   <Route Url="/jobs/:id/dtl"    Method="GET"  Call="GetDTL"   Cors="true"/>
   <Route Url="/jobs/:id/continue" Method="POST" Call="ContinueJob" Cors="true"/>
   <Route Url="/jobs/:id/refine" Method="POST" Call="RefineJob" Cors="true"/>
+  <Route Url="/jobs/:id/messages" Method="GET" Call="JobMessages" Cors="true"/>
   <Route Url="/jobs/:id/outputs" Method="GET" Call="JobOutputs" Cors="true"/>
   <Route Url="/jobs/:id/transform" Method="POST" Call="JobTransform" Cors="true"/>
   <Route Url="/jobs/:id/correct" Method="POST" Call="CorrectJob" Cors="true"/>
@@ -110,6 +113,71 @@ ClassMethod IsChatModel(pId As %String) As %Boolean
 	if (l["embedding")||(l["whisper")||(l["tts")||(l["audio")||(l["dall-e")||(l["image")||(l["moderation")||(l["realtime")||(l["transcribe")||(l["search")||(l["babbage")||(l["davinci")||(l["instruct") quit 0
 	// include the chat/reasoning families
 	quit (l["gpt-4")||(l["gpt-3.5")||(l["chatgpt")||($extract(l)="o")
+}
+
+/// POST /bedrock-models - body {apiKey, region}. Server-side proxy to the Bedrock
+/// control plane to list the account's Anthropic INFERENCE PROFILES (the ids you
+/// can actually invoke on-demand — a bare foundation-model id like
+/// anthropic.claude-opus-4-7 returns "on-demand throughput isn't supported").
+/// Returns {models:[ids...]} (inference-profile ids first, then on-demand
+/// foundation models). Falls back to a built-in list if the listing call fails.
+ClassMethod BedrockModels() As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	set tKey = $select($$$ISOK(tSC):tPayload.apiKey, 1:"")
+	set tRegion = $select($$$ISOK(tSC)&&(tPayload.region'=""):tPayload.region, 1:"us-east-1")
+	if tKey = "" quit ..ErrJson(400, "An AWS Bedrock API key is required to list models.")
+	set tIds = []
+	set tSeen = ""
+	try {
+		// 1) Inference profiles — these are the directly-invokable ids (us.anthropic.*).
+		set tProf = ..BedrockGet(tRegion, tKey, "/inference-profiles?maxResults=1000", .tpsc)
+		if $isobject(tProf), $isobject(tProf."inferenceProfileSummaries") {
+			set it = tProf."inferenceProfileSummaries".%GetIterator()
+			while it.%GetNext(.k, .m) {
+				set id = m."inferenceProfileId"
+				continue:'($zconvert(id,"L")["anthropic")
+				continue:tSeen[(""""_id_"""")
+				do tIds.%Push(id) set tSeen=tSeen_""""_id_""""
+			}
+		}
+		// 2) On-demand foundation models (some accounts can invoke these directly).
+		set tFm = ..BedrockGet(tRegion, tKey, "/foundation-models?byProvider=anthropic&byInferenceType=ON_DEMAND", .tfsc)
+		if $isobject(tFm), $isobject(tFm."modelSummaries") {
+			set it2 = tFm."modelSummaries".%GetIterator()
+			while it2.%GetNext(.k, .m) {
+				set id = m."modelId"
+				continue:tSeen[(""""_id_"""")
+				do tIds.%Push(id) set tSeen=tSeen_""""_id_""""
+			}
+		}
+	} catch ex {
+	}
+	// Fallback to a sane built-in list if the listing produced nothing.
+	if tIds.%Size() = 0 {
+		for id = "us.anthropic.claude-opus-4-8-v1:0","us.anthropic.claude-opus-4-7-v1:0","us.anthropic.claude-sonnet-4-6-v1:0","us.anthropic.claude-haiku-4-5-v1:0" { do tIds.%Push(id) }
+		do ..Json({"models": (tIds), "note": "Could not list from Bedrock (check key/region/permissions) — showing common inference-profile ids."})
+		quit $$$OK
+	}
+	do ..Json({"models": (tIds)})
+	quit $$$OK
+}
+
+/// GET against the Bedrock CONTROL plane (bedrock.<region>.amazonaws.com) using the
+/// bearer API key. Returns the parsed JSON object, or "" on non-200. The control
+/// plane (model/profile listing) is a different host from bedrock-runtime (invoke).
+ClassMethod BedrockGet(pRegion As %String, pKey As %String, pPath As %String, Output pSC As %Status) As %DynamicObject
+{
+	set pSC = $$$OK
+	set http = ##class(%Net.HttpRequest).%New()
+	set http.Server = "bedrock." _ pRegion _ ".amazonaws.com", http.Port = 443, http.Https = 1, http.Timeout = 20
+	set http.SSLConfiguration = "DTLOpenAISSL"
+	do http.SetHeader("Authorization", "Bearer " _ pKey)
+	set sc = http.Get(pPath)
+	if $$$ISERR(sc) { set pSC = sc  quit "" }
+	if (http.HttpResponse.StatusCode '= 200) { set pSC = $$$ERROR($$$GeneralError, "HTTP " _ http.HttpResponse.StatusCode)  quit "" }
+	set tBody = http.HttpResponse.Data.Read(3600000)
+	quit {}.%FromJSON(tBody)
 }
 
 /// GET /links  or  /links/:id - deep links into the IRIS Management Portal:
@@ -228,6 +296,31 @@ ClassMethod Upload() As %Status
 	quit $$$OK
 }
 
+/// GET /specs - list all previously uploaded specifications (newest first) so the
+/// UI can offer a saved-spec picker (no re-upload / re-processing). Returns
+/// {specs:[{token, fileName, status, size, createdAt}]} — text is fetched on
+/// demand via GET /specs/:token.
+ClassMethod ListSpecs() As %Status
+{
+	set tArr = []
+	set tStmt = ##class(%SQL.Statement).%New()
+	set sc = tStmt.%Prepare("SELECT Token,FileName,Status,CreatedAt FROM DTL_Data.SpecDoc ORDER BY ID DESC")
+	if $$$ISOK(sc) {
+		set rs = tStmt.%Execute()
+		while rs.%Next() {
+			set o = {}
+			set o.token = rs.%Get("Token"), o.fileName = rs.%Get("FileName")
+			set o.status = rs.%Get("Status"), o.createdAt = rs.%Get("CreatedAt")
+			// size of the extracted markdown (chars), for display
+			set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(o.token, .dsc)
+			set o.size = $select($isobject(tDoc):tDoc.Text.Size, 1:0)
+			do tArr.%Push(o)
+		}
+	}
+	do ..Json({"specs": (tArr)})
+	quit $$$OK
+}
+
 /// GET /specs/:token - the extraction status + text for an uploaded spec.
 ClassMethod GetSpec(pToken As %String) As %Status
 {
@@ -237,14 +330,25 @@ ClassMethod GetSpec(pToken As %String) As %Status
 	quit $$$OK
 }
 
-/// POST /jobs/:id/continue - body {action: approve|accept|reject, feedback}.
-/// Advances a gated job one step (plan-approve / accept attempt / reject+regen).
+/// POST /jobs/:id/continue - body {action: approve|accept|reject, feedback,
+/// planAdditions:[...]}. Advances a gated job one step (plan-approve / accept /
+/// reject+regen). On "approve", planAdditions[] are extra plan items the USER
+/// added; they are folded into the plan the model must implement.
 ClassMethod ContinueJob(pId As %String) As %Status
 {
 	set tPayload = ..ReadBody(.tSC)
 	set tAction = $select($$$ISOK(tSC):tPayload.action, 1:"")
 	set tFeedback = $select($$$ISOK(tSC):tPayload.feedback, 1:"")
-	set tSC = ##class(DTL.Service.JobManager).Continue(pId, tAction, tFeedback, .tcSC)
+	// Fold any user-added plan items into one block.
+	set tAdd = ""
+	if $$$ISOK(tSC), $isobject(tPayload.planAdditions) {
+		set it = tPayload.planAdditions.%GetIterator()
+		while it.%GetNext(.k, .v) {
+			set tv = $zstrip($select($isobject(v):"", 1:v), "<>W")
+			if tv '= "" set tAdd = tAdd _ $select(tAdd'="":$char(10), 1:"") _ "- " _ tv
+		}
+	}
+	set tSC = ##class(DTL.Service.JobManager).Continue(pId, tAction, tFeedback, .tcSC, tAdd)
 	if $$$ISERR(tSC) || $$$ISERR(tcSC) {
 		quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
 	}
@@ -266,6 +370,16 @@ ClassMethod RefineJob(pId As %String) As %Status
 	}
 	set %response.Status = "202 Accepted"
 	do ..Json({"jobId": (tNewId)})
+	quit $$$OK
+}
+
+/// GET /jobs/:id/messages - the full LLM conversation (every message to/from the
+/// model, in order) so the UI can show complete request/response visibility.
+ClassMethod JobMessages(pId As %String) As %Status
+{
+	set tJob = ##class(DTL.Data.Job).OpenByJobId(pId, .sc)
+	if '$isobject(tJob) quit ..ErrJson(404, "No job with id '" _ pId _ "'")
+	do ..Json({"jobId": (pId), "messages": (tJob.TranscriptDynamic()), "usage": (tJob.UsageSummary())})
 	quit $$$OK
 }
 

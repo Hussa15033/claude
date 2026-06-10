@@ -1,6 +1,6 @@
 ---
 name: intersystems-ui-theme
-description: Building a browser UI with an InterSystems / IRIS look-and-feel (light OR dark+glassmorphism), served same-origin by IRIS from a CSP static web application. Use when creating a front-end for an IRIS app, theming with InterSystems colours/logo, applying glassmorphism, deriving a REST API base path from the UI path, polling a long-running IRIS job, or rendering a side-by-side HL7/text diff. Includes palettes, logo URL, and a self-contained single-file SPA pattern.
+description: Building a browser UI with an InterSystems / IRIS look-and-feel — light, dark+glassmorphism, Material matte, or dark blue-forward flat — served same-origin by IRIS from a CSP static web application. Use when creating a front-end for an IRIS app, theming with InterSystems colours (green or IRIS blue)/logo, choosing dark vs light, deriving a REST API base path from the UI path, polling a long-running IRIS job, line-numbering code boxes, line-diff highlighting, copy buttons, a tabbed working pane, a saved-artifact picker + reader modal, an editable LLM plan, rendering a side-by-side HL7/text diff (scroll-synced panes, red-removed/green-added char highlighting), or giving async action buttons a spinner busy state. Includes palettes, logo URL, and a self-contained single-file SPA pattern.
 ---
 
 # InterSystems-themed web UI (served by IRIS)
@@ -94,7 +94,14 @@ A "Classes" explorer lists `DTL.Generated.*` with source fetched from
 `GET /classes`; "Outputs" lists transform-all results with an editable output +
 feedback box per row. A "Progress" view shows the live generate/auto-repair loop
 (poll `GET /jobs/{id}`, render each attempt, label a failed-then-followed attempt
-"auto-correcting →", and show `lastError` prominently).
+"auto-correcting →", and show `lastError` prominently). An "LLM messages" view
+gives full visibility into the model conversation: the job already persists the
+whole transcript (system/user/assistant turns), so expose it via
+`GET /jobs/{id}/messages` and render each turn as a collapsible card colour-coded
+by role (system=muted, user→OpenAI=blue, assistant←OpenAI=green), with a char
+count, a copy button, the long system prompt collapsed by default, and an opt-in
+2s auto-refresh while a job is running. This is what unblocks a user debugging "the
+LLM keeps failing" — they can read exactly what was sent and returned.
 
 **Tabs in the RIGHT working pane (not a global top bar):** a strong layout for a
 "form on the left, work on the right" tool is a persistent two-column `main` grid
@@ -162,6 +169,170 @@ server-side in the job record.
 function fileToB64(f){return new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(",")[1]);x.readAsDataURL(f);});}
 // POST {filename, dataBase64} -> server base64-decodes and writes the file.
 ```
+
+## Line numbers on every code / message / transcript box
+For an HL7/DTL/LLM-transcript tool, line numbers make errors ("line 3 offset 81")
+navigable. Two cheap vanilla helpers, no library:
+- **read-only blocks** (`linedBlock(text)` → a `.lined` flex div = a right-aligned
+  `.gut` gutter holding `1\n2\n…\nN` beside a `.code` div with the text). Use it for
+  DTL source, class source, input/output messages, and each LLM message body.
+  Key CSS: gutter and code share `line-height` so rows align; `.code` is
+  `white-space:pre-wrap;word-break:break-word`.
+- **editable textareas** (`lineNumberTextarea(ta)`): wrap the textarea next to a
+  `.gut` div, recompute the gutter on `input`, and sync `gut.scrollTop=ta.scrollTop`
+  on `scroll` (and after input) so the numbers track wrapping/scrolling. Guard with
+  a `data-lined` flag so re-renders don't double-wrap.
+Match the gutter's font/size/line-height to the content exactly or the numbers
+drift from their rows.
+
+## Dark mode, InterSystems-BLUE forward
+The IRIS blue `#2596be` (lighter accent `#56c2e6`) as Material `--primary` over a
+deep blue-ink dark surface set reads strongly as "InterSystems". Dark palette that
+worked: `--bg:#0b1620; --surface:#10212d; --surface-2:#152734; --surface-3:#1d3645;
+--txt:#e6f1f7; --muted:#8fa9b8; --outline:#2c4757; --outline-v:#223a48`, with
+`--primary-cont:#0c3a4c/--on-primary-cont:#bfe9f7` for chips. Gotchas migrating a
+light theme to dark: gutter/inset backgrounds that used `rgba(0,0,0,.03)` vanish on
+dark — flip to `rgba(255,255,255,.04)`; the dark code block (`.dtl`) needs a real
+border now that it no longer contrasts with a white page; bump shadow alpha
+(`rgba(0,0,0,.35)`). Watch for typos when hand-editing the `:root` line — a stray
+duplicate or non-ASCII char silently kills every var after it.
+
+## Copy buttons everywhere (one tiny helper)
+`copyBtn(getText)` returns a button that copies `getText()` (string or fn) via
+`navigator.clipboard.writeText` with a `document.execCommand('copy')` textarea
+fallback, flips to "copied ✓" for ~1.2s. Drop it into every code/message/output
+header (input, output, DTL source, class source, each LLM message, live output, the
+spec-reader modal). `e.stopPropagation()` so a copy click inside a collapsible
+header doesn't also toggle it.
+
+## Line-level diff highlighting on a line-numbered block
+Extend the line-number renderer to take a per-line class array. An LCS line diff
+(`lineDiff(a,b)` → `{aCls,bCls}` of `'add'|'del'|'chg'|''`) drives it: render each
+line as its own `<span class="ln add|del|chg">` (and a matching gutter
+`<span class="gl …">`), colouring add=accent, del=red, chg=amber with a 3px
+left-border. Show input with `aCls` and output with `bCls` so a transform's changes
+are visible on both sides while line numbers stay intact. **Pair adjacent del/add
+runs into `chg`** as a post-pass over the raw LCS walk — otherwise a modified line
+shows as a red delete on the left and an unrelated blue add on the right, which
+doesn't read as "this line changed". Walk both class arrays together; where a `del`
+on the left lines up with an `add` on the right, retag both `chg` (amber). Add a
+small colour legend (changed / only-in-input / only-in-output) so the highlighting
+is self-explanatory.
+
+## Character-level diff inside a changed line
+Line-level add/del/chg highlighting tells you WHICH lines changed; a per-character
+diff on the paired `chg` lines tells you WHICH CHARACTERS. After pairing a del/add
+run into `chg`, run a second LCS — this time over the two lines' CHARACTERS — to get
+`{aSeg,bSeg}`: arrays of `{t,c}` runs where `c` is `""` (kept), `"cdel"` (removed,
+shown on the input side) or `"cadd"` (added, shown on the output side). Render a
+changed line as a sequence of `<span>`s instead of plain text, classed by `c`, so
+e.g. `OLDAPP`→`NEWAPP` highlights only `OLD`/`NEW`. Merge adjacent same-class chars
+into one run, and cap the O(n·m) table for very long lines (fall back to
+whole-line). Colour `cdel`/`cadd` with a STRONGER background than the line tint
+(~0.4 alpha vs ~0.15) so the exact chars pop against the already-tinted chg line.
+Thread the seg arrays through the line-numbered renderer alongside the per-line
+classes (`linedBlock(text,classes,segs)`).
+- **Colour convention: removed=red, added=GREEN (not blue).** Don't reuse the
+  `--secondary` blue accent for "added" — in a transform diff blue reads as a
+  neutral info accent, while users expect git-style red-removed / green-added.
+  Use the InterSystems-green `--primary` (`rgba(26,143,108,…)`) for `cadd` AND the
+  line-level `add` tint+gutter, keep `--bad` red for `cdel`/`del`, and amber `--warn`
+  for `chg`. Update EVERY place the colour appears together or the legend drifts from
+  the render: the `.cadd` char highlight, the `.ln.add` line background, the `.gl.add`
+  gutter number, the `.difflegend .lg.add::before` swatch, AND any inline-styled
+  swatch in the legend HTML (an `rgba(...)` hardcoded in a `<span style>` won't follow
+  a CSS-var change — grep the raw rgba literal, not just `var(--…)`).
+
+## Scroll-sync the two side-by-side diff panes
+A side-by-side input/output diff is only readable if the two panes scroll together —
+otherwise the user scrolls one pane and loses the alignment they came to see. Add a
+tiny `syncScroll(els)` helper that binds a `scroll` listener on each container and
+mirrors `scrollTop` AND `scrollLeft` to the others (HL7 lines are long — horizontal
+sync matters as much as vertical). Guard against the listeners ping-ponging with a
+re-entrancy flag (`let lock; if(lock)return; lock=true; …; lock=false`). Make it
+idempotent so a poll re-render can re-bind cleanly — stash the handler on the element
+(`el._scrollSync`) and `removeEventListener` the old one before adding the new. The
+scroll container is the element with `overflow:auto` — for an `.io>.side` grid that's
+the `.side` wrapper, not the inner `#dexp`/`#dact` content div, so sync
+`$("#dexp").closest(".side")`, not `#dexp` itself. Call it once after each diff
+render (the accept/reject box and every per-output pair in the Outputs list).
+
+## Give async action buttons a busy state (spinner + disable)
+Any button that fires a request and then waits — Approve/Reject a plan, Accept/Reject
+an attempt, rebuild — must show that something is happening or the user re-clicks.
+Reuse the same `.spinner` pattern already on the generate button: a `busyBtn(btn,
+label, fn, siblings)` helper that swaps the button's innerHTML to
+`'<span class=spinner></span> '+label`, disables it AND its sibling (so you can't
+Approve then Reject the same gate), runs `fn`, and on a thrown error restores the
+saved innerHTML/disabled of all of them. No restore on success is needed when the
+action triggers a poll that re-renders the whole pane (`startPolling()`); the spinner
+just bridges the gap until the first tick repaints. Give each action a contextual
+label ("Building…", "Transforming all…", "Regenerating…", "Revising…") rather than a
+generic "Working…".
+
+## Stop the poll from flashing the UI
+A `setInterval` poll that re-renders by `innerHTML=""`+rebuild every tick makes
+boxes (status, diff, copy buttons) visibly flash — the DOM is torn down and
+recreated even when nothing changed. Two fixes, both needed:
+1. **Dedupe renders with a content signature.** Build a string of everything the
+   view actually paints (`status`, `verdict`, attempt list, the diffed messages,
+   the DTL, `lastError`, …); if it equals the previous tick's signature, `return`
+   without touching the DOM. Apply the same trick to any opt-in auto-refresh list
+   (LLM messages): sign on `role+contentLength` per message and skip the rebuild.
+2. **Stop polling at rest states.** The server won't advance `AWAITING_PLAN` /
+   `AWAITING_ATTEMPT` (waiting on the user) or terminal `SUCCESS`/`FAILED`/
+   `REJECTED` on its own — `clearInterval` there instead of polling forever.
+A multi-provider key form: generalise `isOpenAI()` to `needsKey()`/`isBedrock()`,
+swap the key label/placeholder + a region field per provider, and preset the model
+`<select>` to that provider's known ids (hide the live-model-list button where the
+provider has no `/models` endpoint).
+
+## Saved/uploaded artifacts: list + pick + read, don't re-process
+Uploading + extracting a doc every run is slow. Persist each upload and add a
+`GET /specs` list endpoint (`token,fileName,status,size,createdAt`); the UI offers a
+third "Saved spec" mode (a `<select>` of READY, non-empty specs) so the user reuses
+one without re-uploading, plus a "read full specification" link that opens the text
+in a simple overlay modal (fetch `GET /specs/:token` on selection). Keep the
+ORIGINAL upload filename on the record — if a file-ingest service later overwrites
+it with the on-disk `<token>.ext`, the picker shows opaque names; only set it when
+blank.
+
+## Let the user EDIT an LLM plan before approving
+For a plan-approval gate, let the user append their own steps (a dynamic
+add/remove list of inputs) and POST them as `planAdditions[]` on approve. Server-
+side fold them into the stored plan AND inject a user turn marking them as
+additional REQUIRED steps so the model implements them without dropping the
+original plan.
+
+## Show LLM token usage + cost in the UI
+When the backend reports per-call token usage, surface it: a **usage bar** at the
+top of the conversation view (this job's cost, in/out tokens, call count, model;
+plus an all-time cost/token total kept server-side), and a per-message chip on
+each assistant turn (`1429↓ / 127↑ tok` + `$0.0048`). Format money adaptively
+(`$0`, 5dp under a cent, 4dp otherwise) and tokens as `k` for thousands. Fold the
+usage figures into the auto-refresh dedupe signature so the bar updates when cost
+changes but doesn't flash on no-op ticks.
+
+## Model picker: a `<select>` populated from the provider's list endpoint
+Make the model field a **`<select>`** the user must choose from — NOT a free-text
+input. Both OpenAI and Bedrock expose a list endpoint that returns the exact ids the
+key/account can use (Bedrock inference-profile ids included), so there's no need to
+let the user type an arbitrary id, and a free-text box invites typos and unsupported
+ids. The refresh button fills the `<select>` with those real ids
+(`option.value=option.textContent=id`); preselect the remembered model if it's still
+in the list, else the first option. (Earlier this was an `<input list=datalist>` to
+allow pasting an account-specific id — the list endpoint makes that unnecessary, and
+a hard `<select>` guarantees only a real, listed model is submitted.) `#go` still
+guards `$("#model").value` being empty (the disabled placeholder option has `value=""`).
+
+## Gate the model box on a valid key
+Don't show speculative default model ids for a paid provider — they mislead. Keep
+the model `<select>` **disabled** with a single placeholder option ("Enter a valid
+API key") until the key validates, then enable it and fill it from the provider's
+model-list endpoint. Validate on key blur/refresh (a successful `/models` call =
+valid); reset to the placeholder option and re-disable if the key is emptied or
+rejected. Disabling a `<select>` = set `.disabled` and replace `.innerHTML` with the
+lone placeholder `<option value="">` (you can't set `.placeholder` on a `<select>`).
 
 ## Side-by-side diff viewer (LCS) for HL7/text
 

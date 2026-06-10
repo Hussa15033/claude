@@ -1,7 +1,7 @@
 {
 	"objectscript.conn": {
-		"server": "fhir-local",
-		"ns": "DTL",
-		"active": true
+		"server": "docker-52773",
+		"ns": "USER",
+		"active": false
 	}
 }

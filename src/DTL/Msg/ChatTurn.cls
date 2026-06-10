@@ -11,4 +11,13 @@ Property Role As %String(VALUELIST = ",system,user,assistant") [ Required ];
 /// so a long %String is simpler and safer here than a stream.
 Property Content As %String(MAXLEN = 1000000);
 
+/// Token usage + cost for the LLM CALL that produced this turn. Only meaningful on
+/// "assistant" turns (the reply): InputTokens covers the whole prompt sent for this
+/// call, OutputTokens the reply, Cost the USD for this single request.
+Property InputTokens As %Integer [ InitialExpression = 0 ];
+
+Property OutputTokens As %Integer [ InitialExpression = 0 ];
+
+Property Cost As %Numeric(SCALE = 6) [ InitialExpression = 0 ];
+
 }

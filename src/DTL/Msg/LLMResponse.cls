@@ -30,4 +30,10 @@ Property ErrorText As %String(MAXLEN = 2000);
 /// Token usage if the provider reported it.
 Property TotalTokens As %Integer [ InitialExpression = 0 ];
 
+/// Prompt (input) tokens, if the provider reported them.
+Property InputTokens As %Integer [ InitialExpression = 0 ];
+
+/// Completion (output) tokens, if the provider reported them.
+Property OutputTokens As %Integer [ InitialExpression = 0 ];
+
 }

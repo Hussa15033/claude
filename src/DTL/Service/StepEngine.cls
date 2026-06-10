@@ -27,7 +27,7 @@ ClassMethod Plan(pJob As DTL.Data.Job) As %Status
 		// Spec-driven: the transformation is defined by the spec; inputs only.
 		do pJob.AddTurn("system", ##class(DTL.Util.PromptBuilder).SystemPrompt())
 		do pJob.AddTurn("user", ##class(DTL.Util.PromptBuilder).SpecPlanPrompt(pJob.StreamStr(pJob.InputSpec), pJob.SourceDocType, ..InputsBlock(pJob)))
-		set tReply = ..CallLLM(pJob, .tSession, .tErr, 1)
+		set tReply = ..CallLLM(pJob, .tSession, .tErr, 1, .tInTok, .tOutTok, .tCost)
 		if tReply = "" {
 			set pJob.Status = "FAILED", pJob.LastError = "Planning LLM call failed: " _ tErr
 			do pJob.%Save()
@@ -35,7 +35,7 @@ ClassMethod Plan(pJob As DTL.Data.Job) As %Status
 		}
 		set pJob.SessionId = tSession
 		set pJob.Plan = $extract(tReply, 1, 32000)
-		do pJob.AddTurn("assistant", tReply)
+		do ..AddAssistantTurn(pJob, tReply, tInTok, tOutTok, tCost)
 		set pJob.Status = "AWAITING_PLAN"
 		set pJob.UpdatedAt = ##class(DTL.Data.Job).Now()
 		do pJob.%Save()
@@ -77,7 +77,7 @@ ClassMethod GenerateOne(pJob As DTL.Data.Job) As %Status
 				set tFirstTurn = 0
 			}
 
-			set tReply = ..CallLLM(pJob, .tSession, .tErr)
+			set tReply = ..CallLLM(pJob, .tSession, .tErr, 0, .tInTok, .tOutTok, .tCost)
 			set pJob.SessionId = tSession
 			if tReply = "" {
 				do pJob.AddAttempt(tAttempt, "LLM_ERROR", 0, 0, 0, 0, "LLM call failed: " _ tErr)
@@ -89,7 +89,7 @@ ClassMethod GenerateOne(pJob As DTL.Data.Job) As %Status
 
 			// Extract + verify. Spec-driven: gate on COMPILE+RUN only (no expected diff).
 			set tClassSrc = ##class(DTL.Util.Extractor).Extract(tReply, .tCN, .tValid)
-			do pJob.AddTurn("assistant", tClassSrc)
+			do ..AddAssistantTurn(pJob, tClassSrc, tInTok, tOutTok, tCost)
 			set tName = tClassName
 			set tRes = ##class(DTL.Util.Verifier).VerifyAll(tClassSrc, tPrimary, tPrimary, pJob.SourceDocType, "CompileRun", .tName)
 
@@ -206,11 +206,11 @@ ClassMethod Correct(pJob As DTL.Data.Job, pInput As %String, pProduced As %Strin
 	set tSC = $$$OK
 	try {
 		do pJob.AddTurn("user", ##class(DTL.Util.PromptBuilder).CorrectionPrompt(pInput, pProduced, pCorrected, pFeedback))
-		set tReply = ..CallLLM(pJob, .tSession, .tErr)
+		set tReply = ..CallLLM(pJob, .tSession, .tErr, 0, .tInTok, .tOutTok, .tCost)
 		set pJob.SessionId = tSession
 		if tReply = "" { set pJob.LastError = "LLM correction failed: " _ tErr  do pJob.%Save()  quit }
 		set tClassSrc = ##class(DTL.Util.Extractor).Extract(tReply, .tCN, .tValid)
-		do pJob.AddTurn("assistant", tClassSrc)
+		do ..AddAssistantTurn(pJob, tClassSrc, tInTok, tOutTok, tCost)
 		// Recompile under the stable final name and re-run the primary input.
 		set tName = ..SafeName(pJob.InputName) _ "Final"
 		set sc = ##class(DTL.Util.Verifier).CompileDTL(tClassSrc, .tName, .tCErr)
@@ -258,9 +258,9 @@ ClassMethod Reject(pJob As DTL.Data.Job, pFeedback As %String) As %Status
 /// step the caller runs the Extractor over it to pull the class.
 /// For the plan step pass pPlanMode=1 so a reply that is intentionally NOT a DTL
 /// class (Ok=0 from the connector's class validator) is still accepted as text.
-ClassMethod CallLLM(pJob As DTL.Data.Job, Output pSession As %String, Output pErr As %String, pPlanMode As %Boolean = 0) As %String
+ClassMethod CallLLM(pJob As DTL.Data.Job, Output pSession As %String, Output pErr As %String, pPlanMode As %Boolean = 0, Output pInTok As %Integer, Output pOutTok As %Integer, Output pCost As %Numeric) As %String
 {
-	set pSession = "", pErr = ""
+	set pSession = "", pErr = "", pInTok = 0, pOutTok = 0, pCost = 0
 	set sc = ##class(Ens.Director).CreateBusinessService("EnsLib.Testing.Service", .tSvc)
 	if $$$ISERR(sc) { set pErr = $system.Status.GetErrorText(sc) quit "" }
 	set tReq = ##class(DTL.Msg.LLMRequest).%New()
@@ -269,11 +269,17 @@ ClassMethod CallLLM(pJob As DTL.Data.Job, Output pSession As %String, Output pEr
 	set tReq.Provider = pJob.Provider
 	set tReq.Model = pJob.Model
 	set tReq.ApiKey = $get(^DTL.JobKey(pJob.JobId))   // transient key, not on the Job record
+	set tReq.BedrockRegion = $get(^DTL.JobRegion(pJob.JobId))
 	do pJob.FillTranscript(tReq)
-	set sc = tSvc.SendRequestSync(..#LLMTARGET, tReq, .tResp, 120)
+	// Wait up to 10 min for the operation to return — slow reasoning models (gpt-5.x)
+	// plus the operation's own FailureTimeout/ResponseTimeout retries can take minutes.
+	set sc = tSvc.SendRequestSync(..#LLMTARGET, tReq, .tResp, 600)
 	set pSession = tSvc.%SessionId
 	if $$$ISERR(sc) { set pErr = $system.Status.GetErrorText(sc) quit "" }
 	if '$isobject(tResp) { set pErr = "no response" quit "" }
+	// Token usage + per-request cost (0 if the provider didn't report usage).
+	set pInTok = +tResp.InputTokens, pOutTok = +tResp.OutputTokens
+	set pCost = ##class(DTL.Util.Pricing).Cost(pJob.Model, pInTok, pOutTok)
 	// RawContent is always the assistant text; Ok=0 only means "no DTL class
 	// extracted", which is expected for a plan reply.
 	set tRaw = pJob.StreamStr(tResp.RawContent)
@@ -283,6 +289,21 @@ ClassMethod CallLLM(pJob As DTL.Data.Job, Output pSession As %String, Output pEr
 		quit ""
 	}
 	quit tRaw
+}
+
+/// Append an assistant turn carrying the token/cost of the call that produced it.
+ClassMethod AddAssistantTurn(pJob As DTL.Data.Job, pContent As %String, pInTok As %Integer, pOutTok As %Integer, pCost As %Numeric)
+{
+	set t = ##class(DTL.Msg.ChatTurn).%New()
+	set t.Role = "assistant"
+	set t.Content = pContent
+	set t.InputTokens = +pInTok
+	set t.OutputTokens = +pOutTok
+	set t.Cost = +pCost
+	do pJob.Transcript.Insert(t)
+	// Running grand total across all jobs (for the UI's all-time figure).
+	set ^DTL.Usage("cost") = (+$get(^DTL.Usage("cost"))) + (+pCost)
+	set ^DTL.Usage("tokens") = (+$get(^DTL.Usage("tokens"))) + (+pInTok) + (+pOutTok)
 }
 
 ClassMethod SafeName(pName As %String) As %String

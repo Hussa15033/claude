@@ -15,8 +15,9 @@ Parameter ADAPTER = "EnsLib.HTTP.OutboundAdapter";
 
 Parameter INVOCATION = "Queue";
 
-/// mock | openai. Controls defaults but the wire format is identical.
-Property Mode As %String(VALUELIST = ",mock,openai") [ InitialExpression = "mock" ];
+/// mock | openai | bedrock. Controls defaults but the OpenAI/mock wire format is
+/// identical; bedrock uses the Anthropic Messages format.
+Property Mode As %String(VALUELIST = ",mock,openai,bedrock") [ InitialExpression = "mock" ];
 
 /// Chat completions path on the server.
 Property ChatPath As %String [ InitialExpression = "/v1/chat/completions" ];
@@ -41,7 +42,17 @@ Property MockHost As %String [ InitialExpression = "localhost" ];
 
 Property MockPort As %Integer [ InitialExpression = 8085 ];
 
-Parameter SETTINGS = "Mode:Basic,ChatPath:Basic,Model:Basic,OpenAIHost:Basic,OpenAIPort:Basic,OpenAISSLConfig:Basic,MockHost:Basic,MockPort:Basic,ApiKeyCredentials:Basic:credentialsSelector";
+/// AWS region used to build the Bedrock runtime host (bedrock-runtime.<region>.amazonaws.com).
+Property BedrockRegion As %String [ InitialExpression = "us-east-1" ];
+
+/// SSL config name reused for the HTTPS Bedrock connection.
+Property BedrockSSLConfig As %String [ InitialExpression = "DTLOpenAISSL" ];
+
+/// Default Bedrock Anthropic model id — a regional INFERENCE PROFILE (on-demand
+/// invoke of a bare foundation-model id is not supported for these models).
+Property BedrockModel As %String [ InitialExpression = "us.anthropic.claude-opus-4-8-v1:0" ];
+
+Parameter SETTINGS = "Mode:Basic,ChatPath:Basic,Model:Basic,OpenAIHost:Basic,OpenAIPort:Basic,OpenAISSLConfig:Basic,MockHost:Basic,MockPort:Basic,BedrockRegion:Basic,BedrockSSLConfig:Basic,BedrockModel:Basic,ApiKeyCredentials:Basic:credentialsSelector";
 
 /// Map the request type to the handler method.
 XData MessageMap
@@ -61,34 +72,74 @@ Method ChatCompletion(pReq As DTL.Msg.LLMRequest, Output pResp As DTL.Msg.LLMRes
 	set pResp.Attempt = pReq.Attempt
 	set tSC = $$$OK
 	try {
-		// --- Build the OpenAI chat-completions JSON body ---
-		set tMessages = []
-		for i = 1:1:pReq.Transcript.Count() {
-			set tTurn = pReq.Transcript.GetAt(i)
-			do tMessages.%Push({"role": (tTurn.Role), "content": (tTurn.Content)})
-		}
-		set tModel = $select(pReq.Model '= "":pReq.Model, 1:..Model)
-		set tBody = {
-			"model": (tModel),
-			"temperature": (pReq.Temperature),
-			"max_tokens": (pReq.MaxTokens),
-			"messages": (tMessages)
-		}
-
-		set tJsonBody = tBody.%ToJSON()
-
-		// --- Pick the provider (per-request override, else the Mode setting) and
-		//     point the hosted adapter at it for this call. One operation serves
-		//     both OpenAI (HTTPS + SSL) and the offline mock (plaintext). ---
+		// --- Pick the provider (per-request override, else the Mode setting). One
+		//     operation serves OpenAI (HTTPS+SSL), the offline mock (plaintext), and
+		//     AWS Bedrock Anthropic (HTTPS+SSL, Anthropic Messages wire format). ---
 		set tProvider = $select(pReq.Provider '= "":pReq.Provider, 1:..Mode)
-		if tProvider = "openai" {
-			set ..Adapter.HTTPServer = ..OpenAIHost
-			set ..Adapter.HTTPPort = ..OpenAIPort
-			set ..Adapter.SSLConfig = ..OpenAISSLConfig
+
+		set tIsBedrock = (tProvider = "bedrock")
+		set tModel = $select(tIsBedrock:$select(pReq.Model'="":pReq.Model, 1:..BedrockModel), pReq.Model'="":pReq.Model, 1:..Model)
+		set tPath = ..ChatPath
+
+		if tIsBedrock {
+			// Bedrock: Anthropic Messages format — system is separated from messages,
+			// and there is no "model" in the body (it's in the URL path).
+			set tSystem = ""
+			set tMessages = []
+			for i = 1:1:pReq.Transcript.Count() {
+				set tTurn = pReq.Transcript.GetAt(i)
+				if tTurn.Role = "system" {
+					set tSystem = tSystem _ $select(tSystem'="":$char(10,10), 1:"") _ tTurn.Content
+				} else {
+					do tMessages.%Push({"role": (tTurn.Role), "content": (tTurn.Content)})
+				}
+			}
+			set tBody = {
+				"anthropic_version": "bedrock-2023-05-31",
+				"max_tokens": (pReq.MaxTokens),
+				"messages": (tMessages)
+			}
+			if tSystem '= "" set tBody.system = tSystem
+			set tJsonBody = tBody.%ToJSON()
+			// InvokeModel path; the model id (or inference-profile id) is URL-encoded.
+			set tPath = "/model/" _ ..UrlEncode(tModel) _ "/invoke"
+			set tRegion = $select(pReq.BedrockRegion'="":pReq.BedrockRegion, 1:..BedrockRegion)
+			set ..Adapter.HTTPServer = "bedrock-runtime." _ tRegion _ ".amazonaws.com"
+			set ..Adapter.HTTPPort = 443
+			set ..Adapter.SSLConfig = ..BedrockSSLConfig
 		} else {
-			set ..Adapter.HTTPServer = ..MockHost
-			set ..Adapter.HTTPPort = ..MockPort
-			set ..Adapter.SSLConfig = ""
+			// --- OpenAI / mock chat-completions JSON body ---
+			set tMessages = []
+			for i = 1:1:pReq.Transcript.Count() {
+				set tTurn = pReq.Transcript.GetAt(i)
+				do tMessages.%Push({"role": (tTurn.Role), "content": (tTurn.Content)})
+			}
+			// Newer OpenAI models (gpt-5*, o1/o3/o4 reasoning family) reject the
+			// legacy "max_tokens" param ("use 'max_completion_tokens' instead") and
+			// only accept the default temperature. Detect those and adjust the body.
+			set tLModel = $zconvert(tModel, "L")
+			set tNewOpenAI = (tLModel [ "gpt-5") || (tLModel [ "gpt-6") || (tLModel ? 1"o1".e) || (tLModel ? 1"o3".e) || (tLModel ? 1"o4".e)
+			set tBody = {
+				"model": (tModel),
+				"messages": (tMessages)
+			}
+			if tNewOpenAI {
+				set tBody."max_completion_tokens" = pReq.MaxTokens
+				// omit temperature — these models only support the default (1)
+			} else {
+				set tBody."max_tokens" = pReq.MaxTokens
+				set tBody.temperature = pReq.Temperature
+			}
+			set tJsonBody = tBody.%ToJSON()
+			if tProvider = "openai" {
+				set ..Adapter.HTTPServer = ..OpenAIHost
+				set ..Adapter.HTTPPort = ..OpenAIPort
+				set ..Adapter.SSLConfig = ..OpenAISSLConfig
+			} else {
+				set ..Adapter.HTTPServer = ..MockHost
+				set ..Adapter.HTTPPort = ..MockPort
+				set ..Adapter.SSLConfig = ""
+			}
 		}
 
 		// --- Build a request object to carry headers (ContentType + auth) ---
@@ -96,8 +147,10 @@ Method ChatCompletion(pReq As DTL.Msg.LLMRequest, Output pResp As DTL.Msg.LLMRes
 		set tHttpReq.ContentType = "application/json"
 
 		// Authorization header. Prefer the per-request key the user supplied in the
-		// UI; otherwise fall back to the operation's configured credentials. The
-		// header is sent whenever a key is available (mock ignores it).
+		// UI; otherwise fall back to the operation's configured credentials. Bedrock
+		// accepts a long-lived API key (bearer token) the same way — set it in the
+		// Amazon Bedrock console (or `aws bedrock create-api-key`) and paste it in the
+		// UI. The mock ignores the header.
 		set tKey = $select(pReq.ApiKey '= "":pReq.ApiKey, 1:..GetApiKey())
 		if tKey '= "" do tHttpReq.SetHeader("Authorization", "Bearer " _ tKey)
 
@@ -107,7 +160,7 @@ Method ChatCompletion(pReq As DTL.Msg.LLMRequest, Output pResp As DTL.Msg.LLMRes
 		// pData via $ORDER and writes each node to EntityBody. pOp must be "Post".
 		kill tData
 		set tData(1) = tJsonBody
-		set tSC = ..Adapter.SendFormDataArray(.tHttpResp, "Post", tHttpReq, "", .tData, ..ChatPath)
+		set tSC = ..Adapter.SendFormDataArray(.tHttpResp, "Post", tHttpReq, "", .tData, tPath)
 		if $$$ISERR(tSC) {
 			// A non-2xx HTTP status (e.g. 400 for a bad model) surfaces here as an
 			// <Ens>ErrHTTPStatus transport error AND, usually, a populated response
@@ -141,16 +194,40 @@ Method ChatCompletion(pReq As DTL.Msg.LLMRequest, Output pResp As DTL.Msg.LLMRes
 			quit
 		}
 
-		// --- Parse the JSON response defensively ---
+		// --- Parse the JSON response defensively (shape differs by provider) ---
 		set tJson = {}.%FromJSON(tRespBody)
 		set tContent = ""
-		try {
-			set tContent = tJson.choices.%Get(0).message.content
-			set pResp.FinishReason = tJson.choices.%Get(0)."finish_reason"
-		} catch {
-			set tContent = ""
+		if tIsBedrock {
+			// Anthropic Messages response: content is an array of blocks; concatenate
+			// the text blocks. finish_reason is "stop_reason"; usage has in/out tokens.
+			try {
+				set tIt = tJson.content.%GetIterator()
+				while tIt.%GetNext(.k, .blk) {
+					if $isobject(blk), (blk.type = "text") set tContent = tContent _ blk.text
+				}
+				set pResp.FinishReason = tJson."stop_reason"
+			} catch {
+				set tContent = ""
+			}
+			if $isobject(tJson.usage) {
+				set pResp.InputTokens = +tJson.usage."input_tokens"
+				set pResp.OutputTokens = +tJson.usage."output_tokens"
+				set pResp.TotalTokens = pResp.InputTokens + pResp.OutputTokens
+			}
+		} else {
+			try {
+				set tContent = tJson.choices.%Get(0).message.content
+				set pResp.FinishReason = tJson.choices.%Get(0)."finish_reason"
+			} catch {
+				set tContent = ""
+			}
+			if $isobject(tJson.usage) {
+				set pResp.InputTokens = +tJson.usage."prompt_tokens"
+				set pResp.OutputTokens = +tJson.usage."completion_tokens"
+				set pResp.TotalTokens = +tJson.usage."total_tokens"
+				if pResp.TotalTokens = 0 set pResp.TotalTokens = pResp.InputTokens + pResp.OutputTokens
+			}
 		}
-		if $isobject(tJson.usage) set pResp.TotalTokens = +tJson.usage."total_tokens"
 		do pResp.RawContent.Write(tContent)
 
 		if tContent = "" {
@@ -209,7 +286,7 @@ ClassMethod DescribeHttpError(pCode As %Integer, pBody As %String, pProvider As 
 	} elseif (pCode >= 500) {
 		set tHint = "The provider had a server error (HTTP " _ pCode _ "). This is usually transient — retry shortly."
 	} elseif tModelProblem {
-		set tHint = "The selected model """ _ pModel _ """ is not valid for your account / endpoint. Pick a different model (use the ⟳ button to load the models your key can access)."
+		set tHint = "The selected model """ _ pModel _ """ is not valid for your account / endpoint." _ $select(pProvider="bedrock":" For Bedrock, use the full model or inference-profile id (e.g. anthropic.claude-opus-4-8 or us.anthropic.claude-opus-4-8-v1:0) and ensure model access is enabled in your AWS region.", 1:" Pick a different model (use the ⟳ button to load the models your key can access).")
 	} elseif (pCode = 400) || (tType [ "invalid_request") {
 		set tHint = "The request was rejected as invalid (HTTP 400). Check the selected model and your inputs."
 	}
@@ -235,6 +312,22 @@ ClassMethod DescribeTransport(pStatusTxt As %String, pProvider As %String) As %S
 	set tOut = "Could not reach the LLM provider: " _ pStatusTxt
 	if tHint '= "" set tOut = tOut _ "  → " _ tHint
 	quit $extract(tOut, 1, 1900)
+}
+
+/// Percent-encode a Bedrock model/inference-profile id for use in the URL path
+/// (the colons in ids like "us.anthropic.claude-opus-4-8-v1:0" must be escaped).
+ClassMethod UrlEncode(pVal As %String) As %String
+{
+	set out = ""
+	for i = 1:1:$length(pVal) {
+		set c = $extract(pVal, i)
+		if c?1(1A,1N) || (c="-") || (c=".") || (c="_") || (c="~") {
+			set out = out _ c
+		} else {
+			set out = out _ "%" _ $zconvert($zhex($ascii(c)), "U")
+		}
+	}
+	quit out
 }
 
 /// Resolve the API key from the configured Ens credentials entry.

@@ -1,6 +1,6 @@
 ---
 name: objectscript-gotchas
-description: Writing valid InterSystems ObjectScript that compiles and runs the first time. Use when authoring .cls classes or methods, debugging <SYNTAX>/<UNDEFINED>/compile #1043 errors, running code through the `iris session` terminal, or generating ObjectScript with an LLM. Covers quit-vs-return in try blocks, terminal heredoc limits, status checking, and dynamic-object access.
+description: Writing valid InterSystems ObjectScript that compiles and runs the first time. Use when authoring .cls classes or methods, debugging <SYNTAX>/<UNDEFINED>/compile #1043 errors, MAXLEN/#7201 overflow, decomposing compound %Status compile errors, running code through the `iris session` terminal, or generating ObjectScript with an LLM. Covers quit-vs-return in try blocks, terminal heredoc limits, status checking, verbose error logs, %String→%Stream, and dynamic-object access.
 ---
 
 # Writing valid InterSystems ObjectScript
@@ -88,13 +88,48 @@ To hex-encode random bytes, do it per byte:
 - 0-based access: `obj.choices.%Get(0)`. Iterate: `set it=arr.%GetIterator() while it.%GetNext(.k,.v){...}`.
 - `set j={}.%FromJSON(text)` parses; `j.%ToJSON()` serializes.
 
-## 7. HL7 / DTL specifics live in the `dtl-generation` skill
+## 7. `GetErrorText` shows only the TOP wrapper — decompose for the full log
+
+`$system.Status.GetErrorText(sc)` renders only the outermost error of a COMPOUND
+status. A failed class compile typically wraps the real cause (a `#1011 Invalid
+name`, `#1001 Missing closing quote`, `#1063 Invalid TRY`, …) inside a generic
+`#5030`/generator wrapper, so the one line you print hides what actually broke.
+Surface everything from BOTH sources and merge:
+
+```objectscript
+// (a) explode the compound status into each constituent error
+do $system.Status.DecomposeStatus(sc,.errs)   // errs(1),errs(2),... = each message
+// (b) capture the LoadStream errorlog array (often has class/method/line context)
+set sc=$system.OBJ.LoadStream(stream,"ck/displayerror=0/displaylog=0",.loadErr)
+//     walk loadErr(...) with $order; render a node via GetErrorText ONLY when it
+//     is a real status: $listvalid(node)&&$system.Status.IsError(node), else use
+//     the node text verbatim — otherwise a plain-text node gets wrongly re-wrapped
+//     as "#5034 Invalid status code structure".
+```
+Clean each line (collapse CRLF/tabs, strip a leading `>` continuation marker),
+de-dup across the two sources, and number them. This turns one opaque line into the
+handful of real syntax errors — invaluable when feeding errors back to an LLM.
+
+## 8. `%String(MAXLEN=...)` overflows on real data — use a `%Stream`
+
+A `%String` property has a hard `MAXLEN` (commonly 32000); `%Save()` of a longer
+value raises `#7201`/`#5802 … length longer than MAXLEN allowed of 32000`. Any
+field that can hold document/spec/user-supplied text WILL exceed it. Make it a
+`%Stream.GlobalCharacter` instead: write `do obj.Prop.Write(text)`, read via a
+helper (`do s.Rewind() while 's.AtEnd {set t=t_s.Read(16000)}`), and surface to
+JSON by reading the stream. **When you flip a persistent property String→Stream you
+must `%KillExtent()` the old rows** (the stored layout changed) — and restart any
+running business hosts so they drop stale compiled code (the event-log line
+"continuing to run using code from previous version" is the tell that a host is
+still mis-storing against the old type).
+
+## 9. HL7 / DTL specifics live in the `dtl-generation` skill
 
 DocType resolution, segment-path grammar, MSH off-by-one, repeating-field
 indexes, grouped segments, and `OutputToString()`'s trailing terminator are
 documented separately — see the **dtl-generation** skill.
 
-## 8. Method resolution is compile-time, order-independent
+## 10. Method resolution is compile-time, order-independent
 
 A ClassMethod can call another method defined later in the same class. But a
 class is only callable from the namespace it's compiled in (e.g. `Security.*`

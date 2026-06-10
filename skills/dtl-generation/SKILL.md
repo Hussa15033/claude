@@ -1,6 +1,6 @@
 ---
 name: dtl-generation
-description: Generating, compiling, and verifying InterSystems DTL (Data Transformation Language) for HL7 v2 messages — including with an LLM in a generate→compile→verify→regenerate loop. Use when writing DTL classes, transforming HL7 v2, building an LLM prompt for DTL, comparing transform output, or debugging silently-failing assigns. Captures DocType, segment-path, MSH-offset, repeating-field and grouped-segment gotchas proven against IRIS for Health.
+description: Generating, compiling, and verifying InterSystems DTL (Data Transformation Language) for HL7 v2 messages — including spec-driven generation and an LLM generate→compile→verify→auto-repair loop. Use when writing DTL classes, transforming HL7 v2, building/repairing an LLM prompt for DTL, escaping XML in DTL attributes, capturing the full compile-error log, comparing transform output, or debugging silently-failing assigns. Captures DocType, segment-path, MSH-offset, repeating-field, grouped-segment and XML-entity gotchas proven against IRIS for Health.
 ---
 
 # Generating & verifying HL7 v2 DTL
@@ -94,15 +94,18 @@ segments field N = `$piece(seg,"|",N+1)`.
 ## Driving an LLM to generate DTL
 
 - **System prompt**: give the exact class shape above, the `{SEG:field(rep).comp.sub}`
-  brace grammar, the repetition-index and grouped-segment rules, and "output ONLY
-  a complete class (a ```objectscript fence is ok), no prose."
+  brace grammar, the repetition-index and grouped-segment rules, the XML-entity
+  escaping rule (see "#1 compile-failure cause" below — put it in the system prompt
+  AND the repair prompt), and "output ONLY a complete class (a ```objectscript
+  fence is ok), no prose."
 - **Pin** source/target DocTypes in the user prompt (resolved per Gotcha 1).
 - **Caveat handling**: tell it the example output may not be the literal transform
   of the input; infer general rules, don't hard-code instance-specific values.
-- **Feedback loop**: on compile failure feed back the verbatim `GetErrorText`
-  (line numbers + offending line). On mismatch feed back a field-level diff,
-  marking values not present in the source as "likely illustrative — don't
-  hard-code."
+- **Feedback loop**: on compile failure feed back the FULL decomposed error log
+  (see "Capture the FULL compile error log" — not just the top `GetErrorText`
+  wrapper) and auto-repair (see "Auto-repair loop"). On mismatch feed back a
+  field-level diff, marking values not present in the source as "likely
+  illustrative — don't hard-code."
 - **SECURITY**: never compile the LLM's class wrapper verbatim — a smuggled
   `[ CodeMode = generator ]` method runs arbitrary code at compile time. Extract
   only the `<transform>...</transform>` fragment and re-wrap it yourself under a
@@ -161,6 +164,94 @@ outputs as two independent lists, pick one primary input + one primary output fo
 the gate, and tell the model the examples are "NOT necessarily matched pairs —
 infer the general rules; do not assume input[i] maps to output[i]."
 
+## Give the LLM a TESTED DTL element/attribute schema (not just an example)
+A single example `<transform>` isn't enough — the model invents elements/attributes
+that don't exist and gets "Invalid DTL". Put a concise, **compile-verified**
+element reference in the system prompt (and repeat it in the compile-repair prompt).
+The valid DTL elements, each confirmed by compiling them live on IRIS for Health:
+- `<transform>` (root, one): `sourceClass`/`targetClass='EnsLib.HL7.Message'`,
+  `sourceDocType`/`targetDocType='ver:struct'`, `create='copy|new|existing'`,
+  `language='objectscript'`. Holds a flat ordered list of the actions below.
+- `<assign value='EXPR' property='target.{PATH}' action='set|append|clear|insert|remove' [key='EXPR']/>` — self-closing.
+- `<if condition='OBJECTSCRIPT-BOOL'><true>…</true><false>…</false></if>` (`<false>` optional).
+- `<switch><case condition='BOOL'>…</case><default>…</default></switch>`.
+- `<foreach property='source.{REPEATING()}' key='k'>…</foreach>` — use the key as the rep index inside.
+- `<code><![CDATA[ valid ObjectScript ]]></code>` — escape hatch.
+- `<trace value='EXPR'/>`.
+- `<comment/>` — **must be empty/self-closing**; text content inside `<comment>` is INVALID.
+Tell it to use ONLY these, invent no attributes, and never leave a tag unclosed.
+Authoring tip: actually compile each element form (via the compile-from-string
+path) before writing it into the prompt — that's what makes the schema trustworthy.
+
+## Give the LLM the ACTUAL HL7 message schema (segment paths + field numbers)
+A tested DTL element schema makes the DTL *compile*; it does not make it *correct*.
+The model still invents segment paths, wrong group prefixes, missing repetition
+indexes, and non-existent field numbers — which COMPILE fine but silently produce
+no output (DTL wraps path assigns in Try/Catch). The fix is to inject the real
+message structure for the source (and target) DocType, read live from the IRIS HL7
+schema store, into the prompt. IRIS already stores every 2.x schema; pull it with:
+```objectscript
+do ##class(EnsLib.HL7.Schema).GetContentArray(.c,"source","2.5:ORU_R01",,0,0)
+```
+`GetContentArray` returns the full structure tree: top-level `c(i,"name")`/`c(i,"type")`
+where `type` is `SS:ver:SEG` for a segment, `grp`/`grp()` for a group; groups recurse
+into numeric children (`c(i,j,…)`); a trailing `()` on a name marks a REPEATING
+segment/group/field; each segment node carries its fields inline as `c(…,f,"name")`.
+Walk it to emit (a) the exact brace path to every segment WITH its group prefix and a
+concrete repetition index — e.g. `{PIDgrpgrp(1).PIDgrp.PID:...}` — and (b) per segment
+`field# = FieldName`. Render it into the plan, initial-generation, and runtime-repair
+prompts (see `DTL.Util.HL7Schema.SchemaText` / `PromptBuilder.SchemaBlock`). Only emit
+the target schema separately when it differs from the source. This is what turns
+"compiles but wrong" into "compiles and writes the right fields".
+- **Gotcha — name indirection does NOT resolve a ByRef local-array parameter across
+  method frames.** A recursive walk that passes `.array` and builds `@("arr("_node_")")`
+  refs silently reads empty. Copy the content array into a **process-private global**
+  (`merge ^||X = tC`) first and indirect on THAT (`@("^||X("_node_")")`) — PPG
+  indirection works across frames. Kill the PPG when done.
+
+## #1 compile-failure cause: unescaped XML chars inside attribute values
+DTL attributes are SINGLE-quoted (`value='…'`, `condition='…'`), so any special XML
+char inside the value must be an ENTITY, not the literal — else the attribute
+terminates early and you get a SAX/parse error or a truncated-attribute compile
+failure. This bites constantly because ObjectScript's **not-equal operator is an
+apostrophe** (`'=`), and string literals need double-quotes (`"EPIC"`):
+`'`→`&apos;`, `"`→`&quot;`, `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;`.
+- INVALID: `<if condition='source.{PID:8}'="F"'>` (bare `'` and `"` break it)
+- VALID:   `<if condition='source.{PID:8}&apos;=&quot;F&quot;'>`
+- A literal "set MSH-3 to EPIC" is `value='&quot;EPIC&quot;'`.
+Put this rule in the SYSTEM prompt AND restate it in the compile-repair prompt
+(keep it as one reusable block, e.g. `PromptBuilder.XmlEscapingRule()`), and tell
+the model that a SAX / unexpected-`'` / truncated-attribute error is almost
+certainly an unescaped char.
+
+## Let the plan EXTEND the spec without contradicting it
+For spec-driven planning, tell the model the **specification is authoritative**
+(every rule it states must appear; never contradict it) but it MAY add sensible
+extra steps it infers from the example INPUT (normalisations, derived/version
+fields, cleanups) PROVIDED they don't conflict with the spec — and mark each
+inferred item ` (suggested)` so the reviewer can distinguish spec-mandated from
+inferred changes.
+
+## Capture the FULL compile error log (not just the %Status wrapper)
+`$system.Status.GetErrorText(tSC)` renders only the **top** wrapper of a compound
+status — for a DTL that fails compilation that's the near-useless
+`<Ens>ErrInvalidDTL: Invalid DTL` / `#5490 Error running generator for method
+GetSourceDocType…`, with the REAL reason (a `#1011 Invalid name`, `#1001 Missing
+closing quotation mark`, `#1063 Invalid TRY`, etc., with the offending generated
+line + offset) buried in the nested errors. The LLM can't fix what it can't see.
+Capture BOTH sources and merge them into a numbered, de-duplicated block:
+- `$system.OBJ.LoadStream(stream, "ck/displayerror=0/displaylog=0", .errLog)` —
+  pass an errorlog array byref and walk every node (`$order`), normalising each:
+  render it via `GetErrorText` ONLY when `$listvalid(node) && $system.Status.IsError(node)`,
+  else use the node text verbatim (otherwise a plain-text node gets wrongly
+  re-wrapped as `#5034 Invalid status code structure`).
+- `$system.Status.DecomposeStatus(tSC, .errs)` — explodes the compound status into
+  every constituent error so each `#nnnn` shows up as its own line.
+Clean each line (collapse CRLF/tabs, strip a leading `>` continuation marker) and
+dedup across both sources. This routinely turns one opaque line into the four real
+syntax errors the model then fixes in the next auto-repair round. Hand the LLM the
+**complete** block (the truncated one-line UI summary is separate).
+
 ## Auto-repair loop: feed compiler/runtime errors back to the LLM
 Generated DTL frequently fails to compile on the first try (unclosed XML
 attribute, bad macro, missing repetition index). Don't surface that to the user —
@@ -176,6 +267,15 @@ Keep the verbatim errors AND a short "DTL validity checklist" in the repair prom
 single-quoted `value='…'`; brace paths `{SEG:field(rep).comp.sub}` with rep index;
 no extra methods/`[CodeMode]`). The loop only pauses for the user once it
 compiles+runs (spec-driven `CompileRun` gate) or the budget is exhausted.
+
+## Multi-provider LLM backend (OpenAI / Bedrock / mock)
+The generate→compile→repair loop is provider-agnostic — the same prompts work
+against OpenAI chat-completions, AWS Bedrock Claude (Anthropic Messages format),
+and an offline scripted mock. Keep the wire-format differences in ONE business
+operation (host/path/body/response per provider), thread the per-job provider +
+model + key (+ Bedrock region) on the request message, and the DTL loop stays
+identical. See the iris-interop-rest skill for the Bedrock request/response shape
+and the bearer-token auth.
 
 ## Surface PROVIDER errors descriptively (don't echo the raw transport status)
 A bad model id / key shows up as `<Ens>ErrHTTPStatus: non-OK status 400`, which is

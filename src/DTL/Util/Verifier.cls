@@ -49,6 +49,7 @@ ClassMethod CompileDTL(pSource As %String, ByRef pClassName As %String = "", Out
 
 		set tStream = ##class(%Stream.GlobalCharacter).%New()
 		do tStream.Write(tSource)
+		kill tLoadErr
 		set tSC = $system.OBJ.LoadStream(tStream, "ck/displayerror=0/displaylog=0", .tLoadErr)
 
 		if $$$ISOK(tSC), '##class(%Dictionary.CompiledClass).%ExistsId(pClassName) {
@@ -57,8 +58,84 @@ ClassMethod CompileDTL(pSource As %String, ByRef pClassName As %String = "", Out
 	} catch ex {
 		set tSC = ex.AsStatus()
 	}
-	if $$$ISERR(tSC) set pErrors = $system.Status.GetErrorText(tSC)
+	// Build a VERBOSE, fully-decomposed error log: the compound %Status only renders
+	// its top wrapper (e.g. "<Ens>ErrInvalidDTL / #5490 generator failed"), which
+	// hides the actual reason the DTL is invalid. We decompose the status into every
+	// nested error AND walk the LoadStream errorlog array so the LLM sees the real
+	// cause (bad path, unknown property, XML error, ...) and the offending line.
+	if $$$ISERR(tSC) set pErrors = ..FormatCompileErrors(tSC, .tLoadErr)
 	quit tSC
+}
+
+/// Render a compile failure as a numbered, de-duplicated list of EVERY underlying
+/// error. Sources, in order: (1) every error decomposed from the compound %Status
+/// via $system.Status.DecomposeStatus; (2) every node of the LoadStream errorlog
+/// array (which often carries class/method/line context the status text omits).
+/// The result is a clean multi-line block ready to hand back to the LLM.
+ClassMethod FormatCompileErrors(pStatus As %Status, ByRef pLoadErr) As %String
+{
+	set nl = $char(10)
+	set tOut = "", n = 0
+	// Track seen lines so the same error from status + errorlog isn't printed twice.
+	kill tSeen
+
+	// (1) Decompose the compound status into its constituent errors.
+	if $get(pStatus) '= "", $$$ISERR(pStatus) {
+		do $system.Status.DecomposeStatus(pStatus, .tErrs)
+		set i = ""
+		for {
+			set i = $order(tErrs(i))
+			quit:i=""
+			set tTxt = $get(tErrs(i))
+			continue:tTxt=""
+			set tTxt = ..CleanErrLine(tTxt)
+			continue:tTxt=""
+			continue:$data(tSeen(tTxt))
+			set tSeen(tTxt) = 1, n = n + 1
+			set tOut = tOut _ n _ ". " _ tTxt _ nl
+		}
+	}
+
+	// (2) Walk the LoadStream errorlog array (any depth). Nodes may hold a %Status
+	//     or a plain text message; normalise both.
+	set tKey = ""
+	for {
+		set tKey = $order(pLoadErr(tKey))
+		quit:tKey=""
+		set tVal = $get(pLoadErr(tKey))
+		// A node value MAY be a real %Status ($list-encoded); only then render it via
+		// GetErrorText. A plain text string (the common case) is used verbatim --
+		// passing it to GetErrorText would wrongly re-wrap it as "#5034 Invalid
+		// status code structure".
+		set tTxt = ""
+		if (tVal '= "") {
+			if $listvalid(tVal) && $system.Status.IsError(tVal) {
+				set tTxt = $system.Status.GetErrorText(tVal)
+			} else {
+				set tTxt = tVal
+			}
+		}
+		set tTxt = ..CleanErrLine(tTxt)
+		continue:tTxt=""
+		continue:$data(tSeen(tTxt))
+		set tSeen(tTxt) = 1, n = n + 1
+		set tOut = tOut _ n _ ". " _ tTxt _ nl
+	}
+
+	if tOut = "" set tOut = $system.Status.GetErrorText(pStatus)
+	quit tOut
+}
+
+/// Tidy a single error line: collapse CRLF/tabs to spaces, trim, drop a leading
+/// ">" continuation marker the compiler emits, and squeeze runs of whitespace.
+ClassMethod CleanErrLine(pTxt As %String) As %String
+{
+	set s = $translate(pTxt, $char(13, 10, 9), "   ")
+	// squeeze double spaces
+	while (s [ "  ") { set s = $replace(s, "  ", " ") }
+	set s = $zstrip(s, "<>W")
+	if $extract(s) = ">" set s = $zstrip($extract(s, 2, *), "<W")
+	quit s
 }
 
 /// Extract the first &lt;transform&gt;...&lt;/transform&gt; block from arbitrary

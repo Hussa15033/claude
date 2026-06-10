@@ -1,6 +1,6 @@
 ---
 name: iris-embedded-python
-description: Using Python from InterSystems IRIS — extracting text from PDF/DOCX/etc, calling pip-installed libraries, and avoiding the crashes that wedge the instance. Use when calling Python from ObjectScript, extracting document text, running pypdf/python-docx, or debugging SIGSEGV/<ROUTINELOAD invalid cache>/hung-instance issues after Python calls. Strongly recommends the out-of-process irispython + $ZF(-100) pattern.
+description: Using Python from InterSystems IRIS — extracting/Markdown-converting text from PDF/DOCX/etc, calling pip-installed libraries, and avoiding the crashes that wedge the instance. Use when calling Python from ObjectScript, extracting or converting document text to Markdown, running pypdf/pdfplumber/pypandoc/python-docx, or debugging SIGSEGV/<ROUTINELOAD invalid cache>/hung-instance issues after Python calls. Strongly recommends the out-of-process irispython + $ZF(-100) pattern.
 ---
 
 # IRIS Embedded Python — what's safe and what wedges the instance
@@ -34,21 +34,54 @@ Put the Python in a one-function helper module on disk, and shell out to
 `irispython` capturing stdout to a temp file. A crash is isolated to the child.
 
 `dtl_extract.py` (helper, one clean function — avoids ObjectScript calling
-underscore-named methods like `extract_text`):
+underscore-named methods like `extract_text`). Convert to **Markdown** rather than
+flat text: an LLM parses a spec far more reliably with headings/tables/lists
+preserved. Route by extension — Pandoc for Office/HTML, pdfplumber (tables!) for
+PDF, verbatim for text:
 ```python
 def extract(path):
     p=(path or "").lower()
     try:
         if p.endswith(".pdf"):
-            from pypdf import PdfReader
-            return "\n".join((pg.extract_text() or "") for pg in PdfReader(path).pages)
-        if p.endswith(".docx"):
-            import docx
-            return "\n".join(par.text for par in docx.Document(path).paragraphs)
+            return _pdf_to_md(path)                       # pdfplumber -> md tables, pypdf fallback
+        if p.endswith((".docx",".doc",".odt",".rtf",".epub")):
+            return _pandoc_to_md(path)                    # pypandoc -> "gfm"
+        if p.endswith((".html",".htm")):
+            return _pandoc_to_md(path, fmt="html")
         with open(path,"r",encoding="utf-8",errors="replace") as f: return f.read()
     except Exception as e:
+        try:                                              # last-ditch: plain text so the user still gets something
+            with open(path,"r",encoding="utf-8",errors="replace") as f:
+                t=f.read()
+            if t.strip(): return t
+        except Exception: pass
         return "__EXTRACT_ERROR__"+str(e)
+
+def _pandoc_to_md(path, fmt=None):
+    import pypandoc
+    try: pypandoc.get_pandoc_version()
+    except OSError: pypandoc.download_pandoc()            # no system pandoc in a bare container -> fetch a private copy
+    return pypandoc.convert_file(path,"gfm",format=fmt,extra_args=["--wrap=none"])
+
+def _pdf_to_md(path):                                     # pdfplumber keeps table structure; pypdf is the text-only fallback
+    try:
+        import pdfplumber
+        out=[]
+        with pdfplumber.open(path) as pdf:
+            for i,pg in enumerate(pdf.pages,1):
+                out.append("\n\n## Page %d\n"%i)
+                for tbl in (pg.extract_tables() or []): out.append(_rows_to_md_table(tbl))
+                t=pg.extract_text() or ""
+                if t.strip(): out.append(t)
+        return "\n\n".join(out).strip()
+    except Exception:
+        from pypdf import PdfReader
+        return "\n".join((pg.extract_text() or "") for pg in PdfReader(path).pages).strip()
 ```
+- **Pandoc cannot read PDF** — never route PDF through pypandoc; use pdfplumber/pypdf.
+- `pypandoc.download_pandoc()` fetches a private pandoc binary (cached under the
+  user dir) on first use, so conversion works even when no system `pandoc` is on
+  PATH (the community container has none).
 
 ObjectScript call (note the `/STDOUT="..."` flag quoting — `""` inside the OS string):
 ```objectscript
@@ -65,8 +98,10 @@ shares the instance's Python + installed packages.
 
 ## Installing packages so EMBEDDED Python can import them (the right way)
 
-This is the #1 real failure: `ModuleNotFoundError: No module named 'pypdf'` in the
-UI/extraction even after a "pip install". Causes + fix:
+This is the #1 real failure: `ModuleNotFoundError: No module named 'pypdf'` (or
+`pdfplumber`/`pypandoc`/`docx`) in the UI/extraction even after a "pip install".
+For Markdown extraction the package set is `pypdf pdfplumber pypandoc python-docx`
+(import names `pypdf, pdfplumber, pypandoc, docx`). Causes + fix:
 
 - **`irispython` is often NOT on `$PATH`** — a bare `irispython -m pip ...` in a
   setup script silently fails (`command not found`). Discover the binary instead:

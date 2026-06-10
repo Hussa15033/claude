@@ -79,6 +79,8 @@ ClassMethod StartJob(pPayload As %DynamicObject, Output pJobId As %String, Outpu
 
 		// Stash the API key OUT of the Job record (transient global, per job).
 		if pPayload.apiKey '= "" set ^DTL.JobKey(pJobId) = pPayload.apiKey
+		// Per-job Bedrock region (not secret, but per-job runtime config).
+		if pPayload.bedrockRegion '= "" set ^DTL.JobRegion(pJobId) = pPayload.bedrockRegion
 
 		if tAuto {
 			// ----- legacy auto-run path: async ForgeRequest into the BP -----
@@ -159,12 +161,19 @@ ClassMethod ExtraExamplesText(pInputs As %List, pOutputs As %List) As %String
 /// Advance a gated job one step in response to a UI action.
 ///   action="approve" (approve the plan) or "accept" (accept the pending attempt)
 ///   action="reject"  with pFeedback -> regenerate addressing the feedback
-ClassMethod Continue(pJobId As %String, pAction As %String, pFeedback As %String = "", Output pSC As %Status) As %Status
+ClassMethod Continue(pJobId As %String, pAction As %String, pFeedback As %String = "", Output pSC As %Status, pPlanAdditions As %String = "") As %Status
 {
 	set pSC = $$$OK
 	set tJob = ##class(DTL.Data.Job).OpenByJobId(pJobId, .sc)
 	if '$isobject(tJob) { set pSC = $$$ERROR($$$GeneralError, "No job '" _ pJobId _ "'") quit pSC }
 	if pAction = "approve" {
+		// Fold any user-added plan items into the conversation + stored plan so the
+		// generation step (and the visible plan) include them.
+		if $zstrip(pPlanAdditions, "<>W") '= "" {
+			do tJob.AddTurn("user", ##class(DTL.Util.PromptBuilder).PlanAdditionsPrompt(pPlanAdditions))
+			set tJob.Plan = $extract(tJob.Plan _ $char(10,10) _ "Reviewer-added items (implement these too):" _ $char(10) _ pPlanAdditions, 1, 32000)
+			do tJob.%Save()
+		}
 		set pSC = ##class(DTL.Service.StepEngine).GenerateOne(tJob)
 	} elseif pAction = "accept" {
 		set pSC = ##class(DTL.Service.StepEngine).Accept(tJob)
@@ -192,6 +201,7 @@ ClassMethod Refine(pParentId As %String, pFeedback As %String, Output pJobId As 
 	set tPayload.provider = tParent.Provider
 	set tPayload.model = tParent.Model
 	set tPayload.apiKey = $get(^DTL.JobKey(pParentId))
+	set tPayload.bedrockRegion = $get(^DTL.JobRegion(pParentId))
 	set tPayload.successPolicy = tParent.SuccessPolicy
 	set tPayload.maxAttempts = tParent.MaxAttempts
 	set tPayload.parentJobId = pParentId

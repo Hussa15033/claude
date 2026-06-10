@@ -33,7 +33,7 @@ XData ProductionDefinition
 
   <Item Name="DTL.Proc.Orchestrator" Category="DTL" ClassName="DTL.Proc.Orchestrator" PoolSize="1" Enabled="true" Foreground="false" InactivityTimeout="0" Comment="" LogTraceEvents="false" Schedule="">
     <Setting Target="Host" Name="LLMTarget">DTL.Op.LLMConnector</Setting>
-    <Setting Target="Host" Name="LLMTimeout">120</Setting>
+    <Setting Target="Host" Name="LLMTimeout">600</Setting>
     <Setting Target="Host" Name="ArtifactDir"></Setting>
   </Item>
 
@@ -46,6 +46,12 @@ XData ProductionDefinition
     <Setting Target="Host" Name="OpenAISSLConfig">DTLOpenAISSL</Setting>
     <Setting Target="Host" Name="MockHost">localhost</Setting>
     <Setting Target="Host" Name="MockPort">8085</Setting>
+    <!-- FailureTimeout: how long the operation keeps retrying before failing the
+         request. LLM calls (esp. reasoning models like gpt-5.x) can take minutes,
+         so raise it well above the 15s default. ResponseTimeout is the per-HTTP
+         read wait — raise it to match so a slow completion isn't cut off. -->
+    <Setting Target="Host" Name="FailureTimeout">600</Setting>
+    <Setting Target="Adapter" Name="ResponseTimeout">300</Setting>
     <Setting Target="Adapter" Name="HTTPServer">api.openai.com</Setting>
     <Setting Target="Adapter" Name="HTTPPort">443</Setting>
     <Setting Target="Adapter" Name="SSLConfig">DTLOpenAISSL</Setting>

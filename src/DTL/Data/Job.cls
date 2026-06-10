@@ -127,6 +127,51 @@ Method FillTranscript(pReq As DTL.Msg.LLMRequest)
 	}
 }
 
+/// The full LLM conversation as a %DynamicArray of {index, role, content} — every
+/// message sent to and received from the model, in order, for the UI's
+/// "LLM messages" view.
+Method TranscriptDynamic() As %DynamicArray
+{
+	set arr = []
+	for i = 1:1:..Transcript.Count() {
+		set t = ..Transcript.GetAt(i)
+		set o = {}
+		set o.index = i
+		set o.role = t.Role
+		set o.content = t.Content
+		set o.inputTokens = +t.InputTokens
+		set o.outputTokens = +t.OutputTokens
+		set o.cost = +t.Cost
+		do arr.%Push(o)
+	}
+	quit arr
+}
+
+/// Token + cost totals for THIS job (summed over its assistant turns), plus the
+/// running grand total across all jobs (kept in ^DTL.Usage). Returns a dynamic
+/// object {inputTokens, outputTokens, totalTokens, cost, calls, model,
+/// allTimeCost, allTimeTokens}.
+Method UsageSummary() As %DynamicObject
+{
+	set tIn = 0, tOut = 0, tCost = 0, tCalls = 0
+	for i = 1:1:..Transcript.Count() {
+		set t = ..Transcript.GetAt(i)
+		continue:t.Role'="assistant"
+		set tIn = tIn + (+t.InputTokens), tOut = tOut + (+t.OutputTokens), tCost = tCost + (+t.Cost)
+		if (+t.InputTokens) || (+t.OutputTokens) || (+t.Cost) set tCalls = tCalls + 1
+	}
+	set o = {}
+	set o.inputTokens = tIn
+	set o.outputTokens = tOut
+	set o.totalTokens = tIn + tOut
+	set o.cost = tCost
+	set o.calls = tCalls
+	set o.model = ..Model
+	set o.allTimeCost = +$get(^DTL.Usage("cost"))
+	set o.allTimeTokens = +$get(^DTL.Usage("tokens"))
+	quit o
+}
+
 /// Convenience: load by public JobId.
 ClassMethod OpenByJobId(pJobId As %String, Output pSC As %Status) As DTL.Data.Job
 {
