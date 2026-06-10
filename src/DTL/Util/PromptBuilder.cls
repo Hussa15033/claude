@@ -86,6 +86,117 @@ ClassMethod XmlEscapingRule() As %String
 	quit p
 }
 
+/// STEP 0 — SPEC STRUCTURING. Turn the RAW extracted spec (which may be noisy:
+/// PDF table artefacts, headers/footers, multi-column bleed) into an explicit,
+/// numbered, unambiguous list of transformation RULES for a human to verify BEFORE
+/// any DTL work. Crucially we also ask for PROVENANCE: for each rule, the verbatim
+/// snippet of the ORIGINAL spec it came from — so the review UI can show which part
+/// of the source produced each rule and flag rules with no source (hallucinations).
+/// The model returns STRICT JSON so we can render the side-by-side review reliably.
+ClassMethod SpecStructurePrompt(pRawSpec As %String, pSrcDocType As %String, pInputsBlock As %String = "") As %String
+{
+	set nl = $char(10)
+	set p = "You are normalising a clinical interface SPECIFICATION into an explicit, reviewable rule list. The raw text was extracted from an uploaded document (PDF/Word) and MAY contain extraction noise (page headers/footers, broken tables, column bleed, hyphenation). Do NOT invent requirements: every rule must be traceable to the source text." _ nl _ nl
+	set p = p _ "Source message DocType (the HL7 structure the rules act on): " _ pSrcDocType _ nl _ nl
+	set p = p _ "Produce STRICT JSON ONLY (no prose, no code fence), matching exactly:" _ nl
+	set p = p _ "{" _ nl
+	set p = p _ "  ""title"": ""<short title of this interface spec>""," _ nl
+	set p = p _ "  ""rules"": [" _ nl
+	set p = p _ "    {""index"": 1, ""rule"": ""<one concrete, testable transformation rule, segment/field level where possible>"", ""sourceQuote"": ""<verbatim snippet from the spec this rule came from, or empty string if you inferred it>"", ""inferred"": false}" _ nl
+	set p = p _ "  ]," _ nl
+	set p = p _ "  ""ambiguities"": [""<anything in the spec that is unclear/contradictory/missing and needs a human decision>""]" _ nl
+	set p = p _ "}" _ nl _ nl
+	set p = p _ "Rules:" _ nl
+	set p = p _ "- One transformation per rule; keep them concrete (""Set MSH-4 to 001"", ""Map PID-8 F->2""), not vague (""clean up the message"")." _ nl
+	set p = p _ "- sourceQuote MUST be copied verbatim from the SPECIFICATION below (a short phrase is fine). If a rule is your inference from the example input rather than stated in the spec, set inferred=true and sourceQuote=""""." _ nl
+	set p = p _ "- List genuine ambiguities/gaps so the reviewer can resolve them now rather than after a wrong DTL is built." _ nl
+	set p = p _ "- Output ONLY the JSON object." _ nl _ nl
+	set p = p _ "SPECIFICATION (raw extracted text):" _ nl _ pRawSpec _ nl _ nl
+	if pInputsBlock '= "" set p = p _ "Example INPUT message(s) for context (use only to disambiguate the spec, not as a source of new rules unless clearly implied):" _ nl _ pInputsBlock _ nl
+	quit p
+}
+
+/// CONCISE SPEC generation (run once at upload). Turn the raw extracted spec into a
+/// clear, de-noised specification GROUPED BY MESSAGE / SEGMENT TYPE, every item
+/// carrying a verbatim reference back to the original so the side-by-side review can
+/// link each concise item to its source. STRICT JSON so the UI can render groups +
+/// click-to-reference reliably.
+ClassMethod ConciseSpecPrompt(pRawSpec As %String) As %String
+{
+	set nl = $char(10)
+	set p = "You are turning a raw, noisy interface SPECIFICATION (extracted from a PDF/Word document — it may contain page headers/footers, broken tables, column bleed, hyphenation) into a CLEAR, CONCISE, organised specification for an HL7 v2 integration engineer to review." _ nl _ nl
+	set p = p _ "Organise the transformation requirements GROUPED BY the HL7 message type and segment they apply to (e.g. a group for ADT^A01 / MSH, one for PID, etc.; use a 'General' group for cross-message rules). Be concise: one concrete, testable requirement per item; drop prose, boilerplate, and document chrome." _ nl _ nl
+	set p = p _ "Do NOT invent requirements. Every item MUST be traceable to the source text via a verbatim quote. If you must infer something to make a rule actionable, mark inferred=true and leave sourceQuote empty." _ nl _ nl
+	set p = p _ "Produce STRICT JSON ONLY (no prose, no code fence), matching exactly:" _ nl
+	set p = p _ "{" _ nl
+	set p = p _ "  ""title"": ""<short title of this interface>""," _ nl
+	set p = p _ "  ""groups"": [" _ nl
+	set p = p _ "    {""type"": ""<message/segment this group is about, e.g. 'ADT^A01 / MSH' or 'PID' or 'General'>""," _ nl
+	set p = p _ "     ""items"": [ {""id"": ""g1i1"", ""rule"": ""<one concrete requirement>"", ""sourceQuote"": ""<verbatim snippet from the spec, or empty if inferred>"", ""inferred"": false} ] }" _ nl
+	set p = p _ "  ]," _ nl
+	set p = p _ "  ""ambiguities"": [""<unclear/contradictory/missing things needing a human decision>""]" _ nl
+	set p = p _ "}" _ nl _ nl
+	set p = p _ "Give every item a UNIQUE id (groupindex+itemindex, e.g. g2i3). sourceQuote must be copied verbatim from the SPECIFICATION below so the reviewer can locate it. Output ONLY the JSON object." _ nl _ nl
+	set p = p _ "SPECIFICATION (raw extracted text):" _ nl _ pRawSpec _ nl
+	quit p
+}
+
+/// VERIFY the concise spec against the original — completeness + no hallucination.
+/// A second LLM pass (the human verifies too, in the UI) that flags requirements in
+/// the original that the concise spec MISSED, and items in the concise spec that are
+/// NOT supported by the original (hallucinations). STRICT JSON.
+ClassMethod ConciseVerifyPrompt(pRawSpec As %String, pConcise As %String) As %String
+{
+	set nl = $char(10)
+	set p = "You are auditing a CONCISE specification against the ORIGINAL it was derived from. Find (a) requirements stated in the ORIGINAL that are MISSING from the concise version, and (b) items in the CONCISE version that are NOT supported by the original (hallucinations / overreach)." _ nl _ nl
+	set p = p _ "Return STRICT JSON ONLY:" _ nl
+	set p = p _ "{""complete"": true|false, ""faithful"": true|false, ""score"": 0.0-1.0, ""missing"": [""<requirement in the original not captured>""], ""hallucinated"": [""<concise item with no basis in the original>""], ""notes"": ""<one line>""}" _ nl _ nl
+	set p = p _ "complete=true only if no material requirement is missing; faithful=true only if nothing is hallucinated. score = fraction of original requirements correctly and faithfully captured. Be strict but do not penalise pure reorganisation/concision." _ nl _ nl
+	set p = p _ "ORIGINAL SPECIFICATION:" _ nl _ pRawSpec _ nl _ nl
+	set p = p _ "CONCISE SPECIFICATION:" _ nl _ pConcise _ nl
+	quit p
+}
+
+/// The BUILD system prompt: the static, CACHEABLE prefix sent on every plan /
+/// generation / repair call. It bundles everything that does NOT change across the
+/// build conversation — the DTL authoring rules, the element schema, the XML
+/// escaping rule, the HL7 schema for the DocType(s), and the APPROVED STRUCTURED
+/// SPEC (the authority for what the DTL must do). Because it is stable and marked
+/// as the cache breakpoint, the provider re-reads it from prompt cache on every
+/// subsequent turn instead of re-billing it at full input price.
+ClassMethod BuildSystemPrompt(pStructuredSpec As %String, pSrcDocType As %String, pTgtDocType As %String = "") As %String
+{
+	set nl = $char(10)
+	set p = ..SystemPrompt() _ nl
+	set tSchema = ..SchemaBlock(pSrcDocType, pTgtDocType)
+	if tSchema '= "" {
+		set p = p _ "----- HL7 MESSAGE SCHEMA (authoritative paths/fields) -----" _ nl _ tSchema _ nl
+		set p = p _ "Every source.{...} and target.{...} path you write MUST be one of the paths above (full group prefix; a repetition index on any () node)." _ nl _ nl
+	}
+	set p = p _ "----- APPROVED TRANSFORMATION SPECIFICATION (the AUTHORITY for what to implement) -----" _ nl
+	set p = p _ "A human has reviewed and APPROVED the following structured specification. Implement EVERY rule in it. Do not contradict it and do not silently drop rules. The example input message is for testing only — the SPEC, not the input, defines correct behaviour." _ nl _ nl
+	set p = p _ pStructuredSpec _ nl
+	quit p
+}
+
+/// LLM-as-JUDGE conformance prompt. After a candidate DTL compiles and runs on an
+/// input, ask a fresh-perspective grader whether the PRODUCED OUTPUT actually
+/// satisfies the approved spec — this catches the silent-wrong-output case a
+/// compile+run gate cannot (a bad path that the DTL try/catch swallows leaves the
+/// field simply unchanged, no error). Returns STRICT JSON the gate can act on.
+ClassMethod JudgePrompt(pStructuredSpec As %String, pInput As %String, pOutput As %String) As %String
+{
+	set nl = $char(10)
+	set p = "You are a strict QA reviewer for an HL7 v2 transformation. Decide whether the PRODUCED OUTPUT correctly implements the APPROVED SPECIFICATION for the given INPUT. Judge ONLY against the spec rules; ignore volatile fields (message timestamp MSH-7, control id MSH-10)." _ nl _ nl
+	set p = p _ "Return STRICT JSON ONLY:" _ nl
+	set p = p _ "{""conforms"": true|false, ""score"": 0.0-1.0, ""violations"": [{""rule"": ""<the spec rule that is not satisfied>"", ""detail"": ""<what the output shows vs what the spec requires>"", ""severity"": ""HIGH|LOW""}], ""notes"": ""<one line>""}" _ nl _ nl
+	set p = p _ "Guidance: a rule the output does NOT satisfy is a violation even if the message is otherwise valid (a missing change is the most common DTL bug). If every spec rule is satisfied, conforms=true and violations=[]. score is the fraction of spec rules correctly applied." _ nl _ nl
+	set p = p _ "APPROVED SPECIFICATION:" _ nl _ pStructuredSpec _ nl _ nl
+	set p = p _ "INPUT MESSAGE:" _ nl _ ..PrettyHL7(pInput) _ nl _ nl
+	set p = p _ "PRODUCED OUTPUT:" _ nl _ ..PrettyHL7(pOutput) _ nl
+	quit p
+}
+
 /// SPEC-DRIVEN planning prompt: the transformation is described by the spec only;
 /// there are NO expected output messages — only example INPUT messages. Ask the
 /// model for a short plan of the changes it will implement.
@@ -218,37 +329,72 @@ ClassMethod FeedbackPrompt(pResult As %DynamicObject, pTgtDocType As %String) As
 }
 
 /// Auto-repair prompt fed back to the LLM when a generated DTL fails to COMPILE.
-/// Includes the verbatim ObjectScript compiler errors and a focused reminder of
-/// the DTL rules most likely to be the cause, so the model can self-correct.
+/// LEAN: the full DTL element schema + XML-escaping rule + HL7 schema already live
+/// in the (prompt-cached) BUILD SYSTEM PROMPT, so we do NOT re-inject them here —
+/// re-sending ~3-50 KB of identical reference on every repair round is pure token
+/// waste. We send only the DELTA the model needs: the verbatim errors + a short
+/// pointed reminder. (The DocTypes are restated because they're short and the
+/// single most common drift.)
 ClassMethod CompileFixPrompt(pErrors As %String, pSrcDocType As %String, pTgtDocType As %String) As %String
 {
 	set nl = $char(10)
-	set p = "Your DTL did NOT COMPILE. Below are the verbatim InterSystems ObjectScript compiler errors (with line numbers and the offending generated line). Fix EVERY error and return the COMPLETE corrected class (same class name and DocTypes)." _ nl _ nl
+	set p = "Your DTL did NOT COMPILE. Below are the verbatim InterSystems ObjectScript compiler errors (with line numbers and the offending generated line). Fix EVERY error and return the COMPLETE corrected class — same class name, sourceDocType='" _ pSrcDocType _ "', targetDocType='" _ pTgtDocType _ "'." _ nl _ nl
 	set p = p _ "COMPILER ERRORS:" _ nl _ pErrors _ nl _ nl
-	set p = p _ "Checklist for valid DTL (the usual causes of these errors):" _ nl
-	set p = p _ "- Output ONLY one complete class, wrapped in the exact shape: Class ... Extends Ens.DataTransformDTL [ DependsOn = EnsLib.HL7.Message ] with an XData DTL block containing a single <transform>...</transform>." _ nl
-	set p = p _ "- The <transform> element needs sourceClass/targetClass='EnsLib.HL7.Message', sourceDocType='" _ pSrcDocType _ "', targetDocType='" _ pTgtDocType _ "', create='copy', language='objectscript'." _ nl
-	set p = p _ "- Every <assign> needs value=, property= and action='set' (or 'append'/'clear'). Quote literal values inside the value attribute with double-quotes, e.g. value='""EPIC""'." _ nl
-	set p = p _ "- Field paths use the brace grammar {SEG:field.component.subcomponent}; repeating fields REQUIRE a repetition index, e.g. {PID:5(1).1.1}." _ nl
-	set p = p _ "- Do NOT add methods, Parameters, or [ CodeMode ] members — only the <transform>." _ nl _ nl
-	// Restate the full element schema + escaping rule — the usual root causes.
-	set p = p _ ..DtlSchema() _ nl
-	set p = p _ ..XmlEscapingRule() _ nl
-	set p = p _ "If the errors mention a parse/SAX error, an unexpected ' or "" , or a truncated attribute, it is almost certainly an UNESCAPED character inside an attribute value — apply the entity rule above." _ nl _ nl
+	set p = p _ "Reminder (full DTL element + XML-escaping rules are in the system prompt above): a parse/SAX error, an unexpected ' or "" , or a truncated attribute is almost always an UNESCAPED character inside an attribute value — write ' as &apos;, "" as &quot;, & as &amp;. Use ONLY the DTL elements and the HL7 paths given in the system prompt; add no methods or [ CodeMode ] members." _ nl _ nl
 	set p = p _ "Return the COMPLETE corrected DTL class only (a ```objectscript fence is allowed), no prose." _ nl
 	quit p
 }
 
 /// Auto-repair prompt when the DTL compiled but FAILED AT RUNTIME on the input.
+/// LEAN (see CompileFixPrompt): the HL7 schema is in the cached system prompt; we
+/// send only the error + a pointer, not the schema again.
 ClassMethod RuntimeFixPrompt(pErrors As %String, pSrcDocType As %String, pTgtDocType As %String) As %String
 {
 	set nl = $char(10)
 	set p = "Your DTL COMPILED but FAILED AT RUNTIME when transforming the example input. Fix the cause and return the COMPLETE corrected class (same class name and DocTypes)." _ nl _ nl
 	set p = p _ "RUNTIME ERROR:" _ nl _ pErrors _ nl _ nl
-	set p = p _ "Likely causes: a source path that does not exist in DocType '" _ pSrcDocType _ "', a target path that does not exist in '" _ pTgtDocType _ "', a missing repetition index on a repeating field, or referencing a segment inside a group without its group prefix." _ nl
-	set tSchema = ..SchemaBlock(pSrcDocType, pTgtDocType)
-	if tSchema '= "" set p = p _ "Use ONLY these valid paths:" _ nl _ tSchema _ nl
+	set p = p _ "Likely causes: a source path that does not exist in DocType '" _ pSrcDocType _ "', a target path that does not exist in '" _ pTgtDocType _ "', a missing repetition index on a repeating field, or a segment inside a group referenced without its group prefix. Use ONLY the HL7 paths listed in the system prompt above." _ nl
 	set p = p _ "Return the COMPLETE corrected DTL class only, no prose." _ nl
+	quit p
+}
+
+/// Repair prompt when the candidate compiled + ran but the accuracy GATE found
+/// problems — unmet spec rules (from the LLM judge) and/or rules that produced NO
+/// change in the output (coverage check). This is the accuracy feedback the old
+/// compile+run gate never produced. Spec is in the cached system prompt; we send
+/// only the concrete findings to fix.
+ClassMethod GateFixPrompt(pFindings As %String) As %String
+{
+	set nl = $char(10)
+	set p = "Your DTL compiled and ran, but an automated review against the APPROVED SPECIFICATION (in the system prompt above) found it does NOT yet implement every rule correctly. Fix these specific problems and return the COMPLETE corrected class (same class name and DocTypes):" _ nl _ nl
+	set p = p _ pFindings _ nl _ nl
+	set p = p _ "For each item, add or correct the <assign>/<if> so the produced output satisfies that spec rule. Do not regress rules that already work. Return the COMPLETE corrected DTL class only, no prose." _ nl
+	quit p
+}
+
+/// Lean plan prompt for the structured-spec build flow. The approved spec + HL7
+/// schema are already in the cached system prompt, so we only issue the
+/// instruction — no spec/schema re-embedding.
+ClassMethod PlanFromSpecPrompt() As %String
+{
+	set nl = $char(10)
+	set p = "Before writing any DTL, produce a SHORT PLAN of how you will implement the APPROVED SPECIFICATION above, for a human to review." _ nl
+	set p = p _ "Output ONLY a numbered markdown list of the concrete segment/field-level changes the DTL will make — one line per spec rule, in spec order, so the reviewer can confirm nothing was dropped. No DTL code yet. Keep each item to one line." _ nl
+	quit p
+}
+
+/// Lean initial-generation prompt for the structured-spec build flow.
+/// IMPORTANT: the example INPUT message is NOT sent to the model — the DTL is
+/// derived ENTIRELY from the approved specification (the input is used only locally,
+/// to derive the DocType for the HL7 schema in the system prompt and to verify the
+/// compiled DTL). The transform is keyed off the message DocType, so it applies to
+/// every message of that type, not just one example.
+ClassMethod InitialFromSpecPrompt(pClassName As %String, pSrcDocType As %String, pTgtDocType As %String) As %String
+{
+	set nl = $char(10)
+	set p = "Now write the DTL class named '" _ pClassName _ "' that implements the APPROVED SPECIFICATION above." _ nl
+	set p = p _ "Pin sourceDocType='" _ pSrcDocType _ "' and targetDocType='" _ pTgtDocType _ "'. Implement EVERY rule in the specification that applies to this message type. The HL7 schema for these DocTypes is in the system prompt — use only those paths." _ nl _ nl
+	set p = p _ "Derive the transformation from the SPECIFICATION ONLY; do not assume any particular field values — the DTL must be correct for ANY message of this type, not a single example. The class must COMPILE and produce a valid transform." _ nl
 	quit p
 }
 

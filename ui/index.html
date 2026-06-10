@@ -3,337 +3,627 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>ISC DTL Generator</title>
+<title>InterSystems AI DTL Generator</title>
 <link rel="icon" href="https://i.pinimg.com/736x/11/2a/b3/112ab34c423c70caa37e7f8a83d9c2a7.jpg"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
-  /* DARK mode, InterSystems-BLUE forward. FLAT: borders not shadows, SHARP corners
-     (small radius). IRIS blue = primary; a lighter cyan-blue = accent. The right
-     pane is tabbed (Progress / Outputs / Live / Classes / History); the Build form
-     is a fixed left pane. */
+  /* ===========================================================================
+     InterSystems AI DTL Generator — LIGHT enterprise theme.
+     Dark-blue top app bar (brand top-left) + soft-grey workspace + white bordered
+     panels; the right working pane is tabbed (Progress / LLM messages / Outputs /
+     Live test / Classes / History).
+     InterSystems blue (#343699) for tabs/headings/primary actions; InterSystems
+     green (#00b6b0) for active/approval/success/progress. Code & diff viewers
+     stay on a dark code surface for contrast (a deliberate light-chrome /
+     dark-code split). Sharp-but-not-playful 18/12/9px rounding, borders over
+     heavy shadows. =========================================================== */
   :root{
-    --primary:#2596be; --primary-d:#1f7d9c; --primary-l:#56c2e6; --primary-c:#04161c;
-    --primary-cont:#0c3a4c; --on-primary-cont:#bfe9f7;
-    --secondary:#56c2e6; --secondary-cont:#10384a; --on-secondary-cont:#cdeefb;
-    --bg:#0b1620; --surface:#10212d; --surface-2:#152734; --surface-3:#1d3645;
-    --txt:#e6f1f7; --muted:#8fa9b8; --outline:#2c4757; --outline-v:#223a48;
-    --warn:#e8b964; --warn-cont:#3a2e12;
-    --bad:#ff8a80; --bad-cont:#3d1714;
-    --ok:#56c2e6;
+    --iris-blue:#343699; --iris-green:#00b6b0;
+    --iris-blue-900:#17194f; --iris-blue-800:#242679;
+    --iris-green-100:#dffaf8; --iris-green-700:#0a6d68;
+    --ink:#1b2240; --muted:#66708f; --soft:#f5f7fb; --paper:#fbfcff; --panel:#fff;
+    --line:#dfe4f0; --line-strong:#c8d0e3;
+    --bad:#e5484d; --bad-bg:#fdecec; --bad-line:#f3c0c0;
+    --warn:#d98a00; --warn-amber:#f5a623; --warn-bg:#fdf3e0;
+    /* dark code surface (for diff / DTL / message viewers) */
+    --code-bg:#0e1430; --code-fg:#e9fbff; --code-line:#252c54; --code-head:#161d44;
+    --code-accent:#8fe9e4;
     --mono:'Roboto Mono','SFMono-Regular',Consolas,Menlo,monospace;
-    --rad:4px;          /* sharp corners */
-    --e1:0 1px 2px rgba(0,0,0,.35);   /* single subtle shadow, used sparingly */
+    --radius-lg:18px; --radius-md:12px; --radius-sm:9px;
+    --shadow:0 10px 28px rgba(28,34,69,.07);
   }
   *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;color:var(--txt);background:var(--bg);
-    font:14px/1.55 Roboto,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
-  .panel{background:var(--surface);border:1px solid var(--outline-v);border-radius:var(--rad)}
-  /* header — flat top app bar */
-  header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:12px 24px;
-    background:var(--primary);color:var(--primary-c);border-bottom:1px solid var(--primary-d)}
-  header .mark{width:36px;height:36px;border-radius:var(--rad);object-fit:cover;animation:floaty 6s ease-in-out infinite}
-  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-  header h1{font-size:20px;margin:0;font-weight:500;letter-spacing:.15px;color:var(--primary-c)}
-  header .tag{color:rgba(255,255,255,.82);font-size:12px;letter-spacing:.2px}
-  header .health{margin-left:auto;font-size:12.5px;display:flex;align-items:center;gap:8px;cursor:pointer;
-    padding:7px 14px;border-radius:var(--rad);background:rgba(255,255,255,.16);color:var(--primary-c);transition:background .2s}
-  header .health:hover{background:rgba(255,255,255,.26)}
-  .dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.55)}
-  .dot.ok{background:#9ff5cd;box-shadow:0 0 0 0 rgba(159,245,205,.7);animation:pulse 2.2s infinite}
-  .dot.bad{background:#ffb4ab}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(159,245,205,.6)}70%{box-shadow:0 0 0 7px rgba(159,245,205,0)}100%{box-shadow:0 0 0 0 rgba(159,245,205,0)}}
-  /* two persistent columns: Build form (left) + tabbed pane (right) */
-  main{display:grid;grid-template-columns:minmax(420px,1fr) minmax(560px,1.3fr);gap:18px;padding:18px 24px;align-items:start}
-  .col{padding:22px;max-height:calc(100vh - 110px);overflow:auto}
-  .rpane{padding:0;max-height:calc(100vh - 110px);display:flex;flex-direction:column;overflow:hidden}
-  /* right-pane tab bar */
-  .rtabs{display:flex;gap:0;border-bottom:1px solid var(--outline-v);background:var(--surface-2);flex:0 0 auto}
-  .rtab{position:relative;padding:13px 18px;border:none;background:none;cursor:pointer;font-size:13.5px;font-weight:500;
-    color:var(--muted);transition:color .15s,background .15s;font-family:inherit;border-right:1px solid var(--outline-v)}
-  .rtab:hover{color:var(--txt);background:var(--surface-3)}
-  .rtab.active{color:var(--primary);background:var(--surface)}
-  .rtab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--primary)}
-  .rbody{padding:22px;overflow:auto;flex:1 1 auto}
+  body{margin:0;min-height:100vh;color:var(--ink);background:var(--soft);
+    font:14px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow)}
+
+  /* ---- top app bar (dark-blue, brand top-left) ---- */
+  header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:13px 26px;
+    background:var(--iris-blue-900);color:#cfd6f5;border-bottom:1px solid rgba(255,255,255,.08)}
+  header .mark{width:38px;height:38px;border-radius:10px;object-fit:cover;flex:0 0 auto}
+  header .bname{font-weight:800;font-size:17px;color:#fff;letter-spacing:.2px;line-height:1.15}
+  header .btag{font-size:11.5px;color:#9aa3d6;margin-top:1px}
+  header .topactions{margin-left:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+  header .pill{background:rgba(255,255,255,.1);color:#cfd6f5}
+  header .links a{color:#9fe9e3}
+  .health{display:flex;align-items:center;gap:9px;font-size:12px;color:#cfd6f5;cursor:pointer;
+    padding:9px 13px;border-radius:999px;background:rgba(255,255,255,.08);transition:background .15s}
+  .health:hover{background:rgba(255,255,255,.16)}
+  .dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.45);flex:0 0 auto}
+  .dot.ok{background:#33d6b8;box-shadow:0 0 0 0 rgba(51,214,184,.7);animation:pulse 2.2s infinite}
+  .dot.bad{background:#ff9b9b}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(51,214,184,.6)}70%{box-shadow:0 0 0 7px rgba(51,214,184,0)}100%{box-shadow:0 0 0 0 rgba(51,214,184,0)}}
+
+  /* ---- main workspace ---- */
+  .main{min-width:0;padding:22px 26px;display:flex;flex-direction:column;gap:18px}
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .workspace{display:grid;grid-template-columns:minmax(380px,440px) 1fr;gap:18px;align-items:start}
+
+  /* ---- right-pane tab bar ---- */
+  .viewpanel{padding:0;overflow:hidden;display:flex;flex-direction:column}
+  .rtabs{display:flex;gap:2px;padding:8px 8px 0;border-bottom:1px solid var(--line);background:var(--soft);
+    border-radius:var(--radius-lg) var(--radius-lg) 0 0;flex-wrap:wrap}
+  .rtab{display:flex;align-items:center;gap:7px;padding:11px 16px;border:none;background:none;color:var(--muted);
+    font:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:.15s;border-radius:10px 10px 0 0;position:relative;white-space:nowrap}
+  .rtab .ic{flex:0 0 auto}
+  .rtab:hover{color:var(--ink);background:rgba(52,54,153,.05)}
+  .rtab.active{color:var(--iris-blue);background:var(--panel)}
+  .rtab.active::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:3px;background:var(--iris-blue);border-radius:3px 3px 0 0}
+
+  /* ---- KPI cards ---- */
+  .kpi{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);
+    padding:15px 18px 16px;box-shadow:var(--shadow);overflow:hidden}
+  .kpi::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--iris-green),var(--iris-blue))}
+  .kpi .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:800}
+  .kpi .v{font-size:20px;font-weight:800;color:var(--ink);margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi .s{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  .col{padding:24px}
+  .rbody{padding:24px;flex:1 1 auto}
   .rview{display:none;animation:fade .22s ease}.rview.active{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
-  h2{font-size:12px;text-transform:uppercase;letter-spacing:.9px;color:var(--primary);margin:0 0 12px;font-weight:700}
-  label{display:block;font-size:12px;color:var(--muted);margin:16px 0 6px;font-weight:500}
-  /* flat text fields */
-  textarea,input,select{width:100%;color:var(--txt);background:var(--surface);border:1px solid var(--outline);
-    border-radius:var(--rad);padding:10px 12px;font-family:var(--mono);font-size:12.5px;resize:vertical;transition:border-color .15s}
-  textarea{min-height:58px}.spec{min-height:78px;font-family:inherit}
-  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
-  input:disabled,textarea:disabled,select:disabled{background:var(--surface-2);color:var(--muted);cursor:not-allowed;opacity:.7}
-  button:disabled{opacity:.5;cursor:not-allowed}
-  select option{background:var(--surface)}
-  .ex{background:var(--surface-2);border:1px solid var(--outline-v);border-radius:var(--rad);padding:13px;margin-bottom:10px;animation:fade .3s ease}
-  .ex .ph{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px}
-  .ex .ph .rm{margin-left:auto;color:var(--bad);background:none;border:none;cursor:pointer;font-size:16px;border-radius:var(--rad);width:28px;height:28px;transition:background .15s}
-  .ex .ph .rm:hover{background:var(--bad-cont)}
-  .tagp{font-size:10px;background:var(--primary-cont);color:var(--on-primary-cont);padding:2px 9px;border-radius:var(--rad);font-weight:500}
+
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:.85px;color:var(--iris-blue);margin:0 0 12px;font-weight:800}
+  .viewhd{display:flex;align-items:center;gap:12px;margin-bottom:6px}.viewhd h2{margin:0}
+  label{display:block;font-size:11.5px;color:var(--ink);margin:16px 0 6px;font-weight:700}
+  label .opt{color:var(--muted);font-weight:500}
+
+  /* ---- form fields ---- */
+  textarea,input,select{width:100%;color:var(--ink);background:#fff;border:1px solid var(--line-strong);
+    border-radius:var(--radius-sm);padding:11px 12px;font-family:inherit;font-size:13px;transition:border-color .15s,box-shadow .15s}
+  textarea{min-height:58px;font-family:var(--mono);font-size:12.5px;resize:vertical}
+  .spec{min-height:80px;font-family:inherit;font-size:13px}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--iris-green);box-shadow:0 0 0 4px rgba(0,182,176,.13)}
+  input:disabled,textarea:disabled,select:disabled{background:var(--soft);color:var(--muted);cursor:not-allowed;opacity:.8}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  select option{background:#fff}
   .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px}
-  .note{font-size:12px;color:var(--on-primary-cont);background:var(--primary-cont);border:1px solid var(--outline-v);border-left:3px solid var(--primary);border-radius:var(--rad);padding:11px 14px;margin:12px 0}
+  .note{font-size:12px;color:var(--iris-blue-800);background:var(--iris-green-100);border:1px solid #bfeeea;
+    border-left:3px solid var(--iris-green);border-radius:var(--radius-sm);padding:11px 14px;margin:12px 0}
+
+  .ex{background:var(--soft);border:1px solid var(--line);border-radius:var(--radius-md);padding:13px;margin-bottom:10px;animation:fade .3s ease}
+  .ex .ph{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px}
+  .ex .ph .rm{margin-left:auto;color:var(--bad);background:none;border:none;cursor:pointer;font-size:16px;border-radius:var(--radius-sm);width:28px;height:28px;transition:background .15s}
+  .ex .ph .rm:hover{background:var(--bad-bg)}
+  .tagp{font-size:10px;background:var(--iris-green-100);color:var(--iris-green-700);padding:2px 9px;border-radius:999px;font-weight:700}
+
+  /* ---- buttons ---- */
   button{font-family:inherit}
-  /* flat buttons, sharp corners */
-  button.primary{position:relative;background:var(--primary);color:var(--primary-c);border:none;border-radius:var(--rad);
-    padding:12px 26px;font-weight:500;cursor:pointer;font-size:14px;letter-spacing:.2px;transition:background .15s;overflow:hidden}
-  button.primary:hover{background:var(--primary-d)}
-  button.primary:disabled{background:var(--surface-3);color:var(--muted);cursor:not-allowed}
-  button.ghost{background:var(--surface);color:var(--primary);border:1px solid var(--outline);border-radius:var(--rad);padding:9px 16px;cursor:pointer;font-weight:500;transition:background .15s}
-  button.ghost:hover{background:var(--surface-2)}
-  button.ok{background:var(--primary);color:var(--primary-c);border:none;border-radius:var(--rad);padding:10px 18px;font-weight:500;cursor:pointer;transition:background .15s}
-  button.ok:hover{background:var(--primary-d)}
-  button.blue{background:var(--secondary);color:#fff;border:none;border-radius:var(--rad);padding:10px 18px;font-weight:500;cursor:pointer}
-  button.danger{background:var(--surface);color:var(--bad);border:1px solid var(--bad);border-radius:var(--rad);padding:10px 18px;font-weight:500;cursor:pointer;transition:background .15s}
-  button.danger:hover{background:var(--bad-cont)}
-  .badge{display:inline-block;padding:4px 11px;border-radius:var(--rad);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
-  .b-QUEUED,.b-PLANNING{background:var(--surface-3);color:var(--muted)}
-  .b-AWAITING_PLAN,.b-AWAITING_ATTEMPT{background:var(--warn-cont);color:var(--warn)}
-  .b-RUNNING,.b-GENERATING{background:var(--secondary-cont);color:var(--on-secondary-cont)}
-  .b-SUCCESS{background:var(--primary-cont);color:var(--on-primary-cont)}.b-FAILED,.b-REJECTED{background:var(--bad-cont);color:var(--bad)}
-  .att{display:flex;gap:12px;align-items:flex-start;padding:11px 13px;border:1px solid var(--outline-v);border-radius:var(--rad);margin-bottom:8px;background:var(--surface-2);animation:slidein .3s ease}
+  button.primary{position:relative;background:var(--iris-blue);color:#fff;border:none;border-radius:var(--radius-sm);
+    padding:12px 26px;font-weight:600;cursor:pointer;font-size:14px;letter-spacing:.2px;transition:background .15s;overflow:hidden}
+  button.primary:hover{background:var(--iris-blue-800)}
+  button.primary:disabled{background:var(--line-strong);color:#fff}
+  button.ghost{background:#fff;color:var(--iris-blue);border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:9px 16px;cursor:pointer;font-weight:600;transition:.15s}
+  button.ghost:hover{background:var(--soft);border-color:var(--iris-blue)}
+  button.ok{background:var(--iris-green);color:#fff;border:none;border-radius:var(--radius-sm);padding:11px 18px;font-weight:600;cursor:pointer;transition:background .15s}
+  button.ok:hover{background:#019b96}
+  button.blue{background:var(--iris-blue);color:#fff;border:none;border-radius:var(--radius-sm);padding:11px 18px;font-weight:600;cursor:pointer;transition:background .15s}
+  button.blue:hover{background:var(--iris-blue-800)}
+  button.danger{background:#fff;color:var(--bad);border:1px solid var(--bad-line);border-radius:var(--radius-sm);padding:11px 18px;font-weight:600;cursor:pointer;transition:background .15s}
+  button.danger:hover{background:var(--bad-bg)}
+
+  .badge{display:inline-block;padding:4px 11px;border-radius:999px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+  .b-QUEUED,.b-PLANNING{background:#eef1f8;color:var(--muted)}
+  .b-AWAITING_PLAN,.b-AWAITING_ATTEMPT{background:var(--warn-bg);color:#9a6a00}
+  .b-RUNNING,.b-GENERATING{background:#e6f0fb;color:var(--iris-blue-800)}
+  .b-SUCCESS{background:var(--iris-green-100);color:var(--iris-green-700)}
+  .b-FAILED,.b-REJECTED{background:var(--bad-bg);color:#c0353a}
+
+  .att{display:flex;gap:12px;align-items:flex-start;padding:11px 13px;border:1px solid var(--line);border-radius:var(--radius-md);margin-bottom:8px;background:#fff;animation:slidein .3s ease}
   @keyframes slidein{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
-  .att .n{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:0 0 auto;background:var(--primary);color:#fff}
-  .att.ph-SUCCESS .n{background:var(--primary)}.att.ph-COMPILE_FAIL .n,.att.ph-RUNTIME_FAIL .n,.att.ph-LLM_ERROR .n{background:var(--bad)}.att.ph-MISMATCH .n{background:var(--warn)}
-  .att .t{font-weight:500;font-size:13px}.att .m{color:var(--muted);font-size:12px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono)}
-  .meta{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:6px 0 12px}.meta b{color:var(--txt);font-weight:500}
-  .card{border-radius:var(--rad);padding:18px;margin-top:14px;background:var(--surface);border:1px solid var(--outline-v);border-left:3px solid var(--primary);animation:fade .3s ease}
-  .card.warn{border-left-color:var(--warn)} .card.blue{border-left-color:var(--secondary)}
-  .card h2{color:var(--txt)}
-  .plan{white-space:pre-wrap;font-size:13px;line-height:1.65}
-  .io{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--outline-v);border-radius:var(--rad);overflow:hidden;font-family:var(--mono);font-size:12px;background:var(--surface-2)}
-  .io .head{display:flex;align-items:center;gap:8px;background:var(--surface-3);padding:5px 8px 5px 11px;font-weight:500;border-bottom:1px solid var(--outline-v);color:var(--secondary)}
+  .att .n{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex:0 0 auto;background:var(--iris-blue);color:#fff}
+  .att.ph-SUCCESS .n{background:var(--iris-green)}
+  .att.ph-COMPILE_FAIL .n,.att.ph-RUNTIME_FAIL .n,.att.ph-LLM_ERROR .n{background:var(--bad)}
+  .att.ph-MISMATCH .n{background:var(--warn-amber)}
+  .att .t{font-weight:600;font-size:13px}.att .m{color:var(--muted);font-size:12px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono)}
+  .meta{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:8px 0 12px}.meta b{color:var(--ink);font-weight:700}
+
+  .card{border-radius:var(--radius-lg);padding:20px;margin-top:14px;background:#fff;border:1px solid var(--line);border-left:4px solid var(--iris-green);box-shadow:var(--shadow);animation:fade .3s ease}
+  .card.warn{border-left-color:var(--warn-amber)} .card.blue{border-left-color:var(--iris-blue)}
+  .card h2{color:var(--ink)}
+
+  /* ---- markdown-rendered plan ---- */
+  .plan{font-size:13px;line-height:1.65;color:var(--ink)}
+  .plan p{margin:8px 0}
+  .plan .mdh{margin:14px 0 6px;color:var(--iris-blue);font-weight:800;line-height:1.3}
+  .plan h3.mdh{font-size:15px}.plan h4.mdh{font-size:13.5px}.plan h5.mdh,.plan h6.mdh{font-size:12.5px;text-transform:uppercase;letter-spacing:.4px}
+  .plan ul,.plan ol{margin:8px 0 8px 22px;padding:0}
+  .plan li{margin:4px 0}
+  .plan strong{font-weight:700;color:var(--ink)}
+  .plan em{font-style:italic}
+  .plan code{font-family:var(--mono);background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:.92em;color:var(--iris-blue-800)}
+  .plan pre.mdcode{background:var(--code-bg);color:var(--code-fg);border-radius:var(--radius-sm);padding:12px 14px;overflow:auto;font-family:var(--mono);font-size:12px;margin:10px 0}
+  .plan blockquote{border-left:3px solid var(--iris-green);margin:10px 0;padding:2px 14px;color:var(--muted)}
+  .plan hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+  .plan a{color:var(--iris-blue)}
+
+  /* ---- build progress bar + timer ---- */
+  .buildcard{margin-top:12px;background:#fff;border:1px solid var(--line);border-left:4px solid var(--iris-green);
+    border-radius:var(--radius-md);padding:15px 16px;box-shadow:var(--shadow);animation:fade .25s ease}
+  .buildtop{display:flex;align-items:center;gap:10px;margin-bottom:11px;font-size:13.5px;font-weight:700;color:var(--ink)}
+  .buildtop .blabel{display:flex;align-items:center;gap:9px}
+  .buildtop .btimer{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--iris-blue);
+    background:var(--iris-green-100);padding:3px 12px;border-radius:999px;font-weight:700}
+  .pbar{height:10px;border-radius:999px;background:#e7edf7;border:1px solid rgba(200,208,227,.72);overflow:hidden;position:relative}
+  .pbar .pfill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--iris-blue),var(--iris-green))}
+  .pbar.indet .pfill{position:absolute;top:0;width:42%;animation:indet 1.35s cubic-bezier(.45,.05,.35,1) infinite}
+  @keyframes indet{0%{left:-44%}60%,100%{left:100%}}
+  .buildhint{font-size:11.5px;color:var(--muted);margin-top:9px}
+
+  /* ---- diff / code (dark code surface) ---- */
+  .io{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--code-line);border-radius:var(--radius-md);overflow:hidden;font-family:var(--mono);font-size:12px;background:var(--code-bg)}
+  .io .head{display:flex;align-items:center;gap:8px;background:var(--code-head);padding:6px 10px;font-weight:600;border-bottom:1px solid var(--code-line);color:var(--code-accent)}
   .io .head>span:first-child{flex:1 1 auto}
-  .io .side{overflow:auto;max-height:280px;padding:0}.io .side.r{border-left:1px solid var(--outline-v)}
-  .dtl{background:#0a1822;color:#cfe6f2;border:1px solid var(--outline-v);border-radius:var(--rad);font-family:var(--mono);font-size:12px;overflow:auto;max-height:420px}
-  /* line-numbered read-only code/text block */
+  .io .side{overflow:auto;max-height:300px;padding:0}.io .side.r{border-left:1px solid var(--code-line)}
+  .dtl{background:var(--code-bg);color:var(--code-fg);border:1px solid var(--code-line);border-radius:var(--radius-md);font-family:var(--mono);font-size:12px;overflow:auto;max-height:420px}
   .lined{display:flex;font-family:var(--mono);font-size:12px;line-height:1.5;align-items:stretch}
-  .lined .gut{flex:0 0 auto;text-align:right;padding:9px 8px 9px 10px;color:var(--muted);opacity:.7;user-select:none;
-    border-right:1px solid var(--outline-v);background:rgba(255,255,255,.04);white-space:pre}
-  .lined .code{flex:1 1 auto;padding:9px 11px;white-space:pre-wrap;word-break:break-word;overflow-x:auto}
-  .dtl .lined .gut{border-right-color:var(--outline);background:rgba(0,0,0,.30);color:var(--secondary);opacity:1}
-  /* a code block with a header bar + copy button */
-  .codeblock{border:1px solid var(--outline-v);border-radius:var(--rad);overflow:hidden;position:relative}
-  .codeblock>.cbh{display:flex;align-items:center;gap:8px;padding:5px 8px 5px 11px;background:var(--surface-3);border-bottom:1px solid var(--outline-v);font-size:11px;color:var(--muted);font-weight:500}
-  .codeblock>.cbh .ttl{font-weight:600;color:var(--secondary);letter-spacing:.3px}
-  .codeblock>.cbh .copy{margin-left:auto}
+  .lined .gut{flex:0 0 auto;text-align:right;padding:9px 8px 9px 10px;color:#5b6aa8;user-select:none;
+    border-right:1px solid var(--code-line);background:rgba(0,0,0,.25);white-space:pre}
+  .lined .code{flex:1 1 auto;padding:9px 11px;white-space:pre-wrap;word-break:break-word;overflow-x:auto;color:var(--code-fg)}
+  .dtl .lined .gut{color:var(--code-accent)}
+  /* titled code block */
+  .codeblock{border:1px solid var(--code-line);border-radius:var(--radius-md);overflow:hidden;position:relative}
+  .cbh{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--code-head);border-bottom:1px solid var(--code-line);font-size:11px;color:#aeb6e6;font-weight:600}
+  .cbh .ttl{font-weight:700;color:var(--code-accent);letter-spacing:.3px}
+  .cbh .copy{margin-left:auto}
   .codeblock>.lined{max-height:340px;overflow:auto}
-  .copy{background:var(--surface);color:var(--secondary);border:1px solid var(--outline);border-radius:var(--rad);padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s}
-  .copy:hover{background:var(--surface-2)}
-  .copy.done{color:var(--ok);border-color:var(--ok)}
-  /* diff line highlighting inside .lined */
+  .copy{background:#fff;color:var(--iris-blue);border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s}
+  .copy:hover{background:var(--soft)}
+  .copy.done{color:var(--iris-green-700);border-color:var(--iris-green)}
+
+  /* diff highlighting (on dark code surface) */
   .lined.diff .code .ln{display:block;padding:0 3px;margin:0 -11px;border-left:3px solid transparent}
-  .lined.diff .code .ln.add{background:rgba(26,143,108,.16);border-left-color:var(--primary)}
-  .lined.diff .code .ln.del{background:rgba(255,138,128,.14);border-left-color:var(--bad)}
-  .lined.diff .code .ln.chg{background:rgba(232,185,100,.14);border-left-color:var(--warn)}
+  .lined.diff .code .ln.add{background:rgba(0,182,176,.18);border-left-color:var(--iris-green)}
+  .lined.diff .code .ln.del{background:rgba(229,72,77,.18);border-left-color:var(--bad)}
+  .lined.diff .code .ln.chg{background:rgba(245,166,35,.16);border-left-color:var(--warn-amber)}
   .lined.diff .gut .gl{display:block}
-  .lined.diff .gut .gl.add{color:var(--primary)}.lined.diff .gut .gl.del{color:var(--bad)}.lined.diff .gut .gl.chg{color:var(--warn)}
-  /* character-level highlight inside a changed (chg) line */
-  .lined.diff .code .ln .cdel{background:rgba(255,138,128,.40);border-radius:2px}
-  .lined.diff .code .ln .cadd{background:rgba(26,143,108,.42);border-radius:2px}
-  .difflegend{display:flex;gap:14px;margin:0 0 8px;font-size:11px;color:var(--muted)}
+  .lined.diff .gut .gl.add{color:#3fe0d8}.lined.diff .gut .gl.del{color:#ff9b9b}.lined.diff .gut .gl.chg{color:#f3c97a}
+  .lined.diff .code .ln .cdel{background:rgba(229,72,77,.5);border-radius:2px}
+  .lined.diff .code .ln .cadd{background:rgba(0,182,176,.5);border-radius:2px}
+  .difflegend{display:flex;gap:14px;margin:0 0 8px;font-size:11px;color:var(--muted);flex-wrap:wrap;align-items:center}
   .difflegend .lg{display:inline-flex;align-items:center;gap:6px}
   .difflegend .lg::before{content:"";width:10px;height:10px;border-radius:2px;border-left:3px solid}
-  .difflegend .lg.chg::before{background:rgba(232,185,100,.16);border-left-color:var(--warn)}
-  .difflegend .lg.del::before{background:rgba(255,138,128,.14);border-left-color:var(--bad)}
-  .difflegend .lg.add::before{background:rgba(26,143,108,.16);border-left-color:var(--primary)}
-  /* line-numbered EDITABLE textarea (gutter + textarea, scroll-synced) */
-  .lined-ta{display:flex;border:1px solid var(--outline);border-radius:var(--rad);overflow:hidden;background:var(--surface)}
-  .lined-ta .gut{flex:0 0 auto;text-align:right;padding:10px 8px;color:var(--muted);opacity:.7;user-select:none;
-    border-right:1px solid var(--outline-v);background:rgba(255,255,255,.04);white-space:pre;overflow:hidden;font-family:var(--mono);font-size:12.5px;line-height:1.5}
-  .lined-ta textarea{border:none!important;border-radius:0;background:transparent;box-shadow:none!important;line-height:1.5;flex:1 1 auto}
-  .lined-ta:focus-within{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
+  .difflegend .lg.chg::before{background:rgba(245,166,35,.22);border-left-color:var(--warn-amber)}
+  .difflegend .lg.del::before{background:rgba(229,72,77,.2);border-left-color:var(--bad)}
+  .difflegend .lg.add::before{background:rgba(0,182,176,.22);border-left-color:var(--iris-green)}
+
+  /* editable line-numbered textarea (light) */
+  .lined-ta{display:flex;border:1px solid var(--line-strong);border-radius:var(--radius-sm);overflow:hidden;background:#fff}
+  .lined-ta .gut{flex:0 0 auto;text-align:right;padding:10px 8px;color:var(--muted);user-select:none;
+    border-right:1px solid var(--line);background:var(--soft);white-space:pre;overflow:hidden;font-family:var(--mono);font-size:12.5px;line-height:1.5}
+  .lined-ta textarea{border:none!important;border-radius:0;background:transparent;box-shadow:none!important;line-height:1.5;flex:1 1 auto;color:var(--ink)}
+  .lined-ta:focus-within{border-color:var(--iris-green);box-shadow:0 0 0 4px rgba(0,182,176,.13)}
+
   /* LLM message log */
-  .msg{border:1px solid var(--outline-v);border-radius:var(--rad);margin-bottom:10px;background:var(--surface);animation:fade .25s ease;overflow:hidden}
+  .msg{border:1px solid var(--line);border-radius:var(--radius-md);margin-bottom:10px;background:#fff;animation:fade .25s ease;overflow:hidden}
   .msg.role-system{border-left:3px solid var(--muted)}
-  .msg.role-user{border-left:3px solid var(--secondary)}
-  .msg.role-assistant{border-left:3px solid var(--primary)}
-  .msg .mh{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface-2);cursor:pointer;font-size:12px;border-bottom:1px solid var(--outline-v)}
-  .msg .mh .role{font-weight:700;text-transform:uppercase;letter-spacing:.5px;font-size:11px;padding:2px 8px;border-radius:var(--rad)}
-  .msg.role-system .mh .role{background:var(--surface-3);color:var(--muted)}
-  .msg.role-user .mh .role{background:var(--secondary-cont);color:var(--on-secondary-cont)}
-  .msg.role-assistant .mh .role{background:var(--primary-cont);color:var(--on-primary-cont)}
+  .msg.role-user{border-left:3px solid var(--iris-blue)}
+  .msg.role-assistant{border-left:3px solid var(--iris-green)}
+  .msg .mh{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--soft);cursor:pointer;font-size:12px;border-bottom:1px solid var(--line)}
+  .msg .mh .role{font-weight:800;text-transform:uppercase;letter-spacing:.5px;font-size:11px;padding:2px 8px;border-radius:999px}
+  .msg.role-system .mh .role{background:#eef1f8;color:var(--muted)}
+  .msg.role-user .mh .role{background:#e6f0fb;color:var(--iris-blue-800)}
+  .msg.role-assistant .mh .role{background:var(--iris-green-100);color:var(--iris-green-700)}
   .msg .mh .who{color:var(--muted)}.msg .mh .len{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:11px}
   .msg .mh .cv{color:var(--muted);transition:transform .15s}.msg.collapsed .mh .cv{transform:rotate(-90deg)}
-  .msg .mh .tok{font-family:var(--mono);font-size:11px;color:var(--secondary);background:var(--secondary-cont);padding:2px 8px;border-radius:var(--rad);white-space:nowrap}
-  .msg .mh .cost{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--on-primary-cont);background:var(--primary-cont);padding:2px 8px;border-radius:var(--rad);white-space:nowrap}
-  /* usage summary bar */
-  .usagebar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--outline-v);border-left:3px solid var(--primary);border-radius:var(--rad);padding:11px 14px;margin-bottom:12px;font-size:12.5px}
-  .usagebar .u{display:flex;flex-direction:column;gap:1px;padding-right:14px;border-right:1px solid var(--outline-v)}
+  .msg .mh .tok{font-family:var(--mono);font-size:11px;color:var(--iris-blue);background:#e6f0fb;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .msg .mh .cost{font-family:var(--mono);font-size:11px;font-weight:800;color:var(--iris-green-700);background:var(--iris-green-100);padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .usagebar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-left:3px solid var(--iris-green);border-radius:var(--radius-md);padding:11px 14px;margin-bottom:12px;font-size:12.5px}
+  .usagebar .u{display:flex;flex-direction:column;gap:1px;padding-right:14px;border-right:1px solid var(--line)}
   .usagebar .u:last-child{border-right:none}
-  .usagebar .u .k{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px}
-  .usagebar .u .v{font-family:var(--mono);font-weight:700;color:var(--txt)}
-  .usagebar .u .v.big{color:var(--primary)}
-  .msg .mc{font-family:var(--mono);font-size:12px;max-height:460px;overflow:auto;color:var(--txt)}
+  .usagebar .u .k{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+  .usagebar .u .v{font-family:var(--mono);font-weight:800;color:var(--ink)}
+  .usagebar .u .v.big{color:var(--iris-blue)}
+  .msg .mc{font-family:var(--mono);font-size:12px;max-height:460px;overflow:auto;background:var(--code-bg);color:var(--code-fg)}
   .msg.collapsed .mc{display:none}
   .msg .mc .copy{float:right;margin:6px 8px 0 8px;position:relative;z-index:1}
+
   .empty{color:var(--muted);text-align:center;padding:44px 0}
-  .err{background:var(--bad-cont);color:var(--bad);border:1px solid var(--bad);padding:11px 14px;border-radius:var(--rad);margin-top:12px;font-size:13px;white-space:pre-wrap;word-break:break-word}
-  .tabs{display:flex;gap:4px;margin:16px 0 12px;border-bottom:1px solid var(--outline-v)}
-  .tab{padding:9px 16px;border:none;cursor:pointer;background:none;font-size:13px;color:var(--muted);font-weight:500;border-bottom:3px solid transparent;transition:.15s}
-  .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+  .err{background:var(--bad-bg);color:#c0353a;border:1px solid var(--bad-line);padding:11px 14px;border-radius:var(--radius-sm);margin-top:12px;font-size:13px;white-space:pre-wrap;word-break:break-word}
+  .tabs{display:flex;gap:4px;margin:16px 0 12px;border-bottom:1px solid var(--line)}
+  .tab{padding:9px 16px;border:none;cursor:pointer;background:none;font-size:13px;color:var(--muted);font-weight:600;border-bottom:3px solid transparent;transition:.15s}
+  .tab.active{color:var(--iris-blue);border-bottom-color:var(--iris-blue)}
   .hidden{display:none}
-  .pill{font-family:var(--mono);font-size:11px;background:var(--surface-3);padding:3px 9px;border-radius:var(--rad);color:var(--muted)}
-  a{color:var(--secondary);font-weight:500;text-decoration:none}a:hover{text-decoration:underline}
+  .pill{font-family:var(--mono);font-size:11px;background:#eef1f8;padding:3px 10px;border-radius:999px;color:var(--muted)}
+  a{color:var(--iris-blue);font-weight:600;text-decoration:none}a:hover{text-decoration:underline}
   .links{display:flex;gap:16px;font-size:13px}
-  .listcard{padding:13px 15px;border:1px solid var(--outline-v);border-radius:var(--rad);margin-bottom:10px;background:var(--surface);cursor:pointer;transition:background .15s;animation:fade .3s ease}
-  .listcard:hover{background:var(--surface-2);border-color:var(--outline)}
-  .filechip{display:inline-flex;align-items:center;gap:8px;background:var(--secondary-cont);color:var(--on-secondary-cont);border-radius:var(--rad);padding:8px 12px;margin-top:8px;font-size:12px}
-  .seg{display:inline-flex;background:var(--surface);border:1px solid var(--outline);border-radius:var(--rad);overflow:hidden}
-  .seg button{border:none;background:transparent;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--muted);font-weight:500;transition:.15s;border-right:1px solid var(--outline-v)}
+  .listcard{padding:13px 15px;border:1px solid var(--line);border-radius:var(--radius-md);margin-bottom:10px;background:#fff;cursor:pointer;transition:.15s;animation:fade .3s ease}
+  .listcard:hover{background:var(--soft);border-color:var(--line-strong)}
+  .filechip{display:inline-flex;align-items:center;gap:8px;background:var(--iris-green-100);color:var(--iris-green-700);border-radius:999px;padding:8px 12px;margin-top:8px;font-size:12px}
+  .seg{display:inline-flex;background:#fff;border:1px solid var(--line-strong);border-radius:var(--radius-sm);overflow:hidden}
+  .seg button{border:none;background:transparent;padding:8px 15px;cursor:pointer;font-size:12.5px;color:var(--muted);font-weight:600;transition:.15s;border-right:1px solid var(--line)}
   .seg button:last-child{border-right:none}
-  .seg button.on{background:var(--primary);color:#fff}
-  .spinner{width:15px;height:15px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-2px}
-  .ghost .spinner,.tab .spinner,.rtab .spinner{border-color:rgba(26,143,108,.3);border-top-color:var(--primary)}
+  .seg button.on{background:var(--iris-blue);color:#fff}
+  .spinner{width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-2px;opacity:.9}
   @keyframes spin{to{transform:rotate(360deg)}}
-  ::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-thumb{background:var(--outline);border-radius:var(--rad);border:3px solid var(--bg)}::-webkit-scrollbar-track{background:transparent}
-  /* modal overlay (spec reader) */
-  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50;padding:30px}
+  ::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:999px;border:3px solid var(--soft)}::-webkit-scrollbar-track{background:transparent}
+
+  /* spec reader modal */
+  .overlay{position:fixed;inset:0;background:rgba(27,34,64,.5);display:none;align-items:center;justify-content:center;z-index:50;padding:30px;backdrop-filter:blur(2px)}
   .overlay.show{display:flex;animation:fade .2s ease}
-  .modal{background:var(--surface);border:1px solid var(--outline);border-radius:var(--rad);max-width:920px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
-  .modal .mhd{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--outline-v);background:var(--surface-2)}
-  .modal .mhd h2{margin:0;color:var(--secondary)}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);max-width:920px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 70px rgba(28,34,69,.3)}
+  .modal .mhd{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);background:var(--soft)}
+  .modal .mhd h2{margin:0;color:var(--iris-blue)}
   .modal .mbd{padding:16px;overflow:auto}
   .modal .x{margin-left:auto;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1}
-  .modal .x:hover{color:var(--txt)}
-  .mdtext{white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;line-height:1.55;color:var(--txt)}
+  .modal .x:hover{color:var(--ink)}
+  .mdtext{white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;line-height:1.55;color:var(--ink)}
+
+  /* spec-review: provenance-highlighted rules + source linking */
+  .srule{padding:7px 9px;border:1px solid var(--line);border-left:3px solid var(--iris-green);border-radius:var(--radius-sm);margin-bottom:7px;font-size:12.5px;cursor:default;transition:background .12s}
+  .srule:hover{background:var(--iris-green-100)}
+  .srule.inferred{border-left-color:var(--warn-amber)}
+  .srule.nosrc{border-left-color:var(--bad)}
+  .srule .sn{font-weight:800;color:var(--iris-blue);margin-right:6px}
+  .srule .stag{font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;margin-left:6px;vertical-align:1px}
+  .srule .stag.inf{background:var(--warn-bg);color:#9a6a00}
+  .srule .stag.no{background:var(--bad-bg);color:#c0353a}
+  .srule .sq{display:block;color:var(--muted);font-size:11px;margin-top:3px;font-style:italic}
+  .provhi{background:rgba(245,166,35,.38);border-radius:2px;box-shadow:0 0 0 1px rgba(245,166,35,.5)}
+  .speccov{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;margin-bottom:10px}
+  .speccov .cv{display:inline-flex;align-items:center;gap:5px;background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-weight:600}
+  /* accuracy gate report */
+  .gate{border:1px solid var(--line);border-radius:var(--radius-md);padding:12px 14px;margin:4px 0 12px;font-size:12.5px}
+  .gate.pass{border-left:4px solid var(--iris-green);background:var(--iris-green-100)}
+  .gate.fail{border-left:4px solid var(--warn-amber);background:var(--warn-bg)}
+  .gate .gh{font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .gate .gchk{display:flex;gap:14px;flex-wrap:wrap;margin:4px 0}
+  .gate .gchk b{font-weight:700}
+  .gate .gv{margin:6px 0 0;padding-left:2px}
+  .gate .gv .vrow{padding:4px 0;border-top:1px dashed var(--line)}
+  .gate .sev{font-size:10px;font-weight:800;padding:1px 6px;border-radius:999px;margin-right:6px}
+  .gate .sev.HIGH{background:var(--bad-bg);color:#c0353a}.gate .sev.LOW{background:var(--warn-bg);color:#9a6a00}
+  .confbadge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+  .confbadge.hi{background:var(--iris-green-100);color:var(--iris-green-700)}
+  .confbadge.mid{background:var(--warn-bg);color:#9a6a00}
+  .confbadge.lo{background:var(--bad-bg);color:#c0353a}
+  .specwarn{background:var(--warn-bg);color:#7a5200;border:1px solid #f0d8a8;border-left:3px solid var(--warn-amber);border-radius:var(--radius-sm);padding:9px 12px;margin-top:8px;font-size:12px}
+  /* line-by-line raw reply (shown when the concise reply isn't parseable JSON) */
+  .rawlines{font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);font-size:12px;line-height:1.5;border:1px solid var(--line);border-radius:var(--radius-sm);overflow:auto;max-height:60vh;background:var(--paper,#fbfcff)}
+  .rawln{display:flex;white-space:pre}
+  .rawln:nth-child(even){background:rgba(52,54,153,.025)}
+  .rawln:hover{background:var(--iris-green-100)}
+  .rawln .lno{flex:0 0 auto;width:3.2em;text-align:right;padding:1px 10px 1px 6px;color:var(--muted);user-select:none;border-right:1px solid var(--line);background:rgba(52,54,153,.04)}
+  .rawln .lcode{flex:1 1 auto;padding:1px 10px;white-space:pre-wrap;word-break:break-word}
+
+  /* left-pane header: title + quick model dropdown + settings cog */
+  .lpanehd{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .lpanetools{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .qmodel{display:inline-flex;align-items:center;gap:6px;margin:0;font-size:11px;color:var(--muted);font-weight:600}
+  .qmodel .qmlbl{text-transform:uppercase;letter-spacing:.5px}
+  .qmodel select{width:auto;max-width:200px;padding:6px 8px;font-size:12px;border-radius:var(--radius-sm)}
+  .qmodel select:disabled{opacity:.7}
+  .cog{width:34px;height:34px;flex:0 0 auto;border:1px solid var(--line-strong);background:#fff;border-radius:var(--radius-sm);cursor:pointer;font-size:16px;line-height:1;color:var(--iris-blue);transition:.15s}
+  .cog:hover{background:var(--soft);border-color:var(--iris-blue);transform:rotate(30deg)}
+
+  /* settings panel */
+  .setgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
+  .setgrid .full{grid-column:1 / -1}
+  .setsec{margin:6px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:.85px;color:var(--iris-blue);font-weight:800}
+  .savedbar{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--iris-green-700);background:var(--iris-green-100);border:1px solid #bfeeea;border-radius:999px;padding:4px 12px}
+
+  /* large review modal: THREE SCROLLABLE panes — segment menu | rule list | original */
+  .modal.wide{max-width:1320px}
+  .specsplit{display:grid;grid-template-columns:200px minmax(280px,1fr) minmax(360px,1.5fr);gap:0;border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden;min-height:0}
+  .specsplit .pane{display:flex;flex-direction:column;min-height:0;max-height:62vh}
+  .specsplit .pane.seg,.specsplit .pane.mid{border-right:1px solid var(--line)}
+  .specsplit .pane .phd{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--soft);border-bottom:1px solid var(--line);font-weight:700;font-size:12px;color:var(--ink);flex:0 0 auto}
+  .specsplit .pane .pbody{overflow:auto;padding:12px;flex:1 1 auto;font-size:12.5px;line-height:1.6}
+  .specsplit .pane.seg .pbody{padding:6px}
+  #cmpOrig{white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;color:var(--ink)}
+  /* segment menu (left pane) */
+  .segitem{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;font-weight:600;font-size:12.5px;color:var(--ink);margin-bottom:3px;transition:.1s}
+  .segitem:hover{background:var(--iris-green-100)}
+  .segitem.sel{background:var(--iris-blue);color:#fff}
+  .segitem .segcount{margin-left:auto;font-size:10px;font-weight:800;background:rgba(52,54,153,.1);color:var(--iris-blue);padding:1px 7px;border-radius:999px}
+  .segitem.sel .segcount{background:rgba(255,255,255,.22);color:#fff}
+  /* ambiguities entry + rows (must be resolved before approval) */
+  .segitem.amb{color:#c0353a}
+  .segitem.amb.sel{background:var(--bad,#c0353a);color:#fff}
+  .segitem.amb .segcount{background:var(--bad-bg);color:#c0353a}
+  .segitem.amb.sel .segcount{background:rgba(255,255,255,.25);color:#fff}
+  .segitem.amb.done{color:var(--iris-green-700)}
+  .ambrow{border:1px solid #f0d8a8;border-left:3px solid var(--warn-amber);border-radius:var(--radius-sm);padding:10px;margin-bottom:9px;background:var(--warn-bg)}
+  .ambrow.resolved{border-color:#bfe6d8;border-left-color:var(--iris-green);background:var(--iris-green-100)}
+  .ambrow.dismissed{border-color:var(--line);border-left-color:var(--muted);background:var(--soft);opacity:.85}
+  .ambrow .ambq{font-weight:600;font-size:12.5px;color:var(--ink);margin-bottom:7px}
+  .ambrow .ambq .qtag{font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px;margin-right:7px;background:var(--bad-bg);color:#c0353a;vertical-align:1px}
+  .ambrow.resolved .ambq .qtag{background:var(--iris-green-100);color:var(--iris-green-700)}
+  .ambrow.dismissed .ambq .qtag{background:#e7ebf3;color:var(--muted)}
+  .ambrow textarea{width:100%;min-height:48px;font-size:12px;margin-bottom:7px}
+  .ambrow .ambacts{display:flex;gap:8px;flex-wrap:wrap}
+  .ambrow .ambstate{font-size:11.5px;color:var(--muted);font-style:italic}
+  /* clickable concise items */
+  .citem{padding:8px 10px;border:1px solid var(--line);border-left:3px solid var(--iris-green);border-radius:var(--radius-sm);margin-bottom:7px;cursor:pointer;transition:.12s}
+  .citem:hover{background:var(--iris-green-100)}
+  .citem.sel{background:var(--iris-green-100);box-shadow:0 0 0 2px var(--iris-green) inset}
+  .citem.inferred{border-left-color:var(--warn-amber)}
+  .citem.nosrc{border-left-color:var(--bad)}
+  .citem .ci-tag{font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px;margin-left:6px}
+  .citem .ci-tag.inf{background:var(--warn-bg);color:#9a6a00}.citem .ci-tag.no{background:var(--bad-bg);color:#c0353a}
+  .citem .ci-rule{font-weight:500}
+  .citem .ci-rule code{font-family:var(--mono);background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:.92em}
+  .citem .ci-rule strong{font-weight:700}
+  .citem .ci-src{margin-top:5px;font-size:11px;color:var(--muted);font-style:italic;line-height:1.4}
+  .citem .ci-srclbl{font-style:normal;font-weight:700;color:var(--iris-blue);letter-spacing:.3px}
+  .cgrp{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--iris-blue);font-weight:800;margin:12px 0 6px;padding-bottom:3px;border-bottom:1px solid var(--line)}
+  .cgrp:first-child{margin-top:0}
+  .cmphi{background:rgba(245,166,35,.4);border-radius:2px;box-shadow:0 0 0 2px rgba(245,166,35,.55)}
+  .cmptools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:var(--muted)}
+  .vbadge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+  .vbadge.ok{background:var(--iris-green-100);color:var(--iris-green-700)}
+  .vbadge.warn{background:var(--warn-bg);color:#9a6a00}
+  .modal .mft{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--line);background:var(--soft);flex-wrap:wrap}
+  .modal .mft .sp{flex:1 1 auto}
+
+  /* responsive */
+  @media(max-width:1180px){.workspace{grid-template-columns:1fr}}
+  @media(max-width:1080px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:880px){
+    header{flex-wrap:wrap}header .btag{display:none}
+    .rtabs{overflow-x:auto}
+    .main{padding:18px}
+  }
 </style>
 </head>
 <body>
-<header>
-  <img class="mark" src="https://i.pinimg.com/736x/11/2a/b3/112ab34c423c70caa37e7f8a83d9c2a7.jpg" alt="ISC" onerror="this.style.display='none'"/>
-  <div><h1>ISC DTL Generator</h1><div class="tag">Generate &amp; refine InterSystems HL7 DTLs from a specification</div></div>
-  <div class="health" id="health" title="Click to re-run the init/health check"><span class="dot" id="hdot"></span><span id="htxt">checking…</span></div>
-</header>
-<main>
-  <!-- LEFT: persistent Build form -->
-  <div class="col panel">
-    <h2>1 · Specification</h2>
-    <div class="note">The DTL is generated <b>from the specification</b>. Provide example <b>input</b> messages only — there are no expected outputs. The first input is the one the generated DTL is run on.</div>
-    <div class="seg" id="specmode"><button class="on" data-m="text">Type text</button><button data-m="file">Upload document</button><button data-m="saved">Saved spec</button></div>
-    <div id="specText"><label>Describe the transformation the DTL should perform</label>
-      <textarea class="spec" id="spec" placeholder="e.g. Inbound ADT^A01 from EPICADT (HL7 v2.3). Rename the sending application to EPIC, normalize facility SITEA to 001 across MSH/PID/PV1, and upgrade the message to v2.5."></textarea></div>
-    <div id="specFile" class="hidden"><label>Upload a specification document (.pdf, .docx, .txt, .md …) — processed once, then reusable from “Saved spec”</label>
-      <input type="file" id="specfileinput" accept=".pdf,.docx,.txt,.md,.hl7,.csv,.json,.doc"/><div id="specfilestatus"></div></div>
-    <div id="specSaved" class="hidden"><label style="display:flex;align-items:center;gap:8px">Choose a previously uploaded specification <button class="ghost" id="refreshspecs" style="margin-left:auto;padding:4px 10px;font-size:11px">⟳</button></label>
-      <select id="savedspec"><option value="">— select a saved specification —</option></select>
-      <div id="savedspecinfo" style="font-size:12px;color:var(--muted);margin-top:6px"></div></div>
-    <label>Job name (optional)</label><input id="jobname" placeholder="ADT_A01_Admit"/>
-
-    <h2 style="margin-top:22px">2 · Example input messages</h2>
-    <div id="inputs"></div>
-    <button class="ghost" id="addinput">＋ Add input message</button>
-
-    <h2 style="margin-top:22px">3 · LLM provider</h2>
-    <div class="opts">
-      <div><label>Provider</label><select id="provider"><option value="openai" selected>OpenAI (live API)</option><option value="bedrock">AWS Bedrock (Claude)</option><option value="mock">Mock (offline demo)</option></select></div>
-      <div><label>Model</label><div style="display:flex;gap:6px"><select id="model" disabled style="flex:1"><option value="">Enter a valid API key</option></select><button class="ghost" id="refreshmodels" title="Load your account's models" style="padding:9px 11px">⟳</button></div></div>
+  <!-- TOP APP BAR: brand top-left, health + job + portal links top-right -->
+  <header>
+    <img class="mark" src="https://i.pinimg.com/736x/11/2a/b3/112ab34c423c70caa37e7f8a83d9c2a7.jpg" alt="ISC" onerror="this.style.display='none'"/>
+    <div><div class="bname">InterSystems AI DTL Generator</div><div class="btag">Generate &amp; refine InterSystems HL7 DTLs from a specification</div></div>
+    <div class="topactions">
+      <span id="jobid" class="pill hidden"></span>
+      <div id="links" class="links"></div>
+      <div class="health" id="health" title="Click to re-run the init/health check"><span class="dot" id="hdot"></span><span id="htxt">checking…</span></div>
     </div>
-    <div id="openaibox">
-      <label id="keylabel">OpenAI API key <span style="color:var(--muted)">(kept in this browser; sent only to your IRIS server)</span></label>
-      <div style="display:flex;gap:6px"><input id="apikey" type="password" placeholder="sk-..." autocomplete="off" style="flex:1"/>
-        <label style="display:flex;align-items:center;gap:5px;white-space:nowrap;margin:0;color:var(--muted)"><input type="checkbox" id="remember" checked style="width:auto"/> remember</label></div>
-      <div id="bedrockregionbox" class="hidden"><label>AWS region</label><input id="bedrockregion" placeholder="us-east-1" value="us-east-1"/></div>
-      <div id="modelhint" style="color:var(--muted);font-size:11px;margin-top:4px"></div>
-    </div>
-    <div class="row"><button class="primary" id="go">Plan &amp; Generate ▶</button><button class="ghost" id="sample">Load example</button><span id="jobid" class="pill hidden"></span></div>
-    <div id="formerr" class="err hidden"></div>
-  </div>
+  </header>
 
-  <!-- RIGHT: tabbed pane (Progress / Outputs / Live test / Classes / History) -->
-  <div class="rpane panel">
-    <div class="rtabs">
-      <button class="rtab active" data-view="progress">◷ Progress</button>
-      <button class="rtab" data-view="messages">💬 LLM messages</button>
-      <button class="rtab" data-view="outputs">📤 Outputs</button>
-      <button class="rtab" data-view="live">⚡ Live test</button>
-      <button class="rtab" data-view="classes">📦 Classes</button>
-      <button class="rtab" data-view="history">🕮 History</button>
-    </div>
-    <div class="rbody">
+  <!-- MAIN WORKSPACE -->
+  <main class="main">
 
-      <!-- PROGRESS -->
-      <div id="view-progress" class="rview active">
-        <div style="display:flex;align-items:center;gap:14px"><h2 style="margin:0">Current transformation</h2><div id="links" class="links" style="margin-left:auto"></div></div>
-        <div id="status"><div class="empty">Add a specification and at least one input message, then click <b>Plan &amp; Generate</b>. You'll review a plan, then approve the build. Failed compiles are auto-corrected and shown here.</div></div>
-        <div id="plangate" class="card hidden">
-          <h2>Proposed transformation plan</h2><div class="plan" id="plantext"></div>
-          <label style="margin-top:14px">Add your own steps to the plan (optional — added items become required transformations)</label>
-          <div id="planadds"></div>
-          <button class="ghost" id="addplanitem" style="margin-top:8px">＋ Add plan item</button>
-          <div class="row"><button class="ok" id="approveplan">✓ Approve &amp; build</button><button class="danger" id="rejectplan">✗ Revise plan…</button></div>
-        </div>
-        <div id="attemptgate" class="card warn hidden">
-          <h2>Attempt <span id="atnum"></span> — review</h2><div class="meta" id="atmeta"></div>
-          <div class="tabs"><div class="tab active" data-tab="out">Input → Output (diff)</div><div class="tab" data-tab="dtl">Generated DTL</div></div>
-          <div id="tab-out">
-            <div class="difflegend"><span class="lg chg">changed line</span><span class="lg del">only in input</span><span class="lg add">only in output</span><span class="lg" style="margin-left:auto">on a changed line, <span style="background:rgba(255,138,128,.40);border-radius:2px;padding:0 2px">removed</span> / <span style="background:rgba(26,143,108,.42);border-radius:2px;padding:0 2px">added</span> characters are highlighted</span></div>
-            <div class="io"><div class="side l"><div class="head"><span>Primary input</span><span id="dexpcopy"></span></div><div id="dexp"></div></div><div class="side r"><div class="head"><span>Produced output</span><span id="dactcopy"></span></div><div id="dact"></div></div></div></div>
-          <div id="tab-dtl" class="hidden"><div class="cbh" style="border:1px solid var(--outline-v);border-bottom:none"><span class="ttl">Generated DTL</span><span id="dtlcopy" style="margin-left:auto"></span></div><div class="dtl" id="dtlsrc">—</div></div>
-          <label style="margin-top:12px">Feedback (used if you reject this attempt)</label>
-          <textarea id="attfeedback" placeholder="e.g. PID-8 should map F→2; also set MSH-4 to 001…"></textarea>
-          <div class="row"><button class="ok" id="acceptattempt">✓ Accept &amp; transform all inputs</button><button class="danger" id="rejectattempt">✗ Reject &amp; regenerate</button></div>
-        </div>
+    <!-- KPI cards (reflect the active job) -->
+    <section class="kpi-grid" id="kpis">
+      <div class="kpi"><div class="k">Status</div><div class="v">—</div><div class="s">No active job</div></div>
+      <div class="kpi"><div class="k">Attempts</div><div class="v">—</div><div class="s">Build attempts</div></div>
+      <div class="kpi"><div class="k">Source DocType</div><div class="v">—</div><div class="s">Resolved structure</div></div>
+      <div class="kpi"><div class="k">Model</div><div class="v">—</div><div class="s">LLM backend</div></div>
+    </section>
+
+    <section class="workspace">
+      <!-- LEFT: persistent Build form -->
+      <div class="left-column">
+        <article class="panel col">
+          <div class="lpanehd">
+            <h2 style="margin:0">1 · Specification</h2>
+            <div class="lpanetools">
+              <label class="qmodel" id="qmodelwrap" title="Model used for generation"><span class="qmlbl">Model</span>
+                <select id="quickmodel" disabled><option value="">—</option></select></label>
+              <button class="cog" id="opensettings" title="Generator settings">⚙</button>
+            </div>
+          </div>
+          <div class="note">The DTL is generated <b>from the specification</b>. Provide example <b>input</b> messages only — there are no expected outputs. The first input is the one the generated DTL is run on.</div>
+          <div class="seg" id="specmode"><button class="on" data-m="text">Type text</button><button data-m="file">Upload document</button><button data-m="saved">Saved spec</button></div>
+          <div id="specText"><label>Describe the transformation the DTL should perform</label>
+            <textarea class="spec" id="spec" placeholder="e.g. Inbound ADT^A01 from EPICADT (HL7 v2.3). Rename the sending application to EPIC, normalize facility SITEA to 001 across MSH/PID/PV1, and upgrade the message to v2.5."></textarea></div>
+          <div id="specFile" class="hidden"><label>Upload a specification document (.pdf, .docx, .txt, .md …) — processed once, then reusable from “Saved spec”</label>
+            <input type="file" id="specfileinput" accept=".pdf,.docx,.txt,.md,.hl7,.csv,.json,.doc"/><div id="specfilestatus"></div></div>
+          <div id="specSaved" class="hidden"><label style="display:flex;align-items:center;gap:8px">Choose a previously uploaded specification <button class="ghost" id="refreshspecs" style="margin-left:auto;padding:4px 10px;font-size:11px">⟳</button></label>
+            <select id="savedspec"><option value="">— select a saved specification —</option></select>
+            <div id="savedspecinfo" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+            <div id="savedspecreview" class="hidden" style="margin-top:8px"><button class="ghost" id="reviewconcise">🔍 Review concise specification</button></div></div>
+          <label>Job name <span class="opt">(optional)</span></label><input id="jobname" placeholder="ADT_A01_Admit"/>
+
+          <h2 style="margin-top:24px">2 · Example input messages</h2>
+          <div class="note" style="font-size:12px">The input message is used <b>only locally</b> to identify the message type and verify the built DTL — it is <b>not sent to the LLM</b>. The DTL is generated from the specification.</div>
+          <div id="inputs"></div>
+          <button class="ghost" id="addinput">＋ Add input message</button>
+
+          <div class="row"><button class="primary" id="go">Plan &amp; Generate ▶</button><button class="ghost" id="sample">Load example</button></div>
+          <div id="formerr" class="err hidden"></div>
+        </article>
       </div>
 
-      <!-- LLM MESSAGES -->
-      <div id="view-messages" class="rview">
-        <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0">LLM messages</h2><span id="msgjob" class="pill"></span>
-          <label style="display:flex;align-items:center;gap:5px;margin:0;color:var(--muted);font-size:12px;font-weight:400"><input type="checkbox" id="msgauto" style="width:auto"/> auto-refresh</label>
-          <button class="ghost" id="refreshmsg" style="margin-left:auto">⟳ Refresh</button></div>
-        <p style="color:var(--muted);font-size:13px">Every message sent to and received from the model for this job, in order — system / user / assistant. Each model reply shows the tokens it used and that request's cost.</p>
-        <div id="usagebar" class="usagebar hidden"></div>
-        <div id="msglist"></div>
-      </div>
+      <!-- RIGHT: tabbed working pane -->
+      <div class="right-column">
+        <article class="panel viewpanel">
+          <nav class="rtabs">
+            <button class="rtab active" data-view="progress"><span class="ic">◷</span> Progress</button>
+            <button class="rtab" data-view="messages"><span class="ic">💬</span> LLM messages</button>
+            <button class="rtab" data-view="outputs"><span class="ic">📤</span> Outputs</button>
+            <button class="rtab" data-view="live"><span class="ic">⚡</span> Live test</button>
+            <button class="rtab" data-view="classes"><span class="ic">📦</span> Classes</button>
+            <button class="rtab" data-view="history"><span class="ic">🕮</span> History</button>
+            <button class="rtab" data-view="settings" style="margin-left:auto"><span class="ic">⚙</span> Settings</button>
+          </nav>
+          <div class="rbody">
 
-      <!-- OUTPUTS -->
-      <div id="view-outputs" class="rview">
-        <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0">Transformed outputs</h2><span id="outjob" class="pill"></span><button class="ghost" id="refreshout" style="margin-left:auto">⟳ Refresh</button></div>
-        <p style="color:var(--muted);font-size:13px">Every input message run through the built DTL. Correct an output and/or add feedback — the DTL is rebuilt and all inputs re-transformed.</p>
-        <div id="outlist"></div>
-      </div>
+            <!-- PROGRESS -->
+            <div id="view-progress" class="rview active">
+              <div class="viewhd"><h2>Current transformation</h2></div>
+              <div id="status"><div class="empty">Add a specification and at least one input message, then click <b>Plan &amp; Generate</b>. First you'll review the <b>structured specification</b> (so any extraction/interpretation error is caught early), then the plan, then the built DTL — which is verified against the spec, not just compiled.</div></div>
 
-      <!-- LIVE -->
-      <div id="view-live" class="rview">
-        <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0">Live test</h2><span id="livejob" class="pill"></span></div>
-        <p style="color:var(--muted);font-size:13px">Paste any input message and run it through the built DTL. Correct the output and give feedback to improve the DTL.</p>
-        <label>Input message</label><textarea id="liveinput" style="min-height:90px"></textarea>
-        <div class="row"><button class="blue" id="runlive">⚡ Transform</button></div>
-        <div id="liveresult" class="hidden">
-          <label style="display:flex;align-items:center;gap:8px">Input <span id="liveincopy" style="margin-left:auto;font-weight:400"></span></label><div id="liveIn" class="io" style="display:block"></div>
-          <label style="display:flex;align-items:center;gap:8px">Produced output (editable) <span style="color:var(--muted);font-weight:400">— changed lines vs input are highlighted</span><span id="liveoutcopy" style="margin-left:auto;font-weight:400"></span></label><textarea id="liveOut" style="min-height:200px"></textarea>
-          <label>Feedback</label><textarea id="livefb" placeholder="What's wrong / what should change…"></textarea>
-          <div class="row"><button class="ok" id="livecorrect">✓ Apply correction + feedback to the DTL</button></div>
-          <div id="livemsg" style="color:var(--muted);font-size:12px;margin-top:8px"></div>
-        </div>
-      </div>
+              <!-- SPEC REVIEW GATE: earliest human checkpoint. Original (left) vs the
+                   LLM-structured rule list (right), each rule colour-coded by whether
+                   it is traceable to the source. Editable before approval. -->
+              <div id="specgate" class="card blue hidden">
+                <h2>① Review the structured specification</h2>
+                <p style="color:var(--muted);font-size:12.5px;margin:2px 0 12px">The uploaded/typed spec was rewritten into explicit, testable rules. <b>Verify each rule against the original</b> — hover a rule to highlight the source text it came from. Rules with no source are flagged as <span style="color:var(--warn)">inferred</span>. Fix anything wrong here: this becomes the single source of truth the DTL is built and verified against.</p>
+                <div id="speccov"></div>
+                <div class="io" style="background:var(--panel);border-color:var(--line)">
+                  <div class="side l" style="max-height:340px"><div class="head" style="background:var(--soft);color:var(--ink)"><span>Original specification</span><span id="specorigcopy"></span></div><div id="specorig" style="padding:10px;font-size:12px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);color:var(--ink)"></div></div>
+                  <div class="side r" style="max-height:340px"><div class="head" style="background:var(--soft);color:var(--ink)"><span>Structured rules (provenance-highlighted)</span></div><div id="specrules" style="padding:10px"></div></div>
+                </div>
+                <label style="margin-top:12px">Edit the structured specification before approving <span class="opt">(markdown — your edits become the authority)</span></label>
+                <textarea id="specedit" style="min-height:150px"></textarea>
+                <div class="row"><button class="ok" id="approvespec">✓ Approve spec &amp; plan</button><button class="danger" id="rejectspec">✗ Re-structure…</button></div>
+              </div>
 
-      <!-- CLASSES -->
-      <div id="view-classes" class="rview">
-        <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0">Generated DTL classes</h2><button class="ghost" id="refreshcls" style="margin-left:auto">⟳ Refresh</button></div>
-        <p style="color:var(--muted);font-size:13px">All DTL classes generated in this session. Click one to view its source.</p>
-        <div style="display:grid;grid-template-columns:260px 1fr;gap:14px"><div id="clslist"></div><div><div class="cbh" style="border:1px solid var(--outline-v);border-bottom:none"><span class="ttl" id="clsname">Class source</span><span id="clscopy" style="margin-left:auto"></span></div><div class="dtl" id="clssrc">Select a class…</div></div></div>
-      </div>
+              <div id="plangate" class="card hidden">
+                <h2>Proposed transformation plan</h2><div class="plan" id="plantext"></div>
+                <label style="margin-top:14px">Add your own steps to the plan <span class="opt">(optional — added items become required transformations)</span></label>
+                <div id="planadds"></div>
+                <button class="ghost" id="addplanitem" style="margin-top:8px">＋ Add plan item</button>
+                <div class="row"><button class="ok" id="approveplan">✓ Approve &amp; build</button><button class="danger" id="rejectplan">✗ Revise plan…</button></div>
+              </div>
+              <div id="attemptgate" class="card warn hidden">
+                <h2>Attempt <span id="atnum"></span> — review</h2><div class="meta" id="atmeta"></div>
+                <!-- Accuracy-gate verdict: the machine already checked this candidate
+                     against the SPEC (ran all inputs + coverage + LLM judge). -->
+                <div id="gatereport"></div>
+                <div class="tabs"><div class="tab active" data-tab="out">Input → Output (diff)</div><div class="tab" data-tab="dtl">Generated DTL</div></div>
+                <div id="tab-out">
+                  <div class="difflegend"><span class="lg chg">changed line</span><span class="lg del">only in input</span><span class="lg add">only in output</span><span class="lg" style="margin-left:auto">on a changed line, <span style="background:rgba(229,72,77,.22);border-radius:2px;padding:0 3px">removed</span> / <span style="background:rgba(0,182,176,.22);border-radius:2px;padding:0 3px">added</span> characters are highlighted</span></div>
+                  <div class="io"><div class="side l"><div class="head"><span>Primary input</span><span id="dexpcopy"></span></div><div id="dexp"></div></div><div class="side r"><div class="head"><span>Produced output</span><span id="dactcopy"></span></div><div id="dact"></div></div></div></div>
+                <div id="tab-dtl" class="hidden"><div class="cbh" style="border:1px solid var(--code-line);border-bottom:none"><span class="ttl">Generated DTL</span><span id="dtlcopy" style="margin-left:auto"></span></div><div class="dtl" id="dtlsrc">—</div></div>
+                <label style="margin-top:12px">Feedback <span class="opt">(used if you reject this attempt)</span></label>
+                <textarea id="attfeedback" placeholder="e.g. PID-8 should map F→2; also set MSH-4 to 001…"></textarea>
+                <div class="row"><button class="ok" id="acceptattempt">✓ Accept &amp; transform all inputs</button><button class="danger" id="rejectattempt">✗ Reject &amp; regenerate</button></div>
+              </div>
+            </div>
 
-      <!-- HISTORY -->
-      <div id="view-history" class="rview">
-        <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0">History</h2><button class="ghost" id="refreshhist" style="margin-left:auto">⟳ Refresh</button></div>
-        <p style="color:var(--muted);font-size:13px">Every job, newest first. Refinements nest under their parent.</p>
-        <div id="histlist"></div>
-      </div>
+            <!-- LLM MESSAGES -->
+            <div id="view-messages" class="rview">
+              <div class="viewhd"><h2>LLM messages</h2><span id="msgjob" class="pill"></span>
+                <label style="display:flex;align-items:center;gap:5px;margin:0;color:var(--muted);font-size:12px;font-weight:400"><input type="checkbox" id="msgauto" style="width:auto"/> auto-refresh</label>
+                <button class="ghost" id="refreshmsg" style="margin-left:auto">⟳ Refresh</button></div>
+              <p style="color:var(--muted);font-size:13px">Every message sent to and received from the model for this job, in order — system / user / assistant. Each model reply shows the tokens it used and that request's cost.</p>
+              <div id="usagebar" class="usagebar hidden"></div>
+              <div id="msglist"></div>
+            </div>
 
-    </div>
-  </div>
-</main>
+            <!-- OUTPUTS -->
+            <div id="view-outputs" class="rview">
+              <div class="viewhd"><h2>Transformed outputs</h2><span id="outjob" class="pill"></span><button class="ghost" id="refreshout" style="margin-left:auto">⟳ Refresh</button></div>
+              <p style="color:var(--muted);font-size:13px">Every input message run through the built DTL. Correct an output and/or add feedback — the DTL is rebuilt and all inputs re-transformed.</p>
+              <div id="outlist"></div>
+            </div>
+
+            <!-- LIVE -->
+            <div id="view-live" class="rview">
+              <div class="viewhd"><h2>Live test</h2><span id="livejob" class="pill"></span></div>
+              <p style="color:var(--muted);font-size:13px">Paste any input message and run it through the built DTL. Correct the output and give feedback to improve the DTL.</p>
+              <label>Input message</label><textarea id="liveinput" style="min-height:90px"></textarea>
+              <div class="row"><button class="blue" id="runlive">⚡ Transform</button></div>
+              <div id="liveresult" class="hidden">
+                <label style="display:flex;align-items:center;gap:8px">Input <span id="liveincopy" style="margin-left:auto;font-weight:400"></span></label><div id="liveIn" class="io" style="display:block"></div>
+                <label style="display:flex;align-items:center;gap:8px">Produced output (editable) <span class="opt">— changed lines vs input are highlighted</span><span id="liveoutcopy" style="margin-left:auto;font-weight:400"></span></label><textarea id="liveOut" style="min-height:200px"></textarea>
+                <label>Feedback</label><textarea id="livefb" placeholder="What's wrong / what should change…"></textarea>
+                <div class="row"><button class="ok" id="livecorrect">✓ Apply correction + feedback to the DTL</button></div>
+                <div id="livemsg" style="color:var(--muted);font-size:12px;margin-top:8px"></div>
+              </div>
+            </div>
+
+            <!-- CLASSES -->
+            <div id="view-classes" class="rview">
+              <div class="viewhd"><h2>Generated DTL classes</h2><button class="ghost" id="refreshcls" style="margin-left:auto">⟳ Refresh</button></div>
+              <p style="color:var(--muted);font-size:13px">All DTL classes generated in this session. Click one to view its source.</p>
+              <div style="display:grid;grid-template-columns:260px 1fr;gap:14px"><div id="clslist"></div><div><div class="cbh" style="border:1px solid var(--code-line);border-bottom:none"><span class="ttl" id="clsname">Class source</span><span id="clscopy" style="margin-left:auto"></span></div><div class="dtl" id="clssrc">Select a class…</div></div></div>
+            </div>
+
+            <!-- HISTORY -->
+            <div id="view-history" class="rview">
+              <div class="viewhd"><h2>History</h2><button class="ghost" id="refreshhist" style="margin-left:auto">⟳ Refresh</button></div>
+              <p style="color:var(--muted);font-size:13px">Every job, newest first. Refinements nest under their parent.</p>
+              <div id="histlist"></div>
+            </div>
+
+            <!-- SETTINGS — generator configuration, persisted in localStorage -->
+            <div id="view-settings" class="rview">
+              <div class="viewhd"><h2>Generator settings</h2><span id="setsaved" class="savedbar hidden">✓ saved</span></div>
+              <p style="color:var(--muted);font-size:13px">LLM provider, model and run limits. Stored in this browser (localStorage) and reloaded on refresh; the API key is sent only to your IRIS server, never persisted server-side.</p>
+              <div class="setgrid">
+                <div class="setsec full">LLM provider</div>
+                <div><label>Provider</label><select id="provider"><option value="openai" selected>OpenAI (live API)</option><option value="bedrock">AWS Bedrock (Claude)</option><option value="mock">Mock (offline demo)</option></select></div>
+                <div><label>Model</label><div style="display:flex;gap:6px"><select id="model" disabled style="flex:1"><option value="">Enter a valid API key</option></select><button class="ghost" id="refreshmodels" title="Load your account's models" style="padding:9px 11px">⟳</button></div></div>
+                <div class="full" id="openaibox">
+                  <label id="keylabel">OpenAI API key <span class="opt">(kept in this browser; sent only to your IRIS server)</span></label>
+                  <div style="display:flex;gap:6px"><input id="apikey" type="password" placeholder="sk-..." autocomplete="off" style="flex:1"/>
+                    <label style="display:flex;align-items:center;gap:5px;white-space:nowrap;margin:0;color:var(--muted)"><input type="checkbox" id="remember" checked style="width:auto"/> remember</label></div>
+                  <div id="bedrockregionbox" class="hidden"><label>AWS region</label><input id="bedrockregion" placeholder="us-east-1" value="us-east-1"/></div>
+                  <div id="modelhint" style="color:var(--muted);font-size:11px;margin-top:4px"></div>
+                </div>
+                <div class="setsec full">Run limits</div>
+                <div><label>Max attempts <span class="opt">(auto-repair budget)</span></label><input id="maxattempts" type="number" min="1" max="20" value="5"/></div>
+                <div><label>Cost cap (USD) <span class="opt">(0 = none)</span></label><input id="costcap" type="number" min="0" step="0.10" value="0"/></div>
+              </div>
+            </div>
+
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
 
 <!-- spec reader modal -->
 <div class="overlay" id="specmodal">
   <div class="modal">
     <div class="mhd"><h2 id="specmodaltitle">Specification</h2><span id="specmodalcopy"></span><button class="x" id="specmodalclose">✕</button></div>
     <div class="mbd"><div class="mdtext" id="specmodaltext">Loading…</div></div>
+  </div>
+</div>
+
+<!-- CONCISE-SPEC REVIEW modal: original (left) vs concise (right), side by side.
+     Click a concise item to jump to + highlight its source on the left. Edit the
+     concise spec, then approve — it is stored alongside the original. -->
+<div class="overlay" id="cmpmodal">
+  <div class="modal wide">
+    <div class="mhd"><h2 id="cmptitle">Review concise specification</h2><button class="x" id="cmpclose">✕</button></div>
+    <div class="mbd">
+      <div class="cmptools">
+        <span>Pick a <b>segment</b>, then click a <b>specification point</b> to jump to its source in the original.</span>
+        <span id="cmpverdict"></span>
+        <span style="margin-left:auto"><label style="display:inline-flex;align-items:center;gap:6px;margin:0;color:var(--muted);font-weight:600"><input type="checkbox" id="cmpedit" style="width:auto"/> view &amp; edit specification</label></span>
+      </div>
+      <div id="cmpbanner"></div>
+      <!-- 3-pane browser: segment menu | rules for that segment | original spec.
+           When "view & edit specification" is ticked, the two concise panes are
+           replaced by a single editable markdown textarea. -->
+      <div class="specsplit" id="cmpSplit">
+        <div class="pane seg">
+          <div class="phd"><span>Segments</span></div>
+          <div class="pbody"><div id="cmpSegs"></div></div>
+        </div>
+        <div class="pane mid">
+          <div class="phd"><span id="cmpRulesHd">Specification points</span><span id="cmpconf" style="margin-left:auto"></span></div>
+          <div class="pbody"><div id="cmpItems"></div></div>
+        </div>
+        <div class="pane orig">
+          <div class="phd"><span>Original specification</span><span id="cmporigcopy" style="margin-left:auto"></span></div>
+          <div class="pbody" id="cmpOrigBody"><div id="cmpOrig"></div></div>
+        </div>
+      </div>
+      <textarea id="cmpEdit" class="hidden" style="min-height:52vh;width:100%"></textarea>
+    </div>
+    <div class="mft">
+      <span id="cmpmsg" style="font-size:12px;color:var(--muted)"></span>
+      <span id="cmpgatehint" style="font-size:12px;color:#c0353a;font-weight:600"></span>
+      <span class="sp"></span>
+      <button class="ghost" id="cmpregen">↻ Regenerate</button>
+      <button class="ok" id="cmpapprove">✓ Approve specification</button>
+    </div>
   </div>
 </div>
 
@@ -349,8 +639,6 @@ const fmtScore=x=>(x==null||x==="")?"—":(Math.round(x*1000)/1000).toFixed(3);
 const norm=s=>(s||"").replace(/\r/g,"\n").replace(/\n+$/,"");
 
 // ---- copy button ----------------------------------------------------------
-// A small "copy" button that copies the given text (or text-returning fn) to the
-// clipboard with brief visual feedback.
 function copyBtn(getText){
   const b=el("button","copy","⧉ copy");
   b.onclick=(e)=>{e.stopPropagation();const t=(typeof getText==="function")?getText():getText;
@@ -361,14 +649,48 @@ function copyBtn(getText){
   return b;
 }
 
+// ---- lightweight Markdown renderer ----------------------------------------
+// Some LLMs return the plan as Markdown. Render a safe subset (headings, bold,
+// italic, inline code, fenced code, ordered/unordered lists, blockquotes, rules,
+// links) to HTML. All raw text is HTML-escaped FIRST, so the model can't inject
+// markup; only our own tags are emitted.
+function mdEsc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+// Inline pass over already-HTML-escaped text: code first (so its contents aren't
+// re-processed), then links, bold, italic.
+function mdInlineApply(s){
+  s=s.replace(/`([^`]+)`/g,(m,c)=>"<code>"+c+"</code>");
+  s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,(m,txt,url)=>'<a href="'+url+'" target="_blank" rel="noopener">'+txt+"</a>");
+  s=s.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/__([^_]+)__/g,"<strong>$1</strong>");
+  s=s.replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<em>$2</em>");
+  s=s.replace(/(^|[^_\w])_([^_\n]+)_/g,"$1<em>$2</em>");
+  return s;
+}
+function mdToHtml(src){
+  const lines=String(src==null?"":src).replace(/\r\n?/g,"\n").split("\n");
+  let html="",i=0,para=[],listType=null,listItems=[];
+  const flushPara=()=>{if(para.length){html+="<p>"+mdInlineApply(mdEsc(para.join(" ")))+"</p>";para=[];}};
+  const flushList=()=>{if(listType){html+="<"+listType+">"+listItems.map(it=>"<li>"+mdInlineApply(mdEsc(it))+"</li>").join("")+"</"+listType+">";listType=null;listItems=[];}};
+  const flushAll=()=>{flushPara();flushList();};
+  while(i<lines.length){
+    const raw=lines[i];const t=raw.trim();
+    if(/^```/.test(t)){flushAll();i++;const code=[];while(i<lines.length&&!/^```/.test(lines[i].trim())){code.push(lines[i]);i++;}i++;html+="<pre class=mdcode>"+mdEsc(code.join("\n"))+"</pre>";continue;}
+    if(t===""){flushAll();i++;continue;}
+    const h=t.match(/^(#{1,6})\s+(.*)$/);
+    if(h){flushAll();const lvl=Math.min(h[1].length+2,6);html+="<h"+lvl+" class=mdh>"+mdInlineApply(mdEsc(h[2]))+"</h"+lvl+">";i++;continue;}
+    if(/^([-*_])\1{2,}$/.test(t)){flushAll();html+="<hr/>";i++;continue;}
+    const ul=t.match(/^[-*+]\s+(.*)$/);
+    if(ul){flushPara();if(listType&&listType!=="ul")flushList();listType="ul";listItems.push(ul[1]);i++;continue;}
+    const ol=t.match(/^\d+[.)]\s+(.*)$/);
+    if(ol){flushPara();if(listType&&listType!=="ol")flushList();listType="ol";listItems.push(ol[1]);i++;continue;}
+    const bq=t.match(/^>\s?(.*)$/);
+    if(bq){flushAll();html+="<blockquote>"+mdInlineApply(mdEsc(bq[1]))+"</blockquote>";i++;continue;}
+    flushList();para.push(t);i++;
+  }
+  flushAll();
+  return html||"<p style='color:var(--muted)'>(no plan text)</p>";
+}
+
 // ---- line numbering helpers ----------------------------------------------
-// Build a read-only line-numbered block: a gutter (1..N) beside the text. Returns
-// a DOM element. If diffClasses is given (array of "add"|"del"|"chg"|"" per line),
-// each line + its gutter number is highlighted accordingly.
-// diffClasses: per-line "add"|"del"|"chg"|"" classes. segs: optional per-line
-// character-segment arrays (for "chg" lines) — each is [{t,c}] where c is ""
-// (unchanged), "cadd" (chars only in this/the output line) or "cdel" (chars only
-// in the input line), so the exact characters that changed are coloured.
 function linedBlock(text,diffClasses,segs){
   text=(text==null?"":String(text));
   const lines=text.split("\n");
@@ -394,10 +716,7 @@ function linedBlock(text,diffClasses,segs){
   wrap.appendChild(gut);wrap.appendChild(code);
   return wrap;
 }
-// Fill a container with a line-numbered read-only view of text.
 function setLined(container,text,diffClasses,segs){container.innerHTML="";container.appendChild(linedBlock(text,diffClasses,segs));}
-// A titled code block with a copy button + a line-numbered body. dtl=true themes it
-// like a code/source block. diffClasses optionally highlights changed lines.
 function codeBlock(text,title,opts){opts=opts||{};
   const wrap=el("div","codeblock");
   const h=el("div","cbh");h.appendChild(el("span","ttl",title||""));h.appendChild(copyBtn(()=>text||""));
@@ -406,10 +725,7 @@ function codeBlock(text,title,opts){opts=opts||{};
   if(opts.dtl){const d=el("div","dtl");d.appendChild(body);wrap.appendChild(d);}else{wrap.appendChild(body);}
   return wrap;
 }
-// ---- line diff (LCS) -> per-line classes for a pair of texts ---------------
-// Returns {aCls, bCls} arrays aligned to the lines of a (input) and b (output):
-// 'del' lines only in a, 'add' lines only in b, 'chg' for a changed line that has
-// a positional counterpart, '' for unchanged.
+// ---- line diff (LCS) -------------------------------------------------------
 function lineDiff(a,b){
   const A=(a||"").split("\n"),B=(b||"").split("\n");
   const n=A.length,m=B.length;
@@ -424,30 +740,20 @@ function lineDiff(a,b){
   }
   while(i<n){aCls[i++]="del";}
   while(j<m){bCls[j++]="add";}
-  // Pair adjacent del/add runs into aligned "chg" lines so a modified line reads as
-  // one change (amber on both sides) rather than a delete + an unrelated add. For
-  // each paired line, also compute a CHARACTER-level diff so we colour exactly which
-  // characters were removed (cdel, on the input side) / added (cadd, on the output).
   const aSeg=new Array(n),bSeg=new Array(m);
   let p=0,q=0;
   while(p<n&&q<m){
     if(aCls[p]===""){p++;continue;}
     if(bCls[q]===""){q++;continue;}
-    // aCls[p] is 'del' and bCls[q] is 'add' (the only non-'' values so far) → it's a change
     aCls[p]="chg";bCls[q]="chg";
     const cd=charDiff(A[p],B[q]);aSeg[p]=cd.aSeg;bSeg[q]=cd.bSeg;
     p++;q++;
   }
   return {aCls,bCls,aSeg,bSeg};
 }
-// Character-level LCS diff of two single lines. Returns {aSeg,bSeg}: arrays of
-// {t,c} runs. For aSeg (input) c is "" (kept) or "cdel" (removed); for bSeg
-// (output) c is "" (kept) or "cadd" (added). Adjacent same-class chars are merged.
 function charDiff(a,b){
   a=a||"";b=b||"";
   const n=a.length,m=b.length;
-  // LCS over characters. Cap very long lines to keep the O(n*m) table bounded;
-  // beyond the cap, fall back to marking the whole line changed.
   if(n>4000||m>4000){return {aSeg:[{t:a,c:a?"cdel":""}],bSeg:[{t:b,c:b?"cadd":""}]};}
   const dp=Array.from({length:n+1},()=>new Array(m+1).fill(0));
   for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i][j]=a[i]===b[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
@@ -463,8 +769,6 @@ function charDiff(a,b){
   while(j<m){push(bSeg,b[j++],"cadd");}
   return {aSeg,bSeg};
 }
-// Turn a bare <textarea> into a line-numbered, scroll-synced editor in place.
-// Returns the textarea (value/oninput unchanged). Safe to call once per textarea.
 function lineNumberTextarea(ta){
   if(ta.dataset.lined)return ta;ta.dataset.lined="1";
   const wrap=el("div","lined-ta");const gut=el("div","gut");
@@ -473,10 +777,6 @@ function lineNumberTextarea(ta){
   ta.addEventListener("input",refresh);ta.addEventListener("scroll",()=>gut.scrollTop=ta.scrollTop);
   refresh();return ta;
 }
-
-// Keep two (or more) scroll containers in lockstep so a side-by-side diff lines
-// up vertically AND horizontally. A re-entrancy guard stops the scroll events
-// from ping-ponging. Idempotent per element set (re-binds cleanly on re-render).
 function syncScroll(els){
   els=els.filter(Boolean);
   if(els.length<2)return;
@@ -488,7 +788,7 @@ function syncScroll(els){
   });
 }
 
-// Right-pane tab switching (Progress / Outputs / Live test / Classes / History).
+// ---- right-pane tab switching --------------------------------------------
 function showView(v){
   document.querySelectorAll(".rtab").forEach(x=>x.classList.toggle("active",x.dataset.view===v));
   document.querySelectorAll(".rview").forEach(x=>x.classList.toggle("active",x.id==="view-"+v));
@@ -496,106 +796,512 @@ function showView(v){
   if(v==="classes")loadClasses();
   if(v==="history")loadHistory();
   if(v==="messages")loadMessages();
-  if(v==="live")$("#livejob").textContent=currentJob?("job "+currentJob):"(build a DTL first)";
+  if(v==="live")$("#livejob").textContent=currentJob?("Job "+currentJob):"(build a DTL first)";
 }
 document.querySelectorAll(".rtab").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 
-// spec mode: text | file (upload+extract) | saved (pick a previously-uploaded spec)
-let specReady=null;        // extracted text from a file upload
-let savedReady=null;       // selected saved-spec text
+// ---- KPI cards -------------------------------------------------------------
+function setKpi(idx,val,sub){const c=$("#kpis").children[idx];if(!c)return;const v=c.querySelector(".v");v.textContent=val;v.title=val;if(sub!=null)c.querySelector(".s").textContent=sub;}
+function updateKPIs(j){
+  if(!j){setKpi(0,"—","No active job");setKpi(1,"—","build attempts");setKpi(2,"—","resolved structure");setKpi(3,"—","LLM backend");return;}
+  setKpi(0,(j.status||"—").replace(/_/g," "),j.verdict||"current job");
+  setKpi(1,(j.attemptsUsed||0)+" / "+(j.maxAttempts||0),"build attempts");
+  setKpi(2,j.sourceDocType||"—","resolved structure");
+  setKpi(3,j.model||"—","LLM backend");
+}
+
+// ---- build progress clock --------------------------------------------------
+// Drives the elapsed timer shown beside the progress bar while the plan/DTL is
+// being implemented. Started when the user successfully kicks off server work
+// (Plan & Generate, Approve & build, Reject & regenerate); cleared once the job
+// reaches a terminal or awaiting-user state.
+let buildClock=null,buildTimerInt=null;
+function fmtElapsed(ms){const s=Math.max(0,Math.floor(ms/1000));const m=Math.floor(s/60);return m+":"+String(s%60).padStart(2,"0");}
+function buildClockReset(){buildClock=Date.now();buildClockStart();}
+function buildClockStart(){if(buildClock==null)buildClock=Date.now();if(!buildTimerInt)buildTimerInt=setInterval(()=>{const t=document.getElementById("buildtimer");if(t&&buildClock!=null)t.textContent=fmtElapsed(Date.now()-buildClock);},250);}
+function buildClockStop(){buildClock=null;if(buildTimerInt){clearInterval(buildTimerInt);buildTimerInt=null;}}
+
+// Generic "Label… Ns" elapsed ticker for short async actions (e.g. generating the
+// concise spec). Renders a spinner + label + a live seconds count into elEl, and
+// returns a stop() that clears the interval. Counts in whole seconds (1s, 2s…),
+// switching to "Xm Ys" past a minute.
+function elapsedTicker(elEl,label){
+  if(!elEl)return ()=>{};
+  const start=Date.now();
+  const fmt=()=>{const s=Math.floor((Date.now()-start)/1000);return s<60?(s+"s"):(Math.floor(s/60)+"m "+(s%60)+"s");};
+  const paint=()=>{elEl.innerHTML="<span class=spinner></span> "+label+" "+fmt();};
+  paint();
+  const iv=setInterval(paint,250);
+  return ()=>{clearInterval(iv);};
+}
+
+// ---- spec mode -------------------------------------------------------------
+let specReady=null;
+let savedReady=null;
 function specMode(){return $("#specmode").querySelector("button.on").dataset.m;}
 $("#specmode").querySelectorAll("button").forEach(b=>b.onclick=()=>{$("#specmode").querySelectorAll("button").forEach(x=>x.classList.remove("on"));b.classList.add("on");const m=b.dataset.m;
   $("#specText").classList.toggle("hidden",m!=="text");$("#specFile").classList.toggle("hidden",m!=="file");$("#specSaved").classList.toggle("hidden",m!=="saved");
   if(m==="saved")loadSavedSpecs();});
-$("#specfileinput").onchange=async e=>{const f=e.target.files[0];if(!f)return;$("#specfilestatus").innerHTML="";
+// The token of the spec currently chosen for the build (upload or saved). When set,
+// generate sends specToken so the backend reuses its APPROVED concise spec.
+let currentSpecToken=null;
+$("#specfileinput").onchange=async e=>{const f=e.target.files[0];if(!f)return;$("#specfilestatus").innerHTML="";currentSpecToken=null;
   const chip=el("div","filechip");chip.appendChild(el("span",null,"📄 "+f.name));const st=el("span",null," — uploading…");st.style.color="var(--muted)";chip.appendChild(st);$("#specfilestatus").appendChild(chip);
   const b64=await fileToB64(f);const [ok,d]=await jpost("/upload",{filename:f.name,dataBase64:b64});
   if(!ok){st.textContent=" — upload failed: "+(d.error||"");st.style.color="var(--bad)";return;}
   specReady=null;
-  for(let i=0;i<25;i++){await sleep(1200);const [o2,sp]=await jget("/specs/"+d.token);if(o2&&sp.status!=="PENDING"){if(sp.status==="READY"){specReady=sp.text;st.textContent=" — extracted "+sp.text.length+" chars ✓ (saved for reuse)";st.style.color="var(--ok)";}else{st.textContent=" — extraction error: "+(sp.error||"");st.style.color="var(--bad)";}return;}}
-  st.textContent=" — still processing…";};
+  let sp=null;
+  for(let i=0;i<25;i++){await sleep(1200);const [o2,r]=await jget("/specs/"+d.token);if(o2&&r.status!=="PENDING"){sp=r;break;}}
+  if(!sp){st.textContent=" — Still processing…";return;}
+  if(sp.status!=="READY"){st.textContent=" — extraction error: "+(sp.error||"");st.style.color="var(--bad)";return;}
+  specReady=sp.text;currentSpecToken=d.token;
+  st.textContent=" — extracted "+sp.text.length+" chars ✓";st.style.color="var(--iris-green-700)";
+  showExtractWarn($("#specfilestatus"),sp);
+  // Generate the concise spec now (so it's ready when the saved spec is reused),
+  // then open the review modal for the human to verify/edit/approve.
+  const gst=el("div");gst.style.cssText="margin-top:8px;font-size:12px;color:var(--muted)";$("#specfilestatus").appendChild(gst);
+  const stopT=elapsedTicker(gst,"Generating a concise specification…");
+  const csp=await generateConcise(d.token);
+  stopT();
+  if(!csp.ok){gst.innerHTML="";conciseErrBox($("#specfilestatus"),csp.error,()=>$("#specfileinput").onchange({target:{files:[f]}}));return;}
+  gst.innerHTML="";const done=el("span",null,"✓ Concise specification ready. ");done.style.color="var(--iris-green-700)";gst.appendChild(done);
+  const rl=el("a",null,"review it");rl.href="#";rl.onclick=(ev)=>{ev.preventDefault();openCompareModal(d.token);};gst.appendChild(rl);
+  if(csp.conciseError){const w=el("div","specwarn");w.style.marginTop="6px";w.textContent="⚠ "+csp.conciseError;$("#specfilestatus").appendChild(w);}
+  loadSavedSpecs();
+  openCompareModal(d.token);
+};
+// Kick off concise-spec generation (async on the server) and POLL GET /specs/:token
+// until it settles. Generation can take a while (several large LLM calls), so the
+// server returns 202 immediately and does the work in the background — this avoids
+// the gateway 504 a long synchronous request would hit. Returns a normalized object
+// {ok, error, conciseStatus, conciseError, ...spec} the call sites already expect.
+async function generateConcise(token){
+  const [sok,start]=await jpost("/specs/"+token+"/concise",providerBody());
+  // A synchronous validation failure (missing key/model) comes back non-2xx now.
+  if(!sok)return{ok:false,error:(start&&start.error)||"Could not start concise-spec generation."};
+  // Poll until READY/ERROR. ~5 min ceiling (slow specs + reasoning models).
+  for(let i=0;i<300;i++){
+    await sleep(1000);
+    const [gok,sp]=await jget("/specs/"+token);
+    if(!gok)continue;
+    if(sp.conciseStatus==="READY")return Object.assign({ok:true},sp);
+    if(sp.conciseStatus==="ERROR")return{ok:false,error:sp.conciseError||"Concise-spec generation failed.",conciseStatus:"ERROR"};
+  }
+  return{ok:false,error:"Concise-spec generation timed out. Try again, or use a faster model."};
+}
+// A prominent, actionable error box for a failed concise-spec generation. Surfaces
+// the real provider message (bad key / rate limit / bad model) + a Settings link +
+// an optional Retry action — so the user never sees a silent "(empty)" again.
+function conciseErrBox(box,msg,retryFn){
+  const e=el("div","err");e.style.marginTop="8px";
+  e.appendChild(el("b",null,"Concise spec failed. "));
+  e.appendChild(document.createTextNode(msg||"The LLM call did not return content."));
+  const row=el("div");row.style.cssText="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap";
+  const sa=el("a",null,"Open Settings");sa.href="#";sa.onclick=(ev)=>{ev.preventDefault();showView("settings");};row.appendChild(sa);
+  if(retryFn){const ra=el("a",null,"Retry");ra.href="#";ra.onclick=(ev)=>{ev.preventDefault();retryFn();};row.appendChild(ra);}
+  e.appendChild(row);box.appendChild(e);
+}
 function fileToB64(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.readAsDataURL(f);});}
+// Provider/model/key payload from Settings, for spec-side LLM calls.
+function providerBody(){const b={provider:$("#provider").value,model:$("#model").value,apiKey:needsKey()?$("#apikey").value.trim():""};if(isBedrock())b.region=$("#bedrockregion").value.trim()||"us-east-1";return b;}
+// Confidence badge text for an extracted spec (0..1).
+function confClass(c){return c>=0.8?"hi":(c>=0.5?"mid":"lo");}
+function confLabel(c){return c>=0.8?"high confidence":(c>=0.5?"review recommended":"LOW confidence — review carefully");}
+// Show extraction-confidence warnings (scanned PDF, dropped tables, mojibake) so a
+// low-confidence extraction is flagged for the human BEFORE it's used downstream.
+function showExtractWarn(box,sp){
+  const c=(sp.confidence==null?1:+sp.confidence);
+  const warns=(sp.meta&&sp.meta.warnings)||[];
+  const b=el("div");b.style.marginTop="6px";
+  const badge=el("span","confbadge "+confClass(c),"extraction: "+confLabel(c)+" ("+Math.round(c*100)+"%)");b.appendChild(badge);
+  box.appendChild(b);
+  if(c<0.8||warns.length){
+    const w=el("div","specwarn");
+    w.appendChild(el("b",null,"Check the extraction before relying on it:"));
+    const ul=el("ul");ul.style.cssText="margin:6px 0 0 18px;padding:0";
+    (warns.length?warns:["Lower-confidence extraction — open ‘read full specification’ to verify it matches the source document."]).forEach(t=>{const li=el("li");li.textContent=t;li.style.marginTop="2px";ul.appendChild(li);});
+    w.appendChild(ul);box.appendChild(w);
+  }
+}
 
-// saved-spec picker — list previously uploaded specs, select one (no re-processing).
 async function loadSavedSpecs(){const sel=$("#savedspec");const [ok,j]=await jget("/specs");
-  const cur=sel.value;sel.innerHTML="<option value=''>— select a saved specification —</option>";
-  if(ok&&j.specs){j.specs.filter(s=>s.status==="READY"&&s.size>0).forEach(s=>{const o=document.createElement("option");o.value=s.token;o.textContent=s.fileName+" · "+s.size+" chars · "+(s.createdAt||"");sel.appendChild(o);});}
+  const cur=sel.value;sel.innerHTML="<option value=''>— Select a saved specification —</option>";
+  if(ok&&j.specs){j.specs.filter(s=>s.status==="READY"&&s.size>0).forEach(s=>{const o=document.createElement("option");const cf=(s.confidence==null?1:+s.confidence);o.value=s.token;o.textContent=s.fileName+" · "+s.size+" chars"+(cf<0.8?(" · ⚠ "+Math.round(cf*100)+"%"):"")+" · "+(s.createdAt||"");sel.appendChild(o);});}
   if([...sel.options].some(o=>o.value===cur))sel.value=cur;}
 $("#refreshspecs").onclick=loadSavedSpecs;
-$("#savedspec").onchange=async()=>{const tok=$("#savedspec").value;savedReady=null;const info=$("#savedspecinfo");info.innerHTML="";
-  if(!tok)return;info.innerHTML="<span class=spinner></span> loading…";
+$("#savedspec").onchange=async()=>{const tok=$("#savedspec").value;savedReady=null;currentSpecToken=null;const info=$("#savedspecinfo");info.innerHTML="";$("#savedspecreview").classList.add("hidden");
+  if(!tok)return;info.innerHTML="<span class=spinner></span> Loading…";
   const [ok,sp]=await jget("/specs/"+tok);
   if(!ok||sp.status!=="READY"){info.textContent="Could not load this spec.";return;}
-  savedReady=sp.text;info.innerHTML="";
-  const span=el("span",null,"✓ "+sp.fileName+" — "+(sp.text||"").length+" chars. ");span.style.color="var(--ok)";info.appendChild(span);
-  const link=el("a",null,"read full specification");link.href="#";link.onclick=(e)=>{e.preventDefault();openSpecModal(sp.fileName,sp.text);};info.appendChild(link);};
+  savedReady=sp.text;currentSpecToken=tok;info.innerHTML="";
+  const span=el("span",null,"✓ "+sp.fileName+" — "+(sp.text||"").length+" chars. ");span.style.color="var(--iris-green-700)";info.appendChild(span);
+  const link=el("a",null,"Read original");link.href="#";link.onclick=(e)=>{e.preventDefault();openSpecModal(sp.fileName,sp.text);};info.appendChild(link);
+  // Concise-spec status: approved (use it) / ready (review) / error / missing.
+  const cs=el("div");cs.style.cssText="font-size:12px;margin-top:6px";
+  if(sp.conciseApproved){const a=el("span",null,"✓ Concise specification approved. ");a.style.color="var(--iris-green-700)";cs.appendChild(a);}
+  else if(sp.conciseStatus==="ERROR"){const a=el("span",null,"✗ Concise specification failed. ");a.style.color="var(--bad)";cs.appendChild(a);}
+  else if(sp.conciseStatus==="READY"){const a=el("span",null,"● Concise specification needs your review. ");a.style.color="#9a6a00";cs.appendChild(a);}
+  else{const a=el("span",null,"○ No concise specification yet. ");a.style.color="var(--muted)";cs.appendChild(a);}
+  info.appendChild(cs);
+  if(sp.conciseStatus==="ERROR"&&sp.conciseError){conciseErrBox(info,sp.conciseError,()=>$("#reviewconcise").onclick());}
+  else if(sp.conciseError){const w=el("div","specwarn");w.style.marginTop="6px";w.textContent="⚠ "+sp.conciseError;info.appendChild(w);}
+  $("#savedspecreview").classList.remove("hidden");
+  $("#reviewconcise").textContent=(sp.conciseStatus==="READY")?"🔍 Review concise specification":((sp.conciseStatus==="ERROR")?"↻ Retry concise specification":"⚙ Generate concise specification");
+  showExtractWarn(info,sp);};
+$("#reviewconcise").onclick=async()=>{
+  if(!currentSpecToken)return;
+  const [ok,sp]=await jget("/specs/"+currentSpecToken);
+  if(ok&&sp.conciseStatus==="READY"){openCompareModal(currentSpecToken);return;}
+  // Generate then open.
+  const lbl=$("#reviewconcise").textContent;
+  $("#reviewconcise").disabled=true;
+  const stopT=elapsedTicker($("#reviewconcise"),"Generating a concise specification…");
+  const csp=await generateConcise(currentSpecToken);
+  stopT();$("#reviewconcise").disabled=false;$("#reviewconcise").textContent=lbl;
+  if(!csp.ok){conciseErrBox($("#savedspecinfo"),csp.error,()=>$("#reviewconcise").onclick());return;}
+  openCompareModal(currentSpecToken);
+};
 
-// spec reader modal
 function openSpecModal(title,text){$("#specmodaltitle").textContent=title||"Specification";$("#specmodaltext").textContent=text||"(empty)";
   $("#specmodalcopy").innerHTML="";$("#specmodalcopy").appendChild(copyBtn(()=>text||""));$("#specmodal").classList.add("show");}
 $("#specmodalclose").onclick=()=>$("#specmodal").classList.remove("show");
 $("#specmodal").onclick=(e)=>{if(e.target===$("#specmodal"))$("#specmodal").classList.remove("show");};
 
-// input list
+// ---- concise-spec review modal (side-by-side, click-to-reference) ----------
+let cmpState={token:null,orig:"",concise:"",prov:null};
+async function openCompareModal(token){
+  cmpState={token:token,orig:"",concise:"",prov:null,segs:[],activeSeg:0,ambs:null};
+  $("#cmpmsg").textContent="";$("#cmpedit").checked=false;
+  $("#cmpSplit").classList.remove("hidden");$("#cmpEdit").classList.add("hidden");
+  $("#cmpItems").innerHTML="<div class=empty><span class=spinner></span> Loading…</div>";$("#cmpSegs").innerHTML="";$("#cmpbanner").innerHTML="";
+  $("#cmpmodal").classList.add("show");
+  const [ok,sp]=await jget("/specs/"+token);
+  if(!ok){$("#cmpItems").innerHTML="<div class=empty>Could not load the spec.</div>";return;}
+  cmpState.orig=sp.text||"";cmpState.concise=sp.conciseSpec||"";cmpState.prov=sp.conciseProvenance||null;
+  $("#cmptitle").textContent="Review concise specification — "+(sp.fileName||"");
+  $("#cmpOrig").textContent=cmpState.orig;
+  $("#cmporigcopy").innerHTML="";$("#cmporigcopy").appendChild(copyBtn(()=>cmpState.orig));
+  $("#cmpEdit").value=cmpState.concise;
+  // verdict badge (LLM completeness/hallucination audit)
+  const vb=$("#cmpverdict");vb.innerHTML="";
+  const v=sp.conciseVerdict;
+  if(v&&typeof v==="object"){
+    const ok2=(v.complete&&v.faithful);
+    const b=el("span","vbadge "+(ok2?"ok":"warn"),ok2?("✓ LLM-verified complete & faithful"+(v.score!=null?(" ("+Math.round(v.score*100)+"%)"):"")):"⚠ LLM flagged issues — review");
+    vb.appendChild(b);
+    if(!ok2){
+      const issues=[].concat((v.missing||[]).map(m=>"Missing: "+m)).concat((v.hallucinated||[]).map(h=>"Hallucinated: "+h));
+      if(issues.length){const w=el("div","specwarn");w.style.marginTop="8px";const ul=el("ul");ul.style.cssText="margin:4px 0 0 18px;padding:0";issues.forEach(t=>{const li=el("li");li.textContent=t;ul.appendChild(li);});w.appendChild(ul);$("#cmpbanner").appendChild(w);}
+    }
+  }
+  renderConciseItems();
+  // Surface a concise-generation error/warning in the persistent banner (not the
+  // rule pane, which is rebuilt on every segment switch).
+  if(sp.conciseError){
+    const isErr=(sp.conciseStatus==="ERROR")||!cmpState.concise;
+    const w=el("div",isErr?"err":"specwarn");w.style.marginBottom="10px";
+    w.textContent=(isErr?"✗ ":"⚠ ")+sp.conciseError;
+    $("#cmpbanner").insertBefore(w,$("#cmpbanner").firstChild);
+  }
+  // confidence on the concise pane header
+  const cf=$("#cmpconf");cf.innerHTML="";const c=(sp.confidence==null?1:+sp.confidence);
+  cf.appendChild(el("span","confbadge "+confClass(c),"extraction "+Math.round(c*100)+"%"));
+}
+// Render arbitrary text as a numbered, line-by-line monospace listing (each source
+// line gets its own row with a line number), so a raw / partial LLM reply can be
+// reviewed exactly as returned. Includes a copy button for the whole reply.
+function renderRawLines(text){
+  const wrap=el("div");
+  const tools=el("div");tools.style.cssText="display:flex;align-items:center;gap:10px;margin-bottom:6px";
+  const lbl=el("span",null,"Raw model reply — "+text.split("\n").length+" lines");lbl.style.cssText="font-size:12px;color:var(--muted)";
+  tools.appendChild(lbl);tools.appendChild(copyBtn(()=>text));wrap.appendChild(tools);
+  const pane=el("div","rawlines");
+  text.split("\n").forEach((line,i)=>{
+    const row=el("div","rawln");
+    row.appendChild(el("span","lno",String(i+1)));
+    const code=el("span","lcode");code.textContent=line;row.appendChild(code);
+    pane.appendChild(row);
+  });
+  wrap.appendChild(pane);
+  return wrap;
+}
+// Render the THREE-pane browser: segment menu (left) → rules for the selected
+// segment (middle) → original spec (right). Clicking a segment lists its rules;
+// clicking a rule scrolls+highlights its source in the original.
+function renderConciseItems(){
+  const segBox=$("#cmpSegs");const ruleBox=$("#cmpItems");
+  const prov=cmpState.prov;
+  // No structured provenance → the reply wasn't parseable JSON, so there are no
+  // grouped items. Hide the segment menu and show the model's RAW reply LINE BY LINE
+  // in the middle pane (markdown rendering would mangle raw / partial JSON).
+  if(!prov||!prov.groups||!prov.groups.length){
+    $(".pane.seg").classList.add("hidden");
+    segBox.innerHTML="";ruleBox.innerHTML="";
+    $("#cmpRulesHd").textContent="Raw reply";
+    ruleBox.appendChild(renderRawLines(cmpState.concise||"(empty)"));
+    return;
+  }
+  $(".pane.seg").classList.remove("hidden");
+  cmpState.segs=prov.groups;
+  // Ambiguities the LLM raised — each MUST be resolved or dismissed by the human
+  // before the spec can be approved (an open question must never reach the planner).
+  // Initialise resolution state once per open (keep prior answers on re-render).
+  const ambs=(prov.ambiguities||[]).map(a=>String(a));
+  if(!cmpState.ambs||cmpState.ambs.length!==ambs.length){
+    cmpState.ambs=ambs.map(q=>({q:q,status:"open",answer:""}));
+  }
+  // Build the segment menu — one entry per group, with a rule count.
+  segBox.innerHTML="";
+  prov.groups.forEach((g,i)=>{
+    const s=el("div","segitem");
+    s.appendChild(el("span",null,g.type||"General"));
+    s.appendChild(el("span","segcount",String((g.items||[]).length)));
+    s.onclick=()=>selectSegment(i);
+    segBox.appendChild(s);
+  });
+  // Ambiguities pseudo-segment at the bottom of the menu (only if any exist).
+  if(cmpState.ambs.length){
+    const a=el("div","segitem amb");a.id="ambMenuItem";
+    a.appendChild(el("span",null,"⚠ Ambiguities"));
+    a.appendChild(el("span","segcount","0"));
+    a.onclick=()=>selectAmbiguities();
+    segBox.appendChild(a);
+  }
+  refreshAmbMenu();
+  // Open the first segment by default (or ambiguities if that's all there is).
+  if(prov.groups.length)selectSegment(0); else if(cmpState.ambs.length)selectAmbiguities();
+  updateApproveGate();
+}
+// Count of still-open ambiguities (must be 0 to approve).
+function ambOpenCount(){return (cmpState.ambs||[]).filter(a=>a.status==="open").length;}
+// Update the ⚠ Ambiguities menu badge + done state.
+function refreshAmbMenu(){
+  const m=$("#ambMenuItem");if(!m)return;
+  const open=ambOpenCount();
+  m.querySelector(".segcount").textContent=String(open);
+  m.classList.toggle("done",open===0);
+}
+// Enable/disable "Approve specification" based on unresolved ambiguities.
+function updateApproveGate(){
+  const open=ambOpenCount();const btn=$("#cmpapprove");
+  btn.disabled=(open>0);
+  btn.title=open>0?("Resolve "+open+" ambiguit"+(open===1?"y":"ies")+" before approving"):"";
+  const hint=$("#cmpgatehint");
+  if(hint)hint.textContent=open>0?("⚠ "+open+" ambiguit"+(open===1?"y":"ies")+" must be resolved before approval"):"";
+}
+// Render the ambiguity-resolution list in the middle pane.
+function selectAmbiguities(){
+  cmpState.activeSeg=-1;
+  [...$("#cmpSegs").children].forEach(c=>c.classList.toggle("sel",c.id==="ambMenuItem"));
+  $("#cmpRulesHd").textContent="Ambiguities — resolve all to approve";
+  const box=$("#cmpItems");box.innerHTML="";
+  if(!cmpState.ambs.length){box.appendChild(el("div","empty","No ambiguities — nothing to resolve."));return;}
+  cmpState.ambs.forEach((a,i)=>{
+    const row=el("div","ambrow"+(a.status==="resolved"?" resolved":(a.status==="dismissed"?" dismissed":"")));
+    const q=el("div","ambq");
+    const tag=el("span","qtag",a.status==="resolved"?"RESOLVED":(a.status==="dismissed"?"N/A":"OPEN"));
+    q.appendChild(tag);q.appendChild(document.createTextNode(a.q));row.appendChild(q);
+    if(a.status==="open"){
+      const ta=el("textarea");ta.placeholder="Your decision — how should this be handled? (this is folded into the spec)";ta.value=a.answer||"";
+      ta.oninput=()=>{a.answer=ta.value;};
+      row.appendChild(ta);
+      const acts=el("div","ambacts");
+      const res=el("button","ok","✓ Resolve");res.onclick=()=>{if(!ta.value.trim()){$("#cmpmsg").textContent="Enter a decision before resolving (or dismiss it as not applicable).";return;}a.status="resolved";a.answer=ta.value.trim();$("#cmpmsg").textContent="";selectAmbiguities();refreshAmbMenu();updateApproveGate();};
+      const dis=el("button","ghost","Dismiss (not applicable)");dis.onclick=()=>{a.status="dismissed";selectAmbiguities();refreshAmbMenu();updateApproveGate();};
+      acts.appendChild(res);acts.appendChild(dis);row.appendChild(acts);
+    } else {
+      const st=el("div","ambstate",a.status==="resolved"?("Decision: "+a.answer):"Dismissed as not applicable.");row.appendChild(st);
+      const acts=el("div","ambacts");
+      const edit=el("button","ghost","Reopen");edit.onclick=()=>{a.status="open";selectAmbiguities();refreshAmbMenu();updateApproveGate();};
+      acts.appendChild(edit);row.appendChild(acts);
+    }
+    box.appendChild(row);
+  });
+}
+// Show the rules for segment index i in the middle pane.
+function selectSegment(i){
+  cmpState.activeSeg=i;
+  [...$("#cmpSegs").children].forEach((c,k)=>c.classList.toggle("sel",k===i));
+  const g=(cmpState.segs||[])[i];const box=$("#cmpItems");box.innerHTML="";
+  $("#cmpRulesHd").textContent=(g&&g.type)?g.type:"Specification points";
+  if(!g){return;}
+  (g.items||[]).forEach(item=>{
+    const hasSrc=item.sourceQuote&&String(item.sourceQuote).trim()!=="";
+    const inf=!!item.inferred;
+    const r=el("div","citem"+(inf?" inferred":(hasSrc?"":" nosrc")));
+    const rule=el("div","ci-rule");rule.innerHTML=mdToHtml(item.rule||"").replace(/^<p>|<\/p>\s*$/g,"");
+    if(inf)rule.appendChild(el("span","ci-tag inf","inferred"));
+    else if(!hasSrc)rule.appendChild(el("span","ci-tag no","no source"));
+    r.appendChild(rule);
+    if(hasSrc){
+      const q=el("div","ci-src");q.appendChild(el("span","ci-srclbl","source ⮕ "));q.appendChild(el("span",null,"“"+item.sourceQuote+"”"));r.appendChild(q);
+    }
+    // Click a rule to scroll+highlight its source on the right. (Click-only — the
+    // old hover handler rebuilt the whole original-spec DOM on every mousemove,
+    // which is what made it laggy on large specs.)
+    r.onclick=()=>{box.querySelectorAll(".citem").forEach(x=>x.classList.remove("sel"));r.classList.add("sel");locateSource(item.sourceQuote);};
+    box.appendChild(r);
+  });
+}
+// Highlight + scroll to the source snippet of a concise item in the ORIGINAL pane.
+function locateSource(quote){
+  const pane=$("#cmpOrig");const cont=$("#cmpOrigBody");const orig=cmpState.orig;
+  if(!quote||String(quote).trim()===""){pane.textContent=orig;$("#cmpmsg").textContent="This item was inferred — no direct source in the original.";return;}
+  $("#cmpmsg").textContent="";
+  // Match on the first line of the quote (quotes can span lines / be truncated).
+  const firstLine=String(quote).split(/\r?\n/)[0].trim();
+  let needle=firstLine.slice(0,50).toLowerCase();
+  let idx=needle?orig.toLowerCase().indexOf(needle):-1;
+  if(idx<0){needle=String(quote).slice(0,40).toLowerCase();idx=orig.toLowerCase().indexOf(needle);}
+  pane.innerHTML="";
+  if(idx<0){pane.textContent=orig;$("#cmpmsg").textContent="Source not found verbatim (it may be paraphrased or split across pages).";return;}
+  const end=idx+needle.length;
+  pane.appendChild(document.createTextNode(orig.slice(0,idx)));
+  const hi=el("span","cmphi",orig.slice(idx,end));pane.appendChild(hi);
+  pane.appendChild(document.createTextNode(orig.slice(end)));
+  // Scroll the ORIGINAL pane so the highlight sits ~16px below the top. Use rect
+  // math (highlight top relative to the scroll container) so it lands accurately
+  // regardless of the highlight's offsetParent — offsetTop was the misalignment.
+  const hiRect=hi.getBoundingClientRect();const contRect=cont.getBoundingClientRect();
+  cont.scrollTop=cont.scrollTop+(hiRect.top-contRect.top)-16;
+}
+// Toggle "view & edit specification": show the editable markdown textarea in place
+// of the whole 3-pane browser, and back.
+$("#cmpedit").onchange=()=>{const on=$("#cmpedit").checked;$("#cmpEdit").classList.toggle("hidden",!on);$("#cmpSplit").classList.toggle("hidden",on);};
+$("#cmpclose").onclick=()=>$("#cmpmodal").classList.remove("show");
+$("#cmpmodal").onclick=(e)=>{if(e.target===$("#cmpmodal"))$("#cmpmodal").classList.remove("show");};
+$("#cmpregen").onclick=async()=>{if(!cmpState.token)return;$("#cmpregen").disabled=true;
+  const stopT=elapsedTicker($("#cmpregen"),"Regenerating…");
+  const csp=await generateConcise(cmpState.token);
+  stopT();$("#cmpregen").disabled=false;$("#cmpregen").textContent="↻ Regenerate";
+  if(!csp.ok){$("#cmpmsg").textContent="Regenerate failed: "+(csp.error||"");return;}
+  openCompareModal(cmpState.token);};
+// Rewrite the concise markdown's "## Ambiguities…" section into the human's
+// resolved decisions (Q → decision) and drop dismissed/open questions, so the
+// stored spec the LLM plans from contains answers, never open questions.
+function foldAmbiguities(md,ambs){
+  let body=String(md||"");
+  // Strip any existing "## Ambiguit…" / "## Resolved decisions" section (to end or
+  // next H2). Heading match is case-insensitive and tolerant of trailing text.
+  body=body.replace(/\n*##\s*(ambiguit|resolved decision)[^\n]*\n[\s\S]*?(?=\n##\s|$)/i,"").replace(/\s+$/,"");
+  const resolved=(ambs||[]).filter(a=>a.status==="resolved");
+  if(resolved.length){
+    body+="\n\n## Resolved decisions\n"+resolved.map(a=>"- "+a.q.replace(/\s+$/,"")+" → **"+a.answer.replace(/\s+/g," ").trim()+"**").join("\n");
+  }
+  return body+"\n";
+}
+$("#cmpapprove").onclick=async()=>{if(!cmpState.token)return;
+  // GATE: every ambiguity must be resolved or dismissed first — an open question
+  // must never reach the planner (it would be implemented as a guess).
+  const open=ambOpenCount();
+  if(open>0){
+    // Make sure the resolution view is visible (leave edit mode if it's on).
+    if($("#cmpedit").checked){$("#cmpedit").checked=false;$("#cmpEdit").classList.add("hidden");$("#cmpSplit").classList.remove("hidden");}
+    selectAmbiguities();$("#cmpmsg").textContent="Resolve all "+open+" ambiguit"+(open===1?"y":"ies")+" before approving.";return;
+  }
+  // If the user edited the markdown, send that; else send the current concise text
+  // with the ambiguity section rewritten into the human's resolved DECISIONS (and
+  // dismissed ones removed) so the stored/LLM-facing spec carries no open questions.
+  const edited=$("#cmpedit").checked?$("#cmpEdit").value:foldAmbiguities(cmpState.concise,cmpState.ambs);
+  $("#cmpapprove").innerHTML='<span class=spinner></span> Approving…';$("#cmpapprove").disabled=true;
+  const [ok,sp]=await jpost("/specs/"+cmpState.token+"/approve-concise",{conciseSpec:edited});
+  $("#cmpapprove").disabled=false;$("#cmpapprove").textContent="✓ Approve specification";
+  if(!ok){$("#cmpmsg").textContent="Approve failed: "+(sp.error||"");return;}
+  $("#cmpmodal").classList.remove("show");
+  if($("#savedspec").value===cmpState.token||currentSpecToken===cmpState.token){$("#savedspec").value=cmpState.token;}
+  loadSavedSpecs();
+  // refresh the saved-spec info line if that spec is selected
+  if(currentSpecToken===cmpState.token){const ev=new Event("change");$("#savedspec").dispatchEvent(ev);}
+};
+
+// ---- input list ------------------------------------------------------------
 function addInput(val=""){const box=$("#inputs");const wrap=el("div","ex");const ph=el("div","ph");ph.appendChild(el("b",null,"Input message"));const ptag=el("span","tagp","primary");ph.appendChild(ptag);const rm=el("button","rm","✕");rm.onclick=()=>{wrap.remove();renumber()};ph.appendChild(rm);wrap.appendChild(ph);const ta=el("textarea");ta.placeholder="Example input HL7 v2 message…";ta.value=val;wrap.appendChild(ta);box.appendChild(wrap);renumber();}
 function renumber(){[...document.querySelectorAll("#inputs .ex")].forEach((p,i)=>{p.querySelector("b").textContent="Input "+(i+1);p.querySelector(".tagp").style.display=i===0?"":"none";});}
 function collectInputs(){return [...document.querySelectorAll("#inputs .ex textarea")].map(t=>t.value).filter(v=>v.trim());}
 $("#addinput").onclick=()=>addInput();
 
-// provider/model/key
-const LS_KEY="iscdtl.apikey",LS_REM="iscdtl.remember",LS_MODEL="iscdtl.model",LS_REGION="iscdtl.bedrockregion";
+// ---- provider / model / key ------------------------------------------------
+const LS_KEY="iscdtl.apikey",LS_REM="iscdtl.remember",LS_MODEL="iscdtl.model",LS_REGION="iscdtl.bedrockregion",
+      LS_PROVIDER="iscdtl.provider",LS_MAXATT="iscdtl.maxattempts",LS_COSTCAP="iscdtl.costcap";
+// Preferred default model per provider when the user hasn't picked one yet.
+const BEDROCK_DEFAULT_MODEL="global.anthropic.claude-opus-4-8";
 const provider=()=>$("#provider").value;
 const isOpenAI=()=>provider()==="openai";
 const isBedrock=()=>provider()==="bedrock";
 const needsKey=()=>isOpenAI()||isBedrock();
-// Bedrock Claude models on-demand require a regional INFERENCE PROFILE id
-// (us.anthropic.*) — a bare foundation-model id 400s with "on-demand throughput
-// isn't supported". Use the ⟳ button to load the exact ids your account/region has.
-let modelsLoaded=false;   // true once a valid key has loaded the provider's models
-// Lock/unlock the model box. Locked = no valid key yet → show the prompt and offer
-// NO model ids (we don't ship speculative defaults that may not work). The model
-// box is a <select> — the user MUST pick one of the listed models, no free text.
+// Persist all generator settings to localStorage (loaded on refresh).
+function saveSettings(){
+  localStorage.setItem(LS_PROVIDER,$("#provider").value);
+  localStorage.setItem(LS_MAXATT,$("#maxattempts").value||"5");
+  localStorage.setItem(LS_COSTCAP,$("#costcap").value||"0");
+  localStorage.setItem(LS_REGION,$("#bedrockregion").value.trim());
+  flashSaved();
+}
+let savedFlashT=null;
+function flashSaved(){const b=$("#setsaved");if(!b)return;b.classList.remove("hidden");if(savedFlashT)clearTimeout(savedFlashT);savedFlashT=setTimeout(()=>b.classList.add("hidden"),1200);}
+// Mirror the Settings model <select> into the quick model dropdown in the spec
+// pane header, so the user can switch model without leaving the build view. Kept
+// in sync both directions. For the mock provider (no model) it shows the provider.
+function syncQuickModel(){
+  const qm=$("#quickmodel");if(!qm)return;
+  const src=$("#model");
+  if(!needsKey()){
+    qm.innerHTML="<option value=''>Mock — no model</option>";qm.disabled=true;return;
+  }
+  qm.disabled=src.disabled||!src.options.length||(src.options.length===1&&src.options[0].value==="");
+  qm.innerHTML="";
+  [...src.options].forEach(o=>{const n=document.createElement("option");n.value=o.value;n.textContent=o.value||o.textContent;qm.appendChild(n);});
+  qm.value=src.value;
+}
+let modelsLoaded=false;
 function setModelEnabled(on,placeholder){const m=$("#model");m.disabled=!on;
   if(!on){m.innerHTML="<option value=\"\">"+(placeholder||"Enter a valid API key")+"</option>";modelsLoaded=false;}
   $("#refreshmodels").disabled=!needsKey();}
 function syncProvider(){
   $("#openaibox").style.display=needsKey()?"":"none";
   $("#bedrockregionbox").classList.toggle("hidden",!isBedrock());
-  $("#refreshmodels").style.display=needsKey()?"":"none";  // live model list for OpenAI + Bedrock
+  $("#refreshmodels").style.display=needsKey()?"":"none";
   $("#refreshmodels").title=isBedrock()?"Load your account's Bedrock models/inference profiles":"Load your account's models";
-  $("#keylabel").innerHTML=(isBedrock()?"AWS Bedrock API key":"OpenAI API key")+" <span style=\"color:var(--muted)\">(kept in this browser; sent only to your IRIS server)</span>";
+  $("#keylabel").innerHTML=(isBedrock()?"AWS Bedrock API key":"OpenAI API key")+" <span class=\"opt\">(kept in this browser; sent only to your IRIS server)</span>";
   $("#apikey").placeholder=isBedrock()?"Bedrock API key (bearer token)":"sk-...";
   modelsLoaded=false;
   if(needsKey()){
     setModelEnabled(false,"Enter a valid API key");
     $("#modelhint").textContent="Enter your "+(isBedrock()?"AWS Bedrock":"OpenAI")+" API key — models load once it's valid.";
-    if($("#apikey").value.trim())refreshModels();   // remembered key → validate + load now
+    if($("#apikey").value.trim())refreshModels();
   }else{
     setModelEnabled(false,"Mock — no model needed");
     $("#modelhint").textContent="Mock provider uses the bundled scripted model — no API key or model needed.";
   }
+  syncQuickModel();
 }
-$("#provider").onchange=syncProvider;
+$("#provider").onchange=()=>{saveSettings();syncProvider();};
 function persistKey(){if($("#remember").checked&&$("#apikey").value){localStorage.setItem(LS_KEY,$("#apikey").value);localStorage.setItem(LS_REM,"1");}else{localStorage.removeItem(LS_KEY);localStorage.setItem(LS_REM,$("#remember").checked?"1":"0");}}
 $("#apikey").addEventListener("change",()=>{persistKey();if(needsKey())refreshModels();});
 $("#remember").addEventListener("change",persistKey);
 $("#bedrockregion").addEventListener("change",()=>{localStorage.setItem(LS_REGION,$("#bedrockregion").value.trim());if(isBedrock())refreshModels();});
-// Fill the model <select> with exactly the ids the provider's list endpoint
-// returned — the user must choose one of these (no custom/free-text ids). Preselect
-// the remembered model if it's still in the list, else the first one.
 function setModels(ids){const m=$("#model");m.innerHTML="";(ids||[]).forEach(id=>{const o=document.createElement("option");o.value=id;o.textContent=id;m.appendChild(o)});
   const want=localStorage.getItem(LS_MODEL);
+  // Prefer the remembered model; else the Bedrock default if present; else the first.
   if(want&&(ids||[]).indexOf(want)>=0)m.value=want;
-  else if((ids||[]).length)m.value=ids[0];}
-$("#model").addEventListener("change",()=>localStorage.setItem(LS_MODEL,$("#model").value));
+  else if(isBedrock()&&(ids||[]).indexOf(BEDROCK_DEFAULT_MODEL)>=0)m.value=BEDROCK_DEFAULT_MODEL;
+  else if((ids||[]).length)m.value=ids[0];
+  syncQuickModel();}
+$("#model").addEventListener("change",()=>{localStorage.setItem(LS_MODEL,$("#model").value);syncQuickModel();});
+$("#maxattempts").addEventListener("change",saveSettings);
+$("#costcap").addEventListener("change",saveSettings);
+// Settings cog (spec-pane header) opens the Settings tab.
+$("#opensettings").onclick=()=>showView("settings");
+// Quick model dropdown in the spec pane mirrors the Settings model select.
+$("#quickmodel").addEventListener("change",()=>{const m=$("#model");if(m&&!m.disabled){m.value=$("#quickmodel").value;localStorage.setItem(LS_MODEL,m.value);}});
 let modelReqSeq=0;
 async function refreshModels(){
-  if(!needsKey())return;   // mock has no key/model
+  if(!needsKey())return;
   const key=$("#apikey").value.trim();
   if(!key){setModelEnabled(false,"Enter a valid API key");$("#modelhint").textContent="Enter your "+(isBedrock()?"AWS Bedrock":"OpenAI")+" API key — models load once it's valid.";return;}
   const seq=++modelReqSeq;
   if(isBedrock()){
-    $("#modelhint").innerHTML="<span class=spinner></span> validating key &amp; loading Bedrock models…";
+    $("#modelhint").innerHTML="<span class=spinner></span> Validating key &amp; loading Bedrock models…";
     const [ok,j]=await jpost("/bedrock-models",{apiKey:key,region:($("#bedrockregion").value.trim()||"us-east-1")});
     if(seq!==modelReqSeq)return;
     if(!ok||!j.models||!j.models.length){setModelEnabled(false,"Enter a valid API key");$("#modelhint").textContent="Invalid key or no models available"+(j&&j.error?(": "+j.error):"")+".";return;}
@@ -603,7 +1309,7 @@ async function refreshModels(){
     $("#modelhint").textContent=(j.note?j.note:((j.models?j.models.length:0)+" Bedrock Anthropic models/profiles available."));
     return;
   }
-  $("#modelhint").innerHTML="<span class=spinner></span> validating key &amp; loading models…";const [ok,j]=await jpost("/models",{apiKey:key});if(seq!==modelReqSeq)return;if(!ok||!j.models||!j.models.length){setModelEnabled(false,"Enter a valid API key");$("#modelhint").textContent="Invalid key or no models available"+(j&&j.error?(": "+j.error):"")+".";return;}setModelEnabled(true,"model id");modelsLoaded=true;setModels(j.models);$("#modelhint").textContent=(j.models?j.models.length:0)+" chat models available.";
+  $("#modelhint").innerHTML="<span class=spinner></span> Validating key &amp; loading models…";const [ok,j]=await jpost("/models",{apiKey:key});if(seq!==modelReqSeq)return;if(!ok||!j.models||!j.models.length){setModelEnabled(false,"Enter a valid API key");$("#modelhint").textContent="Invalid key or no models available"+(j&&j.error?(": "+j.error):"")+".";return;}setModelEnabled(true,"model id");modelsLoaded=true;setModels(j.models);$("#modelhint").textContent=(j.models?j.models.length:0)+" chat models available.";
 }
 $("#refreshmodels").onclick=refreshModels;
 
@@ -616,24 +1322,40 @@ $("#go").onclick=async()=>{
   const inputs=collectInputs();
   let spec=$("#spec").value;
   const m=specMode();
-  if(m==="file"){if(!specReady)return showErr("Upload a spec document and wait for extraction (or switch to Type text).");spec=specReady;}
-  else if(m==="saved"){if(!savedReady)return showErr("Select a saved specification (or switch to Type text / Upload).");spec=savedReady;}
+  let specToken=null,approved=false;
+  if(m==="file"||m==="saved"){
+    const ready=(m==="file"?specReady:savedReady);
+    if(!ready)return showErr(m==="file"?"Upload a spec document and wait for extraction.":"Select a saved specification.");
+    if(!currentSpecToken)return showErr("Spec not ready — re-select it.");
+    specToken=currentSpecToken;spec=ready;
+    // Require an APPROVED concise spec for uploaded/saved docs (review-first flow).
+    const [sok,sp]=await jget("/specs/"+specToken);
+    approved=sok&&sp.conciseApproved;
+    if(!approved){
+      // Open the review modal instead of generating against an unreviewed spec.
+      if(sok&&sp.conciseStatus==="READY"){openCompareModal(specToken);return showErr("Review & approve the concise specification first (opened for you).");}
+      return showErr("Generate & approve the concise specification first — use ‘Review concise specification’.");
+    }
+  }
   if(!spec.trim())return showErr("Provide a specification (text, document, or saved spec).");
   if(!inputs.length)return showErr("Add at least one example input message.");
-  if(needsKey()&&!$("#apikey").value.trim())return showErr("Enter your "+(isBedrock()?"AWS Bedrock":"OpenAI")+" API key (or switch Provider to Mock).");
-  if(needsKey()&&!$("#model").value.trim())return showErr("Select a model — enter a valid API key, then pick one (⟳ loads your models).");
+  if(needsKey()&&!$("#apikey").value.trim())return showErr("Enter your "+(isBedrock()?"AWS Bedrock":"OpenAI")+" API key in Settings (or switch Provider to Mock).");
+  if(needsKey()&&!$("#model").value.trim())return showErr("Select a model in Settings — enter a valid API key, then pick one.");
   persistKey();
   const body={inputSpec:spec,inputName:$("#jobname").value.trim(),provider:$("#provider").value,model:$("#model").value,apiKey:needsKey()?$("#apikey").value.trim():"",autoApprove:false,inputs};
+  if(specToken)body.specToken=specToken;
+  body.maxAttempts=+($("#maxattempts").value||5);
+  body.costCap=+($("#costcap").value||0);
   if(isBedrock())body.bedrockRegion=$("#bedrockregion").value.trim()||"us-east-1";
-  $("#go").disabled=true;$("#go").innerHTML='<span class=spinner></span> Planning…';
+  // With an approved concise spec the backend goes straight to planning; a typed
+  // spec is structured in-job first.
+  $("#go").disabled=true;$("#go").innerHTML='<span class=spinner></span> '+(approved?"Planning…":"Structuring spec…");
   const [ok,j]=await jpost("/generate",body);
   if(!ok){showErr(j.error||"generate failed");resetGo();return;}
-  currentJob=j.jobId;$("#jobid").textContent="job "+j.jobId;$("#jobid").classList.remove("hidden");loadLinks(currentJob);showView("progress");startPolling();
+  currentJob=j.jobId;$("#jobid").textContent="Job "+j.jobId;$("#jobid").classList.remove("hidden");loadLinks(currentJob);showView("progress");buildClockReset();startPolling();
 };
-function resetGo(){$("#go").disabled=false;$("#go").textContent="Plan & Generate ▶";}
-// Show a spinner + label inside a button while an async action runs. Disables
-// the button (and an optional sibling) so the user can't double-submit; the
-// poll that follows re-renders the pane, so we don't need to restore the label.
+function resetGo(){$("#go").disabled=false;$("#go").innerHTML="Plan &amp; Generate ▶";}
+// Show a spinner + label inside a button while an async action runs.
 async function busyBtn(btn,label,fn,siblings){
   if(!btn)return fn&&fn();
   const all=[btn].concat(siblings||[]);
@@ -645,51 +1367,65 @@ async function busyBtn(btn,label,fn,siblings){
 }
 function showErr(m){const e=$("#formerr");e.textContent=m;e.className="err";}
 let lastRenderSig=null;
-// A compact signature of everything render() actually paints. If it's unchanged
-// since the last tick, skip the re-render entirely — this stops the boxes (status
-// list, plan, attempt diff, copy buttons) from being torn down and rebuilt every
-// 1.2s poll, which is what caused the flashing.
+// States where the server is waiting on the user (or finished) — stop polling.
+const REST_STATES={SUCCESS:1,FAILED:1,REJECTED:1,AWAITING_SPEC:1,AWAITING_PLAN:1,AWAITING_ATTEMPT:1};
 function jobSig(j){
   const atts=(j.attempts||[]).map(a=>a.number+":"+a.phase+":"+(a.message||"")).join("|");
-  return [j.status,j.verdict,j.attemptsUsed,j.maxAttempts,j.sourceDocType,j.model,j.generatedClassName,j.lastError||"",j.plan||"",atts,norm(j.sourceHL7||j.expectedHL7),norm(j.actualHL7),j.finalDTL||""].join("");
+  return [j.status,j.verdict,j.attemptsUsed,j.maxAttempts,j.sourceDocType,j.model,j.generatedClassName,j.lastError||"",j.plan||"",atts,norm(j.sourceHL7||j.expectedHL7),norm(j.actualHL7),j.finalDTL||"",j.structuredSpec||"",JSON.stringify(j.gateReport||"")].join("");
 }
 function startPolling(){if(pollTimer)clearInterval(pollTimer);lastRenderSig=null;const tick=async()=>{const [ok,j]=await jget("/jobs/"+currentJob);if(ok)render(j);};tick();pollTimer=setInterval(tick,1200);}
 function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
 function render(j){
+  updateKPIs(j);
   const sig=jobSig(j);
   if(sig===lastRenderSig){
-    // Nothing the UI shows has changed — but still honour terminal/awaiting polling.
-    if(j.status==="SUCCESS"||j.status==="FAILED"||j.status==="REJECTED"||j.status==="AWAITING_PLAN"||j.status==="AWAITING_ATTEMPT")stopPolling();
+    if(REST_STATES[j.status]){stopPolling();buildClockStop();}
     return;
   }
   lastRenderSig=sig;
   renderStatus(j);
+  // SPEC review gate (earliest checkpoint).
+  const ss=j.status==="AWAITING_SPEC";$("#specgate").classList.toggle("hidden",!ss);
+  if(ss){resetGo();renderSpecGate(j);}
   $("#plangate").classList.toggle("hidden",j.status!=="AWAITING_PLAN");
-  if(j.status==="AWAITING_PLAN"){$("#plantext").textContent=j.plan||"(no plan text)";resetGo();}
+  if(j.status==="AWAITING_PLAN"){$("#plantext").innerHTML=mdToHtml(j.plan||"");resetGo();}
   const sa=j.status==="AWAITING_ATTEMPT";$("#attemptgate").classList.toggle("hidden",!sa);
   if(sa){resetGo();renderAttempt(j);}
-  // The server won't advance these states on its own — stop polling so we don't
-  // keep hammering /jobs (and re-rendering) while waiting on the user.
-  if(j.status==="SUCCESS"||j.status==="FAILED"||j.status==="REJECTED"||j.status==="AWAITING_PLAN"||j.status==="AWAITING_ATTEMPT"){stopPolling();resetGo();loadLinks(currentJob);}
+  if(REST_STATES[j.status]){stopPolling();resetGo();buildClockStop();loadLinks(currentJob);}
 }
 function renderStatus(j){const s=$("#status");s.innerHTML="";
   const head=el("div");head.style.cssText="display:flex;align-items:center;gap:10px";head.appendChild(el("span","badge b-"+j.status,j.status));if(j.verdict)head.appendChild(el("span","pill",j.verdict));const c=el("span",null,"attempt "+(j.attemptsUsed||0)+" / "+j.maxAttempts);c.style.cssText="color:var(--muted);font-size:12px";head.appendChild(c);s.appendChild(head);
-  const meta=el("div","meta");meta.innerHTML="<span>doctype: <b>"+(j.sourceDocType||"?")+"</b></span><span>model: <b>"+(j.model||"?")+"</b></span><span>class: <b>"+(j.generatedClassName||"—")+"</b></span>";s.appendChild(meta);
+  const meta=el("div","meta");meta.innerHTML="<span>DocType: <b>"+(j.sourceDocType||"?")+"</b></span><span>Model: <b>"+(j.model||"?")+"</b></span><span>Class: <b>"+(j.generatedClassName||"—")+"</b></span>";s.appendChild(meta);
   const atts=j.attempts||[];
   const list=el("div");atts.forEach((a,i)=>{const d=el("div","att ph-"+(a.phase||""));d.appendChild(el("div","n",a.number));const b=el("div");b.style.flex="1";
     let lbl=phaseLabel(a.phase);
-    // Mark a failed attempt that was auto-followed by another attempt as auto-corrected.
     if((a.phase==="COMPILE_FAIL"||a.phase==="RUNTIME_FAIL")&&i<atts.length-1)lbl+=" — auto-correcting →";
     b.appendChild(el("div","t",lbl));if(a.message)b.appendChild(el("div","m",a.message));d.appendChild(b);list.appendChild(d);});
-  if(j.status==="PLANNING"||j.status==="GENERATING"||j.status==="QUEUED"){const d=el("div","att");d.appendChild(el("div","n","…"));const b=el("div");
-    const lastFail=atts.length&&(atts[atts.length-1].phase==="COMPILE_FAIL"||atts[atts.length-1].phase==="RUNTIME_FAIL");
-    const msg=j.status==="PLANNING"?"Drafting a plan…":(lastFail?"Auto-correcting from the compiler errors…":"Generating the DTL…");
-    b.innerHTML='<div class=t><span class=spinner></span> '+msg+'</div>';d.appendChild(b);list.appendChild(d);}
+  // While the server is doing work (planning / generating / auto-repairing), show a
+  // gradient progress bar + a live elapsed timer so the user knows the build is
+  // running. This is what appears after a successful "Approve & build".
+  if(j.status==="STRUCTURING"||j.status==="PLANNING"||j.status==="GENERATING"||j.status==="JUDGING"||j.status==="QUEUED"||j.status==="RUNNING"){
+    buildClockStart();
+    const lastFail=atts.length&&(atts[atts.length-1].phase==="COMPILE_FAIL"||atts[atts.length-1].phase==="RUNTIME_FAIL"||atts[atts.length-1].phase==="MISMATCH");
+    const msg=j.status==="STRUCTURING"?"Structuring the specification for your review…":(j.status==="PLANNING"?"Drafting an implementation plan…":(j.status==="JUDGING"?"Verifying the DTL against the spec (running all inputs + conformance check)…":(j.status==="QUEUED"?"Queued — starting…":(lastFail?"Auto-correcting from the previous attempt…":"Building the DTL…"))));
+    const card=el("div","buildcard");
+    const top=el("div","buildtop");
+    const lab=el("span","blabel");lab.appendChild(el("span","spinner"));lab.appendChild(el("span",null," "+msg));top.appendChild(lab);
+    const tm=el("span","btimer");tm.id="buildtimer";tm.textContent=buildClock!=null?fmtElapsed(Date.now()-buildClock):"0:00";top.appendChild(tm);
+    card.appendChild(top);
+    const bar=el("div","pbar indet");bar.appendChild(el("div","pfill"));card.appendChild(bar);
+    card.appendChild(el("div","buildhint","This can take a moment for larger specs or reasoning models — failed compiles are auto-corrected and shown above as they happen."));
+    list.appendChild(card);
+  }
   s.appendChild(list);
   if(j.lastError){const e=el("div","err");e.appendChild(el("b",null,"Error: "));e.appendChild(document.createTextNode(j.lastError));s.appendChild(e);}
 }
-function phaseLabel(p){return{GENERATING:"Asked the model",COMPILE_FAIL:"Did not compile",RUNTIME_FAIL:"Compiled, failed at runtime",MISMATCH:"Compiled & ran",SUCCESS:"Compiled & ran cleanly ✓",LLM_ERROR:"LLM call problem"}[p]||p;}
-function renderAttempt(j){$("#atnum").textContent=j.attemptsUsed;$("#atmeta").innerHTML="<span>verdict: <b>"+(j.verdict||"")+"</b></span><span>class: <b>"+(j.generatedClassName||"—")+"</b></span>";
+function phaseLabel(p){return{GENERATING:"Asked the model",COMPILE_FAIL:"Did not compile",RUNTIME_FAIL:"Compiled, failed at runtime",MISMATCH:"Compiled & ran, but does NOT meet the spec",SUCCESS:"Compiled, ran & conforms to the spec ✓",LLM_ERROR:"LLM call problem"}[p]||p;}
+function renderAttempt(j){$("#atnum").textContent=j.attemptsUsed;$("#atmeta").innerHTML="<span>Verdict: <b>"+(j.verdict||"")+"</b></span><span>Class: <b>"+(j.generatedClassName||"—")+"</b></span>";
+  // Colour the attempt card by whether the candidate actually passed the spec gate.
+  const passed=(j.verdict==="SUCCESS");
+  $("#attemptgate").classList.toggle("warn",!passed);
+  renderGateReport(j.gateReport,passed);
   const inp=norm(j.sourceHL7||j.expectedHL7),out=norm(j.actualHL7);
   const d=lineDiff(inp,out);
   setLined($("#dexp"),inp,d.aCls,d.aSeg);
@@ -699,27 +1435,107 @@ function renderAttempt(j){$("#atnum").textContent=j.attemptsUsed;$("#atmeta").in
   $("#dactcopy").innerHTML="";$("#dactcopy").appendChild(copyBtn(()=>out));
   $("#dtlcopy").innerHTML="";$("#dtlcopy").appendChild(copyBtn(()=>j.finalDTL||""));
   syncScroll([$("#dexp").closest(".side"),$("#dact").closest(".side")]);}
+
+// Render the accuracy-gate verdict for the pending candidate: did it run on all
+// inputs, did it actually change fields, and did the spec-conformance judge pass —
+// with the concrete violations the judge found. This is the informed review the
+// old compile+run gate could never give.
+function renderGateReport(gr,passed){
+  const box=$("#gatereport");box.innerHTML="";
+  if(!gr||typeof gr!=="object"){return;}
+  const card=el("div","gate "+(passed?"pass":"fail"));
+  const h=el("div","gh");h.appendChild(el("span",null,passed?"✓ Verified against the specification":"⚠ Does not yet meet the specification"));card.appendChild(h);
+  const ra=gr.runAll||{};
+  const chk=el("div","gchk");
+  const mk=(ok,t)=>{const s=el("span",null,(ok?"✓ ":"✗ ")+t);s.style.color=ok?"var(--iris-green-700)":"#c0353a";return s;};
+  chk.appendChild(mk(!!ra.ran,"runs on all inputs"));
+  chk.appendChild(mk(!!ra.anyChange,"actually transforms fields"));
+  const jdg=gr.judge||{};
+  if(jdg&&typeof jdg==="object"){chk.appendChild(mk(!!jdg.conforms,"spec-conformance judge"+(jdg.score!=null?(" ("+Math.round(jdg.score*100)+"%)"):"")));}
+  card.appendChild(chk);
+  // per-input change counts
+  if(ra.results&&ra.results.length){
+    const r=el("div");r.style.cssText="font-size:11.5px;color:var(--muted);margin-top:4px";
+    r.textContent="Inputs: "+ra.results.map(x=>"#"+x.index+" "+(x.ran?(x.changedCount+" field"+(x.changedCount===1?"":"s")+" changed"):"runtime error")).join(" · ");
+    card.appendChild(r);
+  }
+  // judge violations
+  if(jdg.violations&&jdg.violations.length){
+    const v=el("div","gv");v.appendChild(el("div",null,"Unmet rules:")).style.fontWeight="700";
+    jdg.violations.forEach(x=>{const row=el("div","vrow");const sev=el("span","sev "+(x.severity||"HIGH"),x.severity||"HIGH");row.appendChild(sev);row.appendChild(document.createTextNode((x.rule||"")+(x.detail?(" — "+x.detail):"")));v.appendChild(row);});
+    card.appendChild(v);
+  }
+  box.appendChild(card);
+}
+
+// SPEC REVIEW GATE — render the original spec (left) and the structured rule list
+// (right), colour-coded by provenance. Hovering a rule highlights the exact source
+// snippet it was derived from, so the reviewer can confirm each rule is grounded.
+let specOrigText="";
+function renderSpecGate(j){
+  specOrigText=j.inputSpec||"";
+  $("#specorig").textContent=specOrigText;
+  $("#specorigcopy").innerHTML="";$("#specorigcopy").appendChild(copyBtn(()=>specOrigText));
+  $("#specedit").value=j.structuredSpec||"";
+  const prov=Array.isArray(j.specProvenance)?j.specProvenance:[];
+  const box=$("#specrules");box.innerHTML="";
+  let grounded=0,inferred=0,nosrc=0;
+  prov.forEach(p=>{
+    const hasSrc=(p.sourceQuote&&String(p.sourceQuote).trim()!=="");
+    const inf=!!p.inferred;
+    if(inf)inferred++; else if(!hasSrc)nosrc++; else grounded++;
+    const r=el("div","srule"+(inf?" inferred":(hasSrc?"":" nosrc")));
+    const head=el("div");head.appendChild(el("span","sn",(p.ruleIndex||"")+"."));head.appendChild(document.createTextNode(p.rule||""));
+    if(inf)head.appendChild(el("span","stag inf","inferred"));
+    else if(!hasSrc)head.appendChild(el("span","stag no","no source"));
+    r.appendChild(head);
+    if(hasSrc){const q=el("span","sq","“"+p.sourceQuote+"”");r.appendChild(q);
+      r.onmouseenter=()=>highlightSource(p.sourceQuote);r.onmouseleave=()=>{$("#specorig").textContent=specOrigText;};}
+    box.appendChild(r);
+  });
+  if(!prov.length){box.appendChild(el("div","empty","No structured rules returned — edit the spec below directly."));}
+  // coverage summary
+  const cov=$("#speccov");cov.innerHTML="";
+  const add=(t,c)=>{const s=el("span","cv",t);s.style.color=c;cov.appendChild(s);};
+  add("✓ "+grounded+" grounded in source","var(--iris-green-700)");
+  if(inferred)add("● "+inferred+" inferred (verify)","#9a6a00");
+  if(nosrc)add("⚠ "+nosrc+" no source (possible hallucination)","#c0353a");
+}
+// Highlight the matching source snippet inside the original-spec pane.
+function highlightSource(quote){
+  const orig=specOrigText;if(!quote){$("#specorig").textContent=orig;return;}
+  const idx=orig.toLowerCase().indexOf(String(quote).toLowerCase().slice(0,40));
+  const pane=$("#specorig");pane.innerHTML="";
+  if(idx<0){pane.textContent=orig;return;}
+  const end=idx+Math.min(String(quote).length,40);
+  pane.appendChild(document.createTextNode(orig.slice(0,idx)));
+  pane.appendChild(el("span","provhi",orig.slice(idx,end)));
+  pane.appendChild(document.createTextNode(orig.slice(end)));
+}
 document.querySelectorAll("#attemptgate .tab").forEach(t=>t.onclick=()=>{document.querySelectorAll("#attemptgate .tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");$("#tab-out").classList.toggle("hidden",t.dataset.tab!=="out");$("#tab-dtl").classList.toggle("hidden",t.dataset.tab!=="dtl");});
 
-// plan additions: the user can append as many extra steps as they like.
+// plan additions
 function addPlanItem(val=""){const box=$("#planadds");const wrap=el("div","ex");wrap.style.cssText="display:flex;gap:8px;align-items:center;padding:8px";
   const ta=el("input");ta.placeholder="e.g. Also blank out PID-19 (SSN) for privacy";ta.value=val;ta.style.flex="1";
   const rm=el("button","rm","✕");rm.style.cssText="color:var(--bad);background:none;border:none;cursor:pointer;font-size:16px";rm.onclick=()=>wrap.remove();
   wrap.appendChild(ta);wrap.appendChild(rm);box.appendChild(wrap);ta.focus();}
 function collectPlanAdditions(){return [...document.querySelectorAll("#planadds input")].map(t=>t.value.trim()).filter(Boolean);}
 $("#addplanitem").onclick=()=>addPlanItem();
-$("#approveplan").onclick=()=>busyBtn($("#approveplan"),"Building…",async()=>{const adds=collectPlanAdditions();$("#planadds").innerHTML="";await jpost("/jobs/"+currentJob+"/continue",{action:"approve",planAdditions:adds});startPolling();},[$("#rejectplan")]);
-$("#rejectplan").onclick=()=>{const fb=prompt("How should the plan change?");if(fb==null)return;busyBtn($("#rejectplan"),"Revising…",async()=>{await jpost("/jobs/"+currentJob+"/continue",{action:"reject",feedback:"Revise the plan: "+fb});startPolling();},[$("#approveplan")]);};
+// SPEC gate: approve (with any edits) -> plan; reject -> re-structure.
+$("#approvespec").onclick=()=>busyBtn($("#approvespec"),"Planning…",async()=>{const edit=$("#specedit").value;const [ok]=await jpost("/jobs/"+currentJob+"/continue",{action:"approve-spec",specEdit:edit});if(ok)buildClockReset();startPolling();},[$("#rejectspec")]);
+$("#rejectspec").onclick=()=>{const fb=prompt("What should change about the structured spec? (e.g. a rule is wrong/missing)");if(fb==null)return;busyBtn($("#rejectspec"),"Re-structuring…",async()=>{const [ok]=await jpost("/jobs/"+currentJob+"/continue",{action:"reject",feedback:"Re-structure the specification: "+fb});if(ok)buildClockReset();startPolling();},[$("#approvespec")]);};
+$("#approveplan").onclick=()=>busyBtn($("#approveplan"),"Building…",async()=>{const adds=collectPlanAdditions();$("#planadds").innerHTML="";const [ok]=await jpost("/jobs/"+currentJob+"/continue",{action:"approve",planAdditions:adds});if(ok)buildClockReset();startPolling();},[$("#rejectplan")]);
+$("#rejectplan").onclick=()=>{const fb=prompt("How should the plan change?");if(fb==null)return;busyBtn($("#rejectplan"),"Revising…",async()=>{const [ok]=await jpost("/jobs/"+currentJob+"/continue",{action:"reject",feedback:"Revise the plan: "+fb});if(ok)buildClockReset();startPolling();},[$("#approveplan")]);};
 $("#acceptattempt").onclick=()=>busyBtn($("#acceptattempt"),"Transforming all…",async()=>{await jpost("/jobs/"+currentJob+"/continue",{action:"accept"});startPolling();showView("outputs");},[$("#rejectattempt")]);
-$("#rejectattempt").onclick=()=>{const fb=$("#attfeedback").value.trim();busyBtn($("#rejectattempt"),"Regenerating…",async()=>{await jpost("/jobs/"+currentJob+"/continue",{action:"reject",feedback:fb||"Please improve the transformation."});$("#attfeedback").value="";startPolling();},[$("#acceptattempt")]);};
+$("#rejectattempt").onclick=()=>{const fb=$("#attfeedback").value.trim();busyBtn($("#rejectattempt"),"Regenerating…",async()=>{const [ok]=await jpost("/jobs/"+currentJob+"/continue",{action:"reject",feedback:fb||"Please improve the transformation."});$("#attfeedback").value="";if(ok)buildClockReset();startPolling();},[$("#acceptattempt")]);};
 
 async function loadLinks(jobId){try{const [ok,j]=await jget("/links"+(jobId?("/"+jobId):""));const box=$("#links");box.innerHTML="";const mk=(h,l,t)=>{const a=el("a",null,l);a.href=h;a.target="_blank";a.title=t||l;box.appendChild(a)};if(j.production)mk(j.production,"⚙ Production");if(j.visualTrace)mk(j.visualTrace,"🔍 Visual Trace");else if(j.messages)mk(j.messages,"🔍 Messages");}catch(e){}}
 
 // OUTPUTS view
-async function loadOutputs(){$("#outjob").textContent=currentJob?("job "+currentJob):"";const box=$("#outlist");box.innerHTML="";if(!currentJob){box.appendChild(el("div","empty","Build a DTL first."));return;}
-  const [ok,j]=await jget("/jobs/"+currentJob+"/outputs");if(!ok||!j.outputs.length){box.appendChild(el("div","empty","No outputs yet — accept a build on the Build tab."));return;}
-  j.outputs.forEach(r=>{const c=el("div","card");c.style.borderTopColor=r.error?"var(--bad)":"var(--primary)";
-    c.appendChild(el("div",null,"Input "+r.index)).style.fontWeight="600";
+async function loadOutputs(){$("#outjob").textContent=currentJob?("Job "+currentJob):"";const box=$("#outlist");box.innerHTML="";if(!currentJob){box.appendChild(el("div","empty","Build a DTL first."));return;}
+  const [ok,j]=await jget("/jobs/"+currentJob+"/outputs");if(!ok||!j.outputs.length){box.appendChild(el("div","empty","No outputs yet — accept a build on the Progress tab."));return;}
+  j.outputs.forEach(r=>{const c=el("div","card");c.style.borderLeftColor=r.error?"var(--bad)":"var(--iris-green)";
+    c.appendChild(el("div",null,"Input "+r.index)).style.fontWeight="700";
     const inT=norm(r.input),outT=r.error?("⚠ "+r.error):norm(r.output);
     const d=r.error?{aCls:null,bCls:null,aSeg:null,bSeg:null}:lineDiff(inT,outT);
     const io=el("div","io");
@@ -730,25 +1546,30 @@ async function loadOutputs(){$("#outjob").textContent=currentJob?("job "+current
     const ta=el("textarea");ta.value=norm(r.output);ta.style.minHeight="70px";c.appendChild(ta);lineNumberTextarea(ta);
     const fb=el("textarea");fb.placeholder="Feedback (optional)…";fb.style.minHeight="40px";c.appendChild(fb);
     const btn=el("button","ok","✓ Apply correction + feedback");btn.style.marginTop="8px";
-    btn.onclick=async()=>{btn.disabled=true;btn.innerHTML='<span class=spinner></span> rebuilding…';await jpost("/jobs/"+currentJob+"/correct",{input:r.input,produced:r.output,corrected:ta.value,feedback:fb.value});await loadOutputs();};
-    c.appendChild(btn);box.appendChild(c);});
+    const cmsg=el("div");cmsg.style.cssText="font-size:12px;margin-top:6px";
+    btn.onclick=async()=>{btn.disabled=true;btn.innerHTML='<span class=spinner></span> Rebuilding…';cmsg.innerHTML="";
+      const [ok,j]=await jpost("/jobs/"+currentJob+"/correct",{input:r.input,produced:r.output,corrected:ta.value,feedback:fb.value});
+      btn.disabled=false;btn.textContent="✓ Apply correction + feedback";
+      if(!ok||(j&&j.lastError)){cmsg.className="err";cmsg.textContent="Correction failed: "+((j&&(j.error||j.lastError))||"unknown error");return;}
+      await loadOutputs();};
+    c.appendChild(btn);c.appendChild(cmsg);box.appendChild(c);});
 }
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 $("#refreshout").onclick=loadOutputs;
 
 // LIVE view
 $("#runlive").onclick=async()=>{if(!currentJob){$("#livemsg").textContent="Build a DTL first.";return;}const inp=$("#liveinput").value;if(!inp.trim())return;
-  $("#runlive").innerHTML='<span class=spinner></span> transforming…';const [ok,j]=await jpost("/jobs/"+currentJob+"/transform",{input:inp});$("#runlive").textContent="⚡ Transform";
+  $("#runlive").innerHTML='<span class=spinner></span> Transforming…';const [ok,j]=await jpost("/jobs/"+currentJob+"/transform",{input:inp});$("#runlive").textContent="⚡ Transform";
   const inN=norm(inp),outN=j.error?("⚠ "+j.error):norm(j.output);
   const d=j.error?{aCls:null,aSeg:null}:lineDiff(inN,outN);
   $("#liveresult").classList.remove("hidden");setLined($("#liveIn"),inN,d.aCls,d.aSeg);$("#liveOut").value=outN;lineNumberTextarea($("#liveOut"));$("#livemsg").textContent="";
   $("#liveincopy").innerHTML="";$("#liveincopy").appendChild(copyBtn(()=>inN));
   $("#liveoutcopy").innerHTML="";$("#liveoutcopy").appendChild(copyBtn(()=>$("#liveOut").value));};
-$("#livecorrect").onclick=async()=>{const inp=$("#liveinput").value;$("#livecorrect").innerHTML='<span class=spinner></span> rebuilding…';
+$("#livecorrect").onclick=async()=>{const inp=$("#liveinput").value;$("#livecorrect").innerHTML='<span class=spinner></span> Rebuilding…';
   const [ok,j]=await jpost("/jobs/"+currentJob+"/correct",{input:inp,produced:"",corrected:$("#liveOut").value,feedback:$("#livefb").value});
   $("#livecorrect").textContent="✓ Apply correction + feedback to the DTL";$("#livemsg").textContent=ok?("DTL rebuilt — class "+(j.generatedClassName||"")+". Re-run to see the new output."):("Failed: "+(j.error||""));};
 
-// LLM MESSAGES view — full visibility into everything sent to / from the model.
+// LLM MESSAGES view
 function roleWho(r){return {system:"instructions to the model",user:"sent to the model →",assistant:"← reply from the model"}[r]||r;}
 const money=x=>{x=+x||0;return x===0?"$0":(x<0.01?("$"+x.toFixed(5)):("$"+x.toFixed(4)));};
 const kt=n=>{n=+n||0;return n>=1000?((n/1000).toFixed(n>=10000?0:1)+"k"):(""+n);};
@@ -762,11 +1583,10 @@ function renderUsageBar(u){const bar=$("#usagebar");if(!u){bar.classList.add("hi
   cell("All jobs — tokens",kt(u.allTimeTokens));
 }
 let lastMsgSig=null;
-async function loadMessages(){$("#msgjob").textContent=currentJob?("job "+currentJob):"";const box=$("#msglist");
+async function loadMessages(){$("#msgjob").textContent=currentJob?("Job "+currentJob):"";const box=$("#msglist");
   if(!currentJob){lastMsgSig=null;$("#usagebar").classList.add("hidden");box.innerHTML="";box.appendChild(el("div","empty","Build a DTL first — the conversation appears here as it happens."));return;}
   const [ok,j]=await jget("/jobs/"+currentJob+"/messages");
   if(!ok||!j.messages||!j.messages.length){lastMsgSig="empty:"+currentJob;$("#usagebar").classList.add("hidden");box.innerHTML="";box.appendChild(el("div","empty","No messages yet for this job."));return;}
-  // Skip the rebuild if the conversation + usage hasn't changed (stops auto-refresh flashing).
   const u=j.usage||{};
   const sig=currentJob+":"+(u.cost||0)+":"+(u.allTimeCost||0)+":"+j.messages.map(m=>m.role+":"+(m.content||"").length+":"+(m.cost||0)).join("|");
   if(sig===lastMsgSig)return;
@@ -780,7 +1600,6 @@ async function loadMessages(){$("#msgjob").textContent=currentJob?("job "+curren
     h.appendChild(el("span","role",m.role));
     h.appendChild(el("span","who",roleWho(m.role)));
     h.appendChild(el("span","len",(m.content||"").length+" chars"));
-    // assistant turns carry the token usage + cost of the call that produced them
     if(m.role==="assistant"&&((+m.inputTokens)||(+m.outputTokens)||(+m.cost))){
       h.appendChild(el("span","tok",(+m.inputTokens||0)+"↓ / "+(+m.outputTokens||0)+"↑ tok"));
       h.appendChild(el("span","cost",money(m.cost)));
@@ -789,7 +1608,6 @@ async function loadMessages(){$("#msgjob").textContent=currentJob?("job "+curren
     copy.onclick=(e)=>{e.stopPropagation();navigator.clipboard&&navigator.clipboard.writeText(m.content||"");copy.textContent="copied ✓";setTimeout(()=>copy.textContent="copy",1200);};
     const c=el("div","mc");c.appendChild(copy);c.appendChild(linedBlock(m.content||""));
     h.onclick=()=>wrap.classList.toggle("collapsed");
-    // collapse the long system prompt by default; keep user/assistant expanded.
     if(m.role==="system")wrap.classList.add("collapsed");
     wrap.appendChild(h);wrap.appendChild(c);box.appendChild(wrap);
   });
@@ -802,7 +1620,7 @@ $("#msgauto").onchange=e=>{if(msgAutoTimer){clearInterval(msgAutoTimer);msgAutoT
 // CLASSES view
 function showClass(c){setLined($("#clssrc"),c.source||"(no source)");$("#clsname").textContent=c.className;$("#clscopy").innerHTML="";$("#clscopy").appendChild(copyBtn(()=>c.source||""));}
 async function loadClasses(){const box=$("#clslist");box.innerHTML="";const [ok,j]=await jget("/classes");if(!ok||!j.classes.length){box.appendChild(el("div","empty","No classes yet."));return;}
-  j.classes.forEach(c=>{const card=el("div","listcard");card.appendChild(el("div",null,c.className)).style.cssText="font-weight:600;font-family:var(--mono);font-size:12px;word-break:break-all";card.onclick=()=>showClass(c);box.appendChild(card);});
+  j.classes.forEach(c=>{const card=el("div","listcard");card.appendChild(el("div",null,c.className)).style.cssText="font-weight:700;font-family:var(--mono);font-size:12px;word-break:break-all";card.onclick=()=>showClass(c);box.appendChild(card);});
   showClass(j.classes[0]);
 }
 $("#refreshcls").onclick=loadClasses;
@@ -810,7 +1628,7 @@ $("#refreshcls").onclick=loadClasses;
 // HISTORY view
 async function loadHistory(){const [ok,j]=await jget("/history");const box=$("#histlist");box.innerHTML="";if(!ok||!j.history||!j.history.length){box.appendChild(el("div","empty","No transformations yet."));return;}
   j.history.forEach(h=>{const row=el("div","listcard");row.style.cssText+=";display:flex;align-items:center;gap:12px";if(h.parentJobId)row.style.marginLeft="26px";
-    row.appendChild(el("span","badge b-"+h.status,h.status));const info=el("div");info.style.flex="1";info.appendChild(el("div",null,h.inputName||h.jobId)).style.fontWeight="600";
+    row.appendChild(el("span","badge b-"+h.status,h.status));const info=el("div");info.style.flex="1";info.appendChild(el("div",null,h.inputName||h.jobId)).style.fontWeight="700";
     const sub=el("div",null,(h.attemptsUsed||0)+" attempts · "+(h.model||"")+(h.parentJobId?(" · ↳ refines "+h.parentJobId):"")+" · "+(h.updatedAt||""));sub.style.cssText="color:var(--muted);font-size:12px";info.appendChild(sub);row.appendChild(info);
     row.onclick=()=>{currentJob=h.jobId;showView("outputs");};box.appendChild(row);});}
 $("#refreshhist").onclick=loadHistory;
@@ -823,11 +1641,16 @@ $("#sample").onclick=()=>{
 };
 
 (function init(){
+  // Load persisted settings (provider, model, key, region, limits).
+  const pv=localStorage.getItem(LS_PROVIDER);if(pv)$("#provider").value=pv;
   if(localStorage.getItem(LS_REM)==="0")$("#remember").checked=false;
   const k=localStorage.getItem(LS_KEY);if(k)$("#apikey").value=k;
   const rg=localStorage.getItem(LS_REGION);if(rg)$("#bedrockregion").value=rg;
-  syncProvider();   // sets model-box state + validates a remembered key if present
-  addInput();checkHealth();loadLinks();
+  const ma=localStorage.getItem(LS_MAXATT);if(ma)$("#maxattempts").value=ma;
+  const cc=localStorage.getItem(LS_COSTCAP);if(cc)$("#costcap").value=cc;
+  syncProvider();
+  syncQuickModel();
+  addInput();checkHealth();loadLinks();updateKPIs(null);
 })();
 </script>
 </body>

@@ -11,10 +11,15 @@ Property JobId As %String(MAXLEN = 64) [ Required ];
 Index JobIdIdx On JobId [ Unique ];
 
 /// Job state machine (drives the UI). With per-attempt approval enabled:
-///   QUEUED -> PLANNING -> AWAITING_PLAN -(approve)-> GENERATING ->
-///   AWAITING_ATTEMPT -(accept)-> SUCCESS | -(reject+feedback)-> GENERATING ...
+///   QUEUED -> STRUCTURING -> AWAITING_SPEC -(approve spec)-> PLANNING ->
+///   AWAITING_PLAN -(approve)-> GENERATING -> AWAITING_ATTEMPT -(accept)->
+///   SUCCESS | -(reject+feedback)-> GENERATING ...
+/// The AWAITING_SPEC gate is the EARLIEST human checkpoint: the raw extracted
+/// spec is restructured into an explicit, numbered rule list (with provenance back
+/// to the original) and the human verifies it BEFORE any planning/DTL work, so an
+/// extraction or interpretation error is caught before it propagates downstream.
 /// Auto-approve jobs (file service / tests) go QUEUED -> RUNNING -> SUCCESS|FAILED.
-Property Status As %String(VALUELIST = ",QUEUED,PLANNING,AWAITING_PLAN,RUNNING,GENERATING,AWAITING_ATTEMPT,SUCCESS,FAILED,REJECTED") [ InitialExpression = "QUEUED" ];
+Property Status As %String(VALUELIST = ",QUEUED,STRUCTURING,AWAITING_SPEC,PLANNING,AWAITING_PLAN,RUNNING,GENERATING,JUDGING,AWAITING_ATTEMPT,SUCCESS,FAILED,REJECTED") [ InitialExpression = "QUEUED" ];
 
 /// Final verdict from the orchestrator (SUCCESS, FAIL_COMPILE, ...).
 Property Verdict As %String(MAXLEN = 32);
@@ -27,6 +32,13 @@ Property Plan As %String(MAXLEN = 32000);
 /// resume the dialogue without re-sending it from the client.
 Property Transcript As list Of DTL.Msg.ChatTurn;
 
+/// 1-based index of the first turn belonging to the BUILD conversation (plan +
+/// generation + repair). Turns before it are the one-off spec-structuring exchange
+/// (which carries the large RAW spec) — kept for UI visibility but NOT re-sent to
+/// the model on every build/repair call. FillTranscript only sends from here on,
+/// so the expensive raw-spec text is billed once (during structuring), not N times.
+Property BuildStartIndex As %Integer [ InitialExpression = 1 ];
+
 /// LLM provider for this job ("openai" | "mock"); needed to resume gated steps.
 Property Provider As %String(MAXLEN = 16);
 
@@ -37,10 +49,34 @@ Property ParentJobId As %String(MAXLEN = 64);
 /// User-supplied display name / input spec.
 Property InputName As %String(MAXLEN = 256);
 
-/// The input specification. Held as a STREAM, not a %String: an uploaded spec
-/// document (PDF/DOCX→markdown) routinely exceeds the 32 000-char %String cap and
-/// would otherwise raise "<value> length longer than MAXLEN allowed of 32000".
+/// The input specification (the RAW extracted markdown / typed text). Held as a
+/// STREAM, not a %String: an uploaded spec document (PDF/DOCX→markdown) routinely
+/// exceeds the 32 000-char %String cap and would otherwise raise "<value> length
+/// longer than MAXLEN allowed of 32000".
 Property InputSpec As %Stream.GlobalCharacter;
+
+/// The STRUCTURED specification: the LLM rewrites the raw spec into an explicit,
+/// numbered, unambiguous list of transformation rules (markdown). This is what the
+/// human reviews/edits at the AWAITING_SPEC gate and what every downstream prompt
+/// (plan, generation, repair, judge) is grounded on — NOT the raw extracted text.
+/// Holding it as the authority means an extraction glitch is corrected once, here.
+Property StructuredSpec As %Stream.GlobalCharacter;
+
+/// Provenance map (JSON array) tying each structured rule back to the snippet of
+/// the ORIGINAL spec it was derived from, so the review UI can show, side-by-side,
+/// which part of the source each rule came from (and flag rules with NO source =
+/// possible hallucination). Element: {rule, sourceQuote, ruleIndex, inferred}.
+Property SpecProvenance As %Stream.GlobalCharacter;
+
+/// The accuracy gate's machine verdict for the pending attempt (JSON): per-input
+/// run results, rule-coverage findings, and the LLM-as-judge conformance opinion.
+/// Surfaced in the UI so the human reviews an INFORMED candidate, not a blind one.
+Property GateReport As %Stream.GlobalCharacter;
+
+/// Running USD cost ceiling for this job. When the accumulated cost crosses it the
+/// loop stops and pauses for the user (circuit-breaker) instead of burning budget.
+/// 0 = no limit.
+Property CostCap As %Numeric [ InitialExpression = 0 ];
 
 /// Derived DocTypes for the primary pair.
 Property SourceDocType As %String(MAXLEN = 64);
@@ -119,12 +155,31 @@ Method AddTurn(pRole As %String, pContent As %String)
 	do ..Transcript.Insert(t)
 }
 
-/// Copy the persisted transcript into an LLMRequest's transcript list.
-Method FillTranscript(pReq As DTL.Msg.LLMRequest)
+/// Copy the BUILD portion of the persisted transcript into an LLMRequest. The
+/// one-off spec-structuring turns (indices before BuildStartIndex) carry the large
+/// RAW spec and are deliberately omitted — the build conversation is grounded on
+/// the compact STRUCTURED spec instead, so we don't re-bill the raw document on
+/// every repair round. pFromBuild=0 forces the whole transcript (the structuring
+/// call itself needs everything up to that point).
+Method FillTranscript(pReq As DTL.Msg.LLMRequest, pFromBuild As %Boolean = 1)
 {
-	for i = 1:1:..Transcript.Count() {
-		do pReq.Transcript.Insert(..Transcript.GetAt(i))
+	set tStart = $select(pFromBuild:$select(..BuildStartIndex>0:..BuildStartIndex, 1:1), 1:1)
+	for i = tStart:1:..Transcript.Count() {
+		set tTurn = ..Transcript.GetAt(i)
+		continue:tTurn.Aux         // side calls (judge) are UI-only, never re-sent
+		do pReq.Transcript.Insert(tTurn)
 	}
+}
+
+/// Mark the most-recently-added turn as the cache breakpoint (the end of the
+/// static, re-readable prefix) and record where the BUILD conversation begins
+/// (the next turn appended after this one). Call right after adding the build
+/// system prompt.
+Method MarkBuildStart()
+{
+	set n = ..Transcript.Count()
+	if n > 0 set ..Transcript.GetAt(n).CacheBreakpoint = 1
+	set ..BuildStartIndex = n
 }
 
 /// The full LLM conversation as a %DynamicArray of {index, role, content} — every
@@ -207,6 +262,7 @@ Method ToDynamic(pIncludeMessages As %Boolean = 1) As %DynamicObject
 	set o.plan = ..Plan
 	set o.parentJobId = ..ParentJobId
 	set o.provider = ..Provider
+	set o.costCap = ..CostCap
 	set o.createdAt = ..CreatedAt
 	set o.updatedAt = ..UpdatedAt
 	set o.attempts = []
@@ -216,10 +272,15 @@ Method ToDynamic(pIncludeMessages As %Boolean = 1) As %DynamicObject
 	}
 	if pIncludeMessages {
 		set o.inputSpec = ..StreamStr(..InputSpec)
+		set o.structuredSpec = ..StreamStr(..StructuredSpec)
 		set o.sourceHL7 = ..StreamStr(..SourceHL7)
 		set o.expectedHL7 = ..StreamStr(..ExpectedHL7)
 		set o.actualHL7 = ..StreamStr(..ActualHL7)
 		set o.finalDTL = ..StreamStr(..FinalDTL)
+		// Provenance + gate report are JSON strings; parse so the UI gets objects,
+		// not escaped strings. Tolerate empty/invalid by falling back to null.
+		set o.specProvenance = ..ParseJSONOrNull(..StreamStr(..SpecProvenance))
+		set o.gateReport = ..ParseJSONOrNull(..StreamStr(..GateReport))
 	}
 	quit o
 }
@@ -231,6 +292,15 @@ ClassMethod StreamStr(pStream As %Stream.Object) As %String
 	set s = ""
 	while 'pStream.AtEnd { set s = s _ pStream.Read(16000) }
 	quit s
+}
+
+/// Parse a JSON string into a dynamic value for the REST layer; returns "" (JSON
+/// null) if the string is empty or not valid JSON, so a half-written field can
+/// never 500 the GET /jobs/:id endpoint.
+ClassMethod ParseJSONOrNull(pStr As %String) As %DynamicAbstractObject
+{
+	quit:$zstrip($get(pStr), "<>W")="" ""
+	try { return ##class(%DynamicAbstractObject).%FromJSON(pStr) } catch { return "" }
 }
 
 Storage Default
@@ -265,6 +335,11 @@ Storage Default
 <Value name="28"><Value>Provider</Value></Value>
 <Value name="29"><Value>ParentJobId</Value></Value>
 <Value name="30"><Value>InputSpec</Value></Value>
+<Value name="31"><Value>StructuredSpec</Value></Value>
+<Value name="32"><Value>SpecProvenance</Value></Value>
+<Value name="33"><Value>GateReport</Value></Value>
+<Value name="34"><Value>CostCap</Value></Value>
+<Value name="35"><Value>BuildStartIndex</Value></Value>
 </Data>
 <DataLocation>^DTL.Data.JobD</DataLocation>
 <DefaultData>JobDefaultData</DefaultData>

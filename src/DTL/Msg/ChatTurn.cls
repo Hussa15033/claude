@@ -20,4 +20,18 @@ Property OutputTokens As %Integer [ InitialExpression = 0 ];
 
 Property Cost As %Numeric(SCALE = 6) [ InitialExpression = 0 ];
 
+/// Marks this turn as the END of the cacheable static prefix. The first system
+/// turn (which carries the big, unchanging DTL element schema + HL7 schema + the
+/// structured spec) is flagged so the LLMConnector can attach a provider prompt-
+/// cache breakpoint (Anthropic cache_control) up to and including it — every
+/// subsequent repair/feedback turn then re-reads that prefix from cache instead of
+/// re-billing it at full input price.
+Property CacheBreakpoint As %Boolean [ InitialExpression = 0 ];
+
+/// Auxiliary turn: a side LLM call (e.g. the spec-conformance judge) that is shown
+/// in the UI transcript for transparency but is NOT part of the build conversation,
+/// so FillTranscript skips it (it must not be re-sent to the build model as if the
+/// model had said it).
+Property Aux As %Boolean [ InitialExpression = 0 ];
+
 }

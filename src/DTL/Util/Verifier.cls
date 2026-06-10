@@ -353,6 +353,83 @@ ClassMethod VerifyAll(pSource As %String, pSourceHL7 As %String, pExpectedHL7 As
 	quit tRes
 }
 
+/// ACCURACY GATE — run a compiled DTL over a SET of input messages and report,
+/// per input: whether it ran, the produced output, and the set of (segment:field)
+/// positions whose value CHANGED vs the input. A spec-driven transform that
+/// compiles+runs but changes NOTHING (every assign silently swallowed by the DTL
+/// try/catch on a bad path) is the classic silent-failure the old gate missed;
+/// surfacing the changed-field set lets the caller verify the DTL is actually doing
+/// work, and lets the LLM judge focus on conformance. Returns a %DynamicObject:
+///   { ran:Bool, anyChange:Bool, results:[ {index, ran, error, output,
+///       changedCount, changes:[ "SEG:field old -> new", ... ] } ] }
+ClassMethod RunAll(pClassName As %String, ByRef pInputs, pSourceDocType As %String = "") As %DynamicObject
+{
+	set tRes = {}
+	set tResults = []
+	set tAllRan = 1, tAnyChange = 0
+	set i = ""
+	for {
+		set i = $order(pInputs(i))
+		quit:i=""
+		set tIn = pInputs(i)
+		continue:tIn=""
+		set tRow = {}
+		set tRow.index = i
+		set tSC = ..RunTransform(pClassName, tIn, pSourceDocType, .tOut, .tErr)
+		set tRow.ran = $$$ISOK(tSC)
+		set tRow.error = $select($$$ISOK(tSC):"", 1:tErr)
+		set tRow.output = $get(tOut)
+		if $$$ISOK(tSC) {
+			set tChanges = ..ChangedFields(tIn, $get(tOut))
+			set tRow.changes = tChanges
+			set tRow.changedCount = tChanges.%Size()
+			if tChanges.%Size() > 0 set tAnyChange = 1
+		} else {
+			set tAllRan = 0
+			set tRow.changes = []
+			set tRow.changedCount = 0
+		}
+		do tResults.%Push(tRow)
+	}
+	set tRes.ran = tAllRan
+	set tRes.anyChange = tAnyChange
+	set tRes.results = tResults
+	quit tRes
+}
+
+/// Compute the (segment:field) positions whose value differs between an input HL7
+/// message and the transform's output. Used by the accuracy gate to prove the DTL
+/// actually changed something (and to show the human exactly what it touched).
+/// Returns a %DynamicArray of "SEG:field  [old] -> [new]" strings (capped).
+ClassMethod ChangedFields(pInput As %String, pOutput As %String, pMax As %Integer = 60) As %DynamicArray
+{
+	set tArr = []
+	set tI = ..Normalize(pInput, 1)     // neutralize volatile MSH-7/10 so a clock tick isn't a "change"
+	set tO = ..Normalize(pOutput, 1)
+	set tIn = ##class(DTL.Util.HL7).EnumSegments(tI, .tIseg)
+	set tOn = ##class(DTL.Util.HL7).EnumSegments(tO, .tOseg)
+	set tMax = $select(tOn>tIn:tOn, 1:tIn)
+	for s = 1:1:tMax {
+		set tIraw = $get(tIseg(s), "")
+		set tOraw = $get(tOseg(s), "")
+		set tSegName = $select($get(tOseg(s, "name"))'="":tOseg(s, "name"), 1:$get(tIseg(s, "name")))
+		continue:tSegName=""
+		continue:tIraw=tOraw         // identical segment -> nothing changed here
+		set tIsMSH = (tSegName = "MSH")
+		set tIfc = ##class(DTL.Util.HL7).FieldCount(tIraw, tIsMSH)
+		set tOfc = ##class(DTL.Util.HL7).FieldCount(tOraw, tIsMSH)
+		set tFmax = $select(tOfc>tIfc:tOfc, 1:tIfc)
+		for f = $select(tIsMSH:3, 1:1):1:tFmax {
+			set tIv = ##class(DTL.Util.HL7).FieldOf(tIraw, f, tIsMSH)
+			set tOv = ##class(DTL.Util.HL7).FieldOf(tOraw, f, tIsMSH)
+			continue:tIv=tOv
+			do tArr.%Push(tSegName _ ":" _ f _ "  [" _ tIv _ "] -> [" _ tOv _ "]")
+			if tArr.%Size() >= pMax return tArr
+		}
+	}
+	quit tArr
+}
+
 /// Render a diffs array as a compact human-readable table for feedback/logging.
 ClassMethod DiffsToText(pDiffs As %DynamicArray, pMax As %Integer = 25) As %String
 {

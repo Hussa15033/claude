@@ -1,6 +1,6 @@
 ---
 name: iris-interop-rest
-description: Building IRIS Interoperability productions and %CSP.REST APIs — business services/processes/operations, the HTTP outbound adapter (incl. parsing provider HTTP errors descriptively), FileInboundAdapter, creating CSP web apps programmatically, async dispatch into a running production, unauthenticated access, and Visual Trace deep-links. Use when wiring an Ens.Production, exposing REST endpoints, calling an external HTTP/LLM API from IRIS, ingesting/listing files, or driving a job from a UI.
+description: Building IRIS Interoperability productions and %CSP.REST APIs — business services/processes/operations, the HTTP outbound adapter (incl. parsing provider HTTP errors descriptively, 429/503 retry with exponential backoff, and provider prompt-cache wire format), FileInboundAdapter, creating CSP web apps programmatically, async dispatch into a running production, PoolSize concurrency, slow-LLM timeouts, unauthenticated access, and Visual Trace deep-links. Use when wiring an Ens.Production, exposing REST endpoints, calling an external HTTP/LLM API from IRIS, ingesting/listing files, or driving a job from a UI.
 ---
 
 # IRIS Interoperability + REST
@@ -73,17 +73,55 @@ record that produced it, and cost it from a per-model price table (USD/1M tokens
 substring-keyed, unknown→0 rather than guessing) so you can show per-request and
 running totals.
 
+**Prompt caching — cut the repeated-prefix bill in a multi-turn loop.** When a long
+static prefix (system rules + schema + spec) is re-sent on every repair/judge turn,
+mark it cacheable so the provider re-reads it at ~10% of input price:
+- **Bedrock/Anthropic Messages**: emit `system` as an ARRAY of text blocks (not a
+  flat string) and attach `cache_control:{"type":"ephemeral"}` to the LAST static
+  block — `system:[{"type":"text","text":"…big prefix…","cache_control":{"type":"ephemeral"}}]`.
+  Keep the flat-string form for small calls (e.g. a one-shot judge) where caching
+  isn't worth a breakpoint.
+- **OpenAI**: prefix caching is automatic for a stable ≥1024-token prefix — no param,
+  just keep the prefix byte-identical and FIRST.
+- Build this from the transcript: flag the turn that ends the static prefix
+  (a `CacheBreakpoint` bool on your ChatTurn), and when serializing, attach
+  `cache_control` to that block. Also stop replaying one-off bulk content (e.g. a raw
+  uploaded doc) on later turns — track where the reusable conversation starts and
+  send only from there.
+
 ### Timeouts for a slow LLM operation (don't fail a slow completion)
 The defaults are far too short for an LLM call. An `Ens.BusinessOperation` retries
 until its **`FailureTimeout`** (Host setting, default **15s**) elapses, and the
 `EnsLib.HTTP.OutboundAdapter` waits **`ResponseTimeout`** (default **30s**) for one
 HTTP read — both well under the minutes a reasoning model (gpt-5.x, o-series) can
 take, so the request fails mid-flight. Raise all THREE layers that bound the call:
-`FailureTimeout` (e.g. 600) on the operation, `ResponseTimeout` (e.g. 300) on the
-adapter, AND the BP→operation `SendRequestSync(...,timeout)` wait (e.g. 600) — the
-sync wait must exceed the operation's own budget or the BP gives up first. Set the
-first two as production `<Setting>`s; a Production.cls settings change needs a
-stop/start (not just UpdateProduction) to take effect.
+`FailureTimeout` (e.g. 600) on the operation, `ResponseTimeout` on the adapter, AND
+the BP→operation `SendRequestSync(...,timeout)` wait (e.g. 600) — the sync wait must
+exceed the operation's own budget or the BP gives up first. **ALIGN `ResponseTimeout`
+to `FailureTimeout` (both 600), don't leave it lower** (e.g. 300): a reasoning model
+can take 5+ min, and a `ResponseTimeout` shorter than the model's think time cuts
+the HTTP read mid-stream, the partial completion is discarded, and it's counted as a
+failed attempt that burns the budget. Set the first two as production `<Setting>`s;
+a Production.cls settings change needs a stop/start (not just UpdateProduction) to
+take effect.
+
+### Retry 429 / 503 with exponential backoff (don't burn an attempt)
+A rate-limit (429) or overloaded (503) is transient — retrying beats failing the
+attempt. Wrap the `SendFormDataArray` call in a small retry loop INSIDE the
+operation: on `StatusCode` 429/503 and while tries remain, `hang` a growing delay
+then resend; quit on anything else. Honour a numeric `Retry-After` response header
+when present, else exponential `2,4,8,…` capped (e.g. 30s) so you never exceed the
+host's `FailureTimeout` budget. Without this a quota blip fails the job and (under
+concurrent load) a no-backoff retry storm makes it worse. Keep the cap × max-tries
+under `FailureTimeout`.
+
+### Concurrency — PoolSize=1 serializes every job behind one worker
+An operation/BP left at `PoolSize="1"` (the default) processes one message at a
+time, so a slow LLM call on one job blocks ALL other jobs for minutes. Raise
+`PoolSize` (e.g. 4) on the LLM operation, the orchestrating BP, AND the
+`EnsLib.Testing.Service` you dispatch through, plus the production `<ActorPoolSize>`,
+so several jobs' calls run concurrently. `ActorPoolSize` alone does NOT parallelize a
+PoolSize=1 item — raise both. A PoolSize change needs a production stop/start.
 
 ### Surface HTTP errors descriptively (a 400 is not a transport failure)
 

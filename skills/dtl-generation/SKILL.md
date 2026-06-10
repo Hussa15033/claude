@@ -1,6 +1,6 @@
 ---
 name: dtl-generation
-description: Generating, compiling, and verifying InterSystems DTL (Data Transformation Language) for HL7 v2 messages — including spec-driven generation and an LLM generate→compile→verify→auto-repair loop. Use when writing DTL classes, transforming HL7 v2, building/repairing an LLM prompt for DTL, escaping XML in DTL attributes, capturing the full compile-error log, comparing transform output, or debugging silently-failing assigns. Captures DocType, segment-path, MSH-offset, repeating-field, grouped-segment and XML-entity gotchas proven against IRIS for Health.
+description: Generating, compiling, and verifying InterSystems DTL (Data Transformation Language) for HL7 v2 messages — including spec-driven generation and an LLM generate→compile→verify→auto-repair loop. Use when writing DTL classes, transforming HL7 v2, building/repairing an LLM prompt for DTL, escaping XML in DTL attributes, capturing the full compile-error log, comparing transform output, debugging silently-failing assigns, gating a candidate on SPEC CONFORMANCE (run-all-inputs + field-coverage + LLM-as-judge, not just compile+run), structuring/reviewing a spec before generating, scoring document-extraction confidence, or prompt-caching the static prefix to cut token cost. Captures DocType, segment-path, MSH-offset, repeating-field, grouped-segment and XML-entity gotchas proven against IRIS for Health.
 ---
 
 # Generating & verifying HL7 v2 DTL
@@ -119,9 +119,13 @@ specification**; you only have example **input** messages, never expected output
 - The LLM gets: the spec + the example inputs. The plan and the DTL are derived
   ENTIRELY from the spec ("there are NO example output messages; infer the output
   from the spec").
-- **Verification gate = compile + run** on a primary input (the `CompileRun`
-  policy) — there's nothing to diff against, so success means "compiles and
-  transforms the example input without error", not an exact match.
+- **Verification gate — do NOT stop at compile+run.** A bare `CompileRun` gate is
+  a trap (see "The CompileRun gate is a correctness trap" below): a DTL that
+  compiles and runs but produces WRONG output passes it, because DTL wraps every
+  path assign in a Try/Catch that swallows a bad-path error — the field is just
+  left unchanged, nothing throws. Gate on SPEC CONFORMANCE instead (run-all-inputs
+  + field-coverage + an LLM judge). The spec, not the example input, defines
+  correct behaviour.
 - After acceptance, **transform every stored input** with the final DTL so the
   user can review the produced outputs.
 - **Feedback loop without expected outputs:** the user reviews a produced output,
@@ -145,6 +149,27 @@ structured spec far better than a flat text dump:
   through it.
 - Always keep a last-ditch plain-text read so a converter failure still yields
   usable content instead of a hard error.
+
+### Score extraction CONFIDENCE and flag low-confidence specs for review
+Extraction is the first place a spec silently goes wrong, and the failures are
+invisible if you only check "did it return text": a **scanned/image PDF** yields a
+document of empty `## Page N` headers (no OCR), **multi-column** layouts scramble
+word order, **tables** collapse, a bad encoding produces mojibake. Don't trust the
+output blindly — emit a confidence signal alongside the text and route low-
+confidence specs to mandatory human review:
+- In the extractor, compute a 0–1 **confidence** + a `warnings[]` list from cheap
+  heuristics: chars-per-page (very low → likely scanned, needs OCR), fraction of
+  empty pages, whether you fell back to the weaker extractor (pypdf vs pdfplumber),
+  zero tables detected when the spec likely has mapping tables, replacement-char
+  ratio (encoding). Return it as a machine-readable header the caller strips, e.g.
+  a first line `__EXTRACT_META__{"confidence":..,"warnings":[..],"method":..}` ahead
+  of the markdown (and keep the `__EXTRACT_ERROR__<detail>` convention for hard
+  failures).
+- Persist confidence + meta on the spec record; surface it in the UI as a badge +
+  the warning list on upload and in any saved-spec picker, and **make a low-
+  confidence extraction a hard prompt to review the markdown** before it's used.
+  This, combined with the spec-structuring review gate above, closes the
+  garbage-in→wrong-DTL path you were worried about.
 
 ### Big specs WILL overflow %String — use a %Stream
 A real spec document (e.g. a 46-page HL7 guide) easily exceeds **32 000 chars**,
@@ -260,13 +285,16 @@ attribute, bad macro, missing repetition index). Don't surface that to the user 
 generated line) as a new user turn and regenerate, looping until it compiles+runs
 or `MaxAttempts` is hit. Record each round as its own attempt so the UI shows the
 repair chain (attempt 1 COMPILE_FAIL → "auto-correcting →" → attempt 2 SUCCESS).
-Keep the verbatim errors AND a short "DTL validity checklist" in the repair prompt
-(the usual causes: must be one class in the exact `Ens.DataTransformDTL` shape;
-`<transform>` needs sourceClass/targetClass/DocTypes/create/language; every
-`<assign>` needs value+property+action; literal values double-quoted inside the
-single-quoted `value='…'`; brace paths `{SEG:field(rep).comp.sub}` with rep index;
-no extra methods/`[CodeMode]`). The loop only pauses for the user once it
-compiles+runs (spec-driven `CompileRun` gate) or the budget is exhausted.
+Keep a short pointed reminder in the repair prompt (parse/SAX/unexpected-`'` →
+unescaped char; use only the listed DTL elements + HL7 paths; no extra methods/
+`[CodeMode]`) — but with a CACHED build system prompt (see "Prompt-cache the static
+prefix") DON'T re-inject the full element schema + escaping rule + HL7 schema every
+round; they're already in the cached prefix, so the repair turn carries only the
+error/finding delta. Extend the loop beyond compile/runtime: a candidate that
+compiles+runs but fails the SPEC-CONFORMANCE gate (see "The CompileRun gate is a
+correctness trap") is also a repair trigger — feed the judge's concrete violations
+back via a gate-fix prompt. The loop pauses for the user only on spec-conformance
+SUCCESS, budget/cost-cap exhaustion, or a plateau/identical-candidate stop.
 
 ## Multi-provider LLM backend (OpenAI / Bedrock / mock)
 The generate→compile→repair loop is provider-agnostic — the same prompts work
@@ -295,6 +323,84 @@ in that error branch too, and prefer the parsed JSON over the transport text.
 
 `CompileOnly` < `CompileRun` (objective gates) < `CompileMatch` (exact, after
 normalization) < `CompileMatchTolerance` (score ≥ threshold, ignoring volatile
-MSH-7 time / MSH-10 control id). Add cycle (identical-candidate) and plateau
-(no-score-improvement) guards so the loop can't burn the whole attempt budget on
-an unsatisfiable pair.
+MSH-7 time / MSH-10 control id) < `SpecConformance` (the accuracy gate below — the
+right gate when you have a spec but no expected outputs). Add cycle
+(identical-candidate, hash the candidate) and plateau (no-score-improvement for K
+rounds) guards so the loop can't burn the whole attempt budget on an unsatisfiable
+candidate, plus a per-job **cost cap** circuit-breaker (stop + pause for the user
+when accumulated USD crosses a ceiling).
+
+## The CompileRun gate is a correctness trap — gate on SPEC CONFORMANCE
+For spec-driven generation (no expected outputs) the tempting gate is "it compiled
+and ran without error". That is **actively misleading**: DTL wraps every path-based
+`<assign>` in a Try/Catch (Gotcha 1/2/3), so a wrong target path, a missing
+repetition index, or a bad group prefix **does not throw** — the assign is silently
+skipped and the field is left unchanged. So a DTL that implements 2 of 5 spec rules
+(or 0 of 5) compiles, runs, and the naive gate reports SUCCESS. The human then
+rubber-stamps a candidate the machine already blessed. Replace it with a three-part
+**accuracy gate** that checks the candidate against the SPEC, not against "did it
+crash":
+1. **Run ALL stored inputs, not just the primary.** The example input the gate runs
+   on may not exercise every rule; a DTL must not throw on the others. Persist every
+   input (`^App.JobInputs(jobId,n)`) and run the compiled class over each.
+2. **Field-coverage / did-it-change check.** Diff each output against its input and
+   assert the DTL actually CHANGED fields. A spec-driven transform whose output is
+   byte-identical to the input means every assign was swallowed — surface the exact
+   changed `(SEG:field old→new)` set both as a gate signal and to show the human what
+   the DTL touched. (Neutralize volatile MSH-7/MSH-10 first so a clock tick isn't a
+   "change".)
+3. **LLM-as-judge conformance.** Give a fresh-perspective grader {structured spec,
+   input, produced output} and ask "does the output satisfy each rule?" → strict JSON
+   `{conforms, score, violations:[{rule,detail,severity}]}`. This catches the
+   silent-missing-change case directly. Make it a SEPARATE call (not part of the
+   build transcript) so it can't be cached/confused with the build conversation, and
+   tag its turn as auxiliary so it shows in the UI but is never re-sent to the build
+   model as if the model had said it.
+Pass = ran-on-all ∧ changed-something ∧ judge.conforms (no HIGH violations). On
+fail, feed the judge's concrete violations + coverage gaps back as the repair turn
+("fix these specific unmet rules") — far more useful than "try again". This is the
+single highest-value accuracy change: it turns "compiles" into "probably correct",
+and it is what makes the human review an INFORMED candidate. Verified live: a
+candidate that compiled+ran but missed the facility remap + version bump scored
+0.50 from the judge → MISMATCH → auto-repair → next attempt conformed (1.0); the old
+CompileRun gate passed the wrong one.
+
+## Structure + human-review the spec BEFORE generating (catch errors earliest)
+The cheapest place to catch a wrong transformation is before any DTL exists. Insert
+a spec-structuring step as the FIRST gate (job state `STRUCTURING → AWAITING_SPEC`,
+ahead of planning):
+- Ask the LLM to rewrite the RAW extracted spec (which carries PDF/extraction noise)
+  into an explicit, numbered, testable **rule list as STRICT JSON**, each rule with
+  **provenance**: the verbatim `sourceQuote` it was derived from + an `inferred`
+  flag, plus a list of `ambiguities` that need a human decision. Render it to
+  markdown for the reviewer AND keep the JSON provenance for the UI.
+- **Show original vs structured side-by-side, colour-coded by provenance** (grounded
+  / inferred / no-source = possible hallucination), let the human EDIT the structured
+  spec, then approve. Whatever they approve becomes the AUTHORITY for planning,
+  generation, repair, and the judge — so an extraction or interpretation error is
+  corrected once, here, instead of propagating into a wrong DTL.
+- This makes the structured spec (not the raw document, and not the example input)
+  the single source of truth. The build system prompt embeds the APPROVED spec and
+  says "implement EVERY rule; the example input is for testing only — the SPEC
+  defines correct behaviour."
+- On reject-at-spec, re-run the structuring with the feedback appended (a different
+  step from rejecting a built attempt — branch on job status).
+
+## Prompt-cache the static prefix; never re-send the raw spec each round
+Token waste in the repair loop comes from re-billing an unchanging prefix on every
+turn. Two moves:
+- **One cacheable BUILD SYSTEM PROMPT** carrying everything stable across the build
+  conversation — the DTL element schema, the XML-escaping rule, the HL7 message
+  schema, and the approved structured spec — emitted ONCE and marked as a provider
+  cache breakpoint (Anthropic `cache_control:{type:"ephemeral"}` on the system
+  block; OpenAI caches a stable ≥1024-token prefix automatically). Subsequent
+  repair/judge turns re-read it from cache at ~10% of input price.
+- **Don't replay the raw spec.** The one-off spec-structuring exchange carries the
+  big RAW document; keep it for UI visibility but exclude it from build/repair calls
+  (track a `BuildStartIndex` and only send turns from there). The build conversation
+  runs on the compact STRUCTURED spec instead.
+- **Lean repair prompts.** Once the element schema + escaping rule + HL7 schema live
+  in the cached system prompt, do NOT re-inject them into CompileFix/RuntimeFix/
+  GateFix prompts — send only the error/finding delta. (Earlier this skill said to
+  restate the full schema in the repair prompt; with a cached system prefix that is
+  pure waste — the delta is enough.)

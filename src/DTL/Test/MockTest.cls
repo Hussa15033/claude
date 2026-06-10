@@ -18,8 +18,11 @@ ClassMethod CallMock(pUserText As %String, pPrior As %Integer, pPort As %Integer
 	set arr = []
 	do arr.%Push({"role": "system", "content": "sys"})
 	do arr.%Push({"role": "user", "content": (pUserText)})
+	// Prior attempts are DTL replies — they MUST look like a DTL (contain
+	// <transform>) so the mock's build-curriculum counter recognises them as
+	// generation attempts (it skips structuring-JSON and judge turns).
 	for i = 1:1:pPrior {
-		do arr.%Push({"role": "assistant", "content": "prev attempt"})
+		do arr.%Push({"role": "assistant", "content": "<transform>prev attempt</transform>"})
 		do arr.%Push({"role": "user", "content": "fix it"})
 	}
 	set req = {"model": "mock", "messages": (arr)}

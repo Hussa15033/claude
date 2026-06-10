@@ -26,8 +26,12 @@ Property ApiKey As %String(MAXLEN = 512);
 /// Sampling temperature (0 = deterministic, best for code generation).
 Property Temperature As %Numeric [ InitialExpression = 0 ];
 
-/// Max tokens for the completion.
-Property MaxTokens As %Integer [ InitialExpression = 4096 ];
+/// Max tokens for the completion. Default raised to 16384: a 4096 cap silently
+/// TRUNCATED large structured replies (e.g. the concise-spec JSON for a big
+/// interface document, or a DTL class for a wide message), producing a reply cut
+/// off mid-object -> invalid JSON -> "did not return structured JSON". 16384 is
+/// comfortably within every supported model's output budget; callers can override.
+Property MaxTokens As %Integer [ InitialExpression = 16384 ];
 
 /// Full conversation so far: [system, user1, assistant1, user2, ...].
 Property Transcript As list Of DTL.Msg.ChatTurn;

@@ -46,18 +46,36 @@ Method OnProcessInput(pInput As %Stream.Object, Output pOutput As %RegisteredObj
 			set tDoc.Token = tToken
 			set tDoc.CreatedAt = ##class(DTL.Data.Job).Now()
 		}
-		// Keep the ORIGINAL upload filename (set by /upload); only fall back to the
-		// on-disk name if none was recorded, so the saved-spec picker shows real names.
-		if tDoc.FileName = "" set tDoc.FileName = tBase
+		// ORIGINAL filename: the on-disk file is "<token>.<ext>", so prefer the
+		// authoritative name the REST /upload recorded in ^DTL.SpecName(token). Fall
+		// back to any name already on the record, and only as a last resort to the
+		// on-disk token name. This guarantees the saved-spec picker shows the real
+		// uploaded filename regardless of record-commit timing across processes.
+		set tOrig = $get(^DTL.SpecName(tToken))
+		if tOrig '= "" {
+			set tDoc.FileName = tOrig
+		} elseif tDoc.FileName = "" {
+			set tDoc.FileName = tBase
+		}
 
-		// Extract text.
-		set tText = ##class(DTL.Util.DocExtract).FromFile(tPath, .tErr)
+		// Extract text + confidence metadata.
+		set tText = ##class(DTL.Util.DocExtract).FromFile(tPath, .tErr, .tMeta)
 		do tDoc.Text.Clear()
 		if tErr '= "" {
 			set tDoc.Status = "ERROR", tDoc.Error = tErr
 		} else {
 			set tDoc.Status = "READY"
 			do tDoc.Text.Write(tText)
+			set tDoc.ExtractMeta = $extract(tMeta, 1, 4000)
+			// Parse the confidence out of the meta JSON (default 1 if absent).
+			set tDoc.Confidence = 1
+			if tMeta '= "" {
+				try {
+					set tMObj = ##class(%DynamicAbstractObject).%FromJSON(tMeta)
+					if tMObj.confidence '= "" set tDoc.Confidence = +tMObj.confidence
+				} catch {}
+			}
+			$$$LOGINFO("Spec '" _ tToken _ "' extracted (confidence " _ tDoc.Confidence _ ", method " _ $piece($piece(tMeta, """method"":""", 2), """", 1) _ ")")
 		}
 		set tSC = tDoc.%Save()
 		$$$LOGINFO("Spec '" _ tToken _ "' -> " _ tDoc.Status _ " (" _ tDoc.Text.Size _ " chars)")

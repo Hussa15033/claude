@@ -1,5 +1,7 @@
-/// Response from <class>DTL.Op.LLMConnector</class> carrying the assistant's
-/// reply and the DTL class extracted from it (markdown fences stripped).
+/// Response from <class>DTL.Op.LLMConnector</class> — a PURE API connector. It
+/// carries the assistant's RAW reply plus transport metadata only. It does NOT
+/// extract or validate a DTL class (or anything else) from the payload; the caller
+/// (business process / service) is responsible for all content processing.
 Class DTL.Msg.LLMResponse Extends Ens.Response
 {
 
@@ -7,18 +9,14 @@ Property JobId As %String(MAXLEN = 64);
 
 Property Attempt As %Integer;
 
-/// True when the HTTP call returned 2xx and a class definition was extracted.
+/// True when the HTTP call returned 2xx AND the model produced non-empty content.
+/// It does NOT imply the content is a valid DTL class — that's the caller's call.
 Property Ok As %Boolean [ InitialExpression = 0 ];
 
 Property HttpStatus As %Integer;
 
-/// Fence-stripped class source, ready for $system.OBJ.LoadStream.
-Property ExtractedClass As %Stream.GlobalCharacter;
-
-/// Class name parsed from "Class X Extends ...".
-Property ClassName As %String(MAXLEN = 220);
-
-/// Full assistant message content (for debugging / trace).
+/// Full assistant message content — the ONLY payload field. The caller extracts a
+/// DTL class / parses JSON / etc. from this.
 Property RawContent As %Stream.GlobalCharacter;
 
 /// stop | length | content_filter | ...

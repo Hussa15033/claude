@@ -34,9 +34,21 @@ ClassMethod StartJob(pPayload As %DynamicObject, Output pJobId As %String, Outpu
 			set pSC = $$$ERROR($$$GeneralError, "At least one example INPUT message is required.")
 			quit
 		}
-		set tSpec = pPayload.inputSpec
+		// The spec can be supplied as raw text (inputSpec) OR — preferred — as a saved
+		// upload token (specToken) whose APPROVED CONCISE spec we reuse directly.
+		set tSpecToken = pPayload.specToken
+		set tConcise = "", tConciseProv = ""
+		if tSpecToken '= "" {
+			set tSDoc = ##class(DTL.Data.SpecDoc).OpenByToken(tSpecToken, .sdsc)
+			if $isobject(tSDoc) {
+				set tConcise = tSDoc.ConciseStr()
+				set tConciseProv = tSDoc.ConciseProvStr()
+				if $zstrip(tSDoc.TextStr(), "<>W") '= "" set tSpec = tSDoc.TextStr()
+			}
+		}
+		if $zstrip($get(tSpec), "<>W") = "" set tSpec = pPayload.inputSpec
 		if $zstrip(tSpec, "<>W") = "" {
-			set pSC = $$$ERROR($$$GeneralError, "An input specification (text or document) is required.")
+			set pSC = $$$ERROR($$$GeneralError, "An input specification (text, document, or saved spec) is required.")
 			quit
 		}
 		set tOut = tIn   // no expected output; the primary input is also the run target
@@ -60,9 +72,19 @@ ClassMethod StartJob(pPayload As %DynamicObject, Output pJobId As %String, Outpu
 		set tJob.Status = "QUEUED"
 		set tJob.InputName = tName
 		do tJob.InputSpec.Write(tSpec)
+		// If we have an APPROVED concise spec from the upload, seed it as the job's
+		// structured spec so we skip the in-job structuring step entirely.
+		set tHaveConcise = ($zstrip(tConcise, "<>W") '= "")
+		if tHaveConcise {
+			do tJob.StructuredSpec.Write(tConcise)
+			if tConciseProv '= "" do tJob.SpecProvenance.Write(tConciseProv)
+		}
 		set tJob.MaxAttempts = $select(pPayload.maxAttempts'="":+pPayload.maxAttempts, 1:5)
-		// Spec-driven jobs gate on compile+run (no expected output to diff).
-		set tJob.SuccessPolicy = "CompileRun"
+		// Spec-driven jobs gate on SPEC CONFORMANCE (compile + run-all + coverage +
+		// LLM judge), not merely compile+run — see StepEngine.AccuracyGate.
+		set tJob.SuccessPolicy = "SpecConformance"
+		// Per-job cost ceiling (USD); 0 = no cap. Circuit-breaker for the repair loop.
+		set tJob.CostCap = $select(pPayload.costCap'="":+pPayload.costCap, 1:0)
 		set tJob.Provider = pPayload.provider
 		set tJob.Model = pPayload.model   // store the model (NOT the key) for display
 		set tJob.ParentJobId = pPayload.parentJobId
@@ -104,9 +126,14 @@ ClassMethod StartJob(pPayload As %DynamicObject, Output pJobId As %String, Outpu
 				set tJob.LastError = "Dispatch failed: " _ $system.Status.GetErrorText(pSC)
 				do tJob.%Save()
 			}
-		} else {
-			// ----- gated path: run the PLAN step now; UI approves to continue -----
+		} elseif tHaveConcise {
+			// ----- preferred path: the APPROVED concise spec (reviewed at upload) is
+			// already the authority — go straight to planning, no in-job structuring. -----
 			set pSC = ##class(DTL.Service.StepEngine).Plan(tJob)
+		} else {
+			// ----- fallback (typed-text spec, never reviewed at upload): structure it
+			// in-job so the user still gets the early spec-review checkpoint. -----
+			set pSC = ##class(DTL.Service.StepEngine).StructureSpec(tJob)
 		}
 	} catch ex {
 		set pSC = ex.AsStatus()
@@ -159,14 +186,26 @@ ClassMethod ExtraExamplesText(pInputs As %List, pOutputs As %List) As %String
 }
 
 /// Advance a gated job one step in response to a UI action.
-///   action="approve" (approve the plan) or "accept" (accept the pending attempt)
-///   action="reject"  with pFeedback -> regenerate addressing the feedback
-ClassMethod Continue(pJobId As %String, pAction As %String, pFeedback As %String = "", Output pSC As %Status, pPlanAdditions As %String = "") As %Status
+///   action="approve-spec" (approve/edit the structured spec) -> plan
+///   action="approve"      (approve the plan) -> generate
+///   action="accept"       (accept the pending attempt) -> success
+///   action="reject"       with pFeedback -> regenerate addressing the feedback
+/// pSpecEdit (optional) is the human's edited structured-spec markdown.
+ClassMethod Continue(pJobId As %String, pAction As %String, pFeedback As %String = "", Output pSC As %Status, pPlanAdditions As %String = "", pSpecEdit As %String = "") As %Status
 {
 	set pSC = $$$OK
 	set tJob = ##class(DTL.Data.Job).OpenByJobId(pJobId, .sc)
 	if '$isobject(tJob) { set pSC = $$$ERROR($$$GeneralError, "No job '" _ pJobId _ "'") quit pSC }
-	if pAction = "approve" {
+	if pAction = "approve-spec" {
+		// The human reviewed (and possibly edited) the structured spec. Persist their
+		// version as the authority, then run the plan step. This is the early
+		// error-catch: whatever they approve here is exactly what the DTL implements.
+		if $zstrip(pSpecEdit, "<>W") '= "" {
+			do tJob.StructuredSpec.Clear()  do tJob.StructuredSpec.Write(pSpecEdit)
+			do tJob.%Save()
+		}
+		set pSC = ##class(DTL.Service.StepEngine).Plan(tJob)
+	} elseif pAction = "approve" {
 		// Fold any user-added plan items into the conversation + stored plan so the
 		// generation step (and the visible plan) include them.
 		if $zstrip(pPlanAdditions, "<>W") '= "" {
@@ -178,7 +217,15 @@ ClassMethod Continue(pJobId As %String, pAction As %String, pFeedback As %String
 	} elseif pAction = "accept" {
 		set pSC = ##class(DTL.Service.StepEngine).Accept(tJob)
 	} elseif pAction = "reject" {
-		set pSC = ##class(DTL.Service.StepEngine).Reject(tJob, pFeedback)
+		// Context-sensitive reject: at the SPEC gate, re-structure; otherwise it's an
+		// attempt rejection that regenerates the DTL.
+		if tJob.Status = "AWAITING_SPEC" {
+			do tJob.AddTurn("user", "The reviewer rejected the structured specification with this feedback; produce a corrected structured spec (same strict JSON format):" _ $char(10) _ pFeedback)
+			do tJob.%Save()
+			set pSC = ##class(DTL.Service.StepEngine).StructureSpecRetry(tJob)
+		} else {
+			set pSC = ##class(DTL.Service.StepEngine).Reject(tJob, pFeedback)
+		}
 	} else {
 		set pSC = $$$ERROR($$$GeneralError, "Unknown action '" _ pAction _ "'")
 	}

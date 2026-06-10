@@ -96,17 +96,26 @@ Method OnRequest(pRequest As DTL.Msg.ForgeRequest, Output pResponse As Ens.Respo
 				do ..JobAttempt(tAttempt, "LLM_ERROR", 0, 0, 0, 0, "LLM transport error: "_$system.Status.GetErrorText(tSC))
 				continue
 			}
+			// Transport / empty-content failure from the (pure) connector.
 			if '$isobject(tLLMResp) || 'tLLMResp.Ok {
 				set tErr = $select($isobject(tLLMResp):tLLMResp.ErrorText, 1:"no response")
-				$$$LOGWARNING("LLM unusable reply: "_tErr)
+				$$$LOGWARNING("LLM call problem: "_tErr)
 				set ..FinalVerdict = "LLM_ERROR"
-				do ..JobAttempt(tAttempt, "LLM_ERROR", 0, 0, 0, 0, "Unusable LLM reply: "_tErr)
+				do ..JobAttempt(tAttempt, "LLM_ERROR", 0, 0, 0, 0, "LLM call problem: "_tErr)
+				continue
+			}
+
+			// CALLER-side processing: extract the DTL class from the raw reply.
+			set tRaw = ..StreamToString(tLLMResp.RawContent)
+			set tCandidate = ##class(DTL.Util.Extractor).Extract(tRaw, .tCN, .tValid)
+			if 'tValid {
+				$$$LOGWARNING("Reply did not contain a valid DTL class")
+				set ..FinalVerdict = "LLM_ERROR"
+				do ..JobAttempt(tAttempt, "LLM_ERROR", 0, 0, 0, 0, "Reply did not contain a valid DTL class.")
 				// Feed a corrective instruction and retry.
 				do ..AddTurn("user", "Your previous reply did not contain a valid DTL class. Output ONLY a complete class named '"_tClassName_"' as specified.")
 				continue
 			}
-
-			set tCandidate = ..StreamToString(tLLMResp.ExtractedClass)
 			// Record the assistant turn (the cleaned class) for the transcript.
 			do ..AddTurn("assistant", tCandidate)
 

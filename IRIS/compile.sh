@@ -4,6 +4,11 @@
 # every class (bootstrap compile, then the Installer load with the production
 # NOT started). Run after editing any .cls file.
 #
+# This is an INCREMENTAL compile (LoadDir adds/updates only). If you DELETED a
+# class member or a whole .cls and need to evict the stale COMPILED artifact, run
+# IRIS/run.sh instead — it purges the DTL.* package (keeping data) for a true
+# clean-slate recompile. See the CLEAN-SLATE COMPILE note in IRIS/run.sh.
+#
 # Usage: IRIS/compile.sh [container-name]
 #
 # Windows note: if you hit "#5007 directory invalid" or "syntax error near do\r",

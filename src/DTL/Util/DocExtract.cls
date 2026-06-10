@@ -30,10 +30,13 @@ ClassMethod PythonExe() As %String
 }
 
 /// Extract text from the file at pPath via the irispython subprocess. Returns the
-/// text; sets pError on failure.
-ClassMethod FromFile(pPath As %String, Output pError As %String) As %String
+/// markdown text; sets pError on failure. pMeta (byref) receives the extraction
+/// confidence metadata JSON (see dtl_extract.py: {confidence, pages, chars,
+/// tables, emptyPages, method, warnings}) so the caller can flag a low-confidence
+/// extraction for mandatory human review.
+ClassMethod FromFile(pPath As %String, Output pError As %String, Output pMeta As %String) As %String
 {
-	set pError = ""
+	set pError = "", pMeta = ""
 	try {
 		set tOut = ##class(%File).TempFilename("txt")
 		set tHelper = ..HelperDir()
@@ -46,6 +49,14 @@ ClassMethod FromFile(pPath As %String, Output pError As %String) As %String
 		if $extract(tText, 1, 17) = "__EXTRACT_ERROR__" {
 			set pError = $extract(tText, 18, *)
 			return ""
+		}
+		// Strip the machine-readable metadata header line if present.
+		if $extract(tText, 1, 16) = "__EXTRACT_META__" {
+			set tNL = $find(tText, $char(10))
+			if tNL > 0 {
+				set pMeta = $extract(tText, 17, tNL - 2)   // between sentinel and the newline
+				set tText = $extract(tText, tNL, *)
+			}
 		}
 		if (tText = "") && (tRC '= 0) {
 			set pError = "extractor subprocess failed (rc=" _ tRC _ ")"

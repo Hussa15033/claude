@@ -48,9 +48,9 @@ Property BedrockRegion As %String [ InitialExpression = "us-east-1" ];
 /// SSL config name reused for the HTTPS Bedrock connection.
 Property BedrockSSLConfig As %String [ InitialExpression = "DTLOpenAISSL" ];
 
-/// Default Bedrock Anthropic model id — a regional INFERENCE PROFILE (on-demand
-/// invoke of a bare foundation-model id is not supported for these models).
-Property BedrockModel As %String [ InitialExpression = "us.anthropic.claude-opus-4-8-v1:0" ];
+/// Default Bedrock Anthropic model id — the GLOBAL cross-region INFERENCE PROFILE
+/// (on-demand invoke of a bare foundation-model id is not supported for these models).
+Property BedrockModel As %String [ InitialExpression = "global.anthropic.claude-opus-4-8" ];
 
 Parameter SETTINGS = "Mode:Basic,ChatPath:Basic,Model:Basic,OpenAIHost:Basic,OpenAIPort:Basic,OpenAISSLConfig:Basic,MockHost:Basic,MockPort:Basic,BedrockRegion:Basic,BedrockSSLConfig:Basic,BedrockModel:Basic,ApiKeyCredentials:Basic:credentialsSelector";
 
@@ -80,26 +80,45 @@ Method ChatCompletion(pReq As DTL.Msg.LLMRequest, Output pResp As DTL.Msg.LLMRes
 		set tIsBedrock = (tProvider = "bedrock")
 		set tModel = $select(tIsBedrock:$select(pReq.Model'="":pReq.Model, 1:..BedrockModel), pReq.Model'="":pReq.Model, 1:..Model)
 		set tPath = ..ChatPath
+		// Callers may request a very large output budget (e.g. spec generation asks for
+		// 64K+ so a big spec is never truncated). Clamp to what the model actually
+		// accepts so an over-large request can't 400 — the clamp only ever LOWERS the
+		// value, never raises a caller's smaller request.
+		set tMaxTokens = ..ClampMaxTokens(+pReq.MaxTokens, tProvider, tModel)
 
 		if tIsBedrock {
 			// Bedrock: Anthropic Messages format — system is separated from messages,
 			// and there is no "model" in the body (it's in the URL path).
-			set tSystem = ""
+			// PROMPT CACHING: the big static prefix (DTL element schema + HL7 schema +
+			// approved spec) lives in the system turn(s). We emit `system` as an ARRAY
+			// of text blocks and attach a cache_control breakpoint to the block carrying
+			// the flagged turn, so every later repair/judge call re-reads that prefix
+			// from cache (~10% of the input price) instead of paying full price again.
+			set tSysBlocks = []
+			set tSysText = ""        // fallback flat string if no breakpoint is flagged
+			set tHaveBreak = 0
 			set tMessages = []
 			for i = 1:1:pReq.Transcript.Count() {
 				set tTurn = pReq.Transcript.GetAt(i)
 				if tTurn.Role = "system" {
-					set tSystem = tSystem _ $select(tSystem'="":$char(10,10), 1:"") _ tTurn.Content
+					set tBlk = {"type": "text", "text": (tTurn.Content)}
+					if tTurn.CacheBreakpoint { do tBlk.%Set("cache_control", {"type": "ephemeral"})  set tHaveBreak = 1 }
+					do tSysBlocks.%Push(tBlk)
+					set tSysText = tSysText _ $select(tSysText'="":$char(10,10), 1:"") _ tTurn.Content
 				} else {
 					do tMessages.%Push({"role": (tTurn.Role), "content": (tTurn.Content)})
 				}
 			}
 			set tBody = {
 				"anthropic_version": "bedrock-2023-05-31",
-				"max_tokens": (pReq.MaxTokens),
+				"max_tokens": (tMaxTokens),
 				"messages": (tMessages)
 			}
-			if tSystem '= "" set tBody.system = tSystem
+			// Use the block array (with cache_control) when we flagged a breakpoint;
+			// otherwise the simple string form keeps small calls (e.g. the judge) lean.
+			if tSysBlocks.%Size() > 0 {
+				set tBody.system = $select(tHaveBreak:tSysBlocks, 1:tSysText)
+			}
 			set tJsonBody = tBody.%ToJSON()
 			// InvokeModel path; the model id (or inference-profile id) is URL-encoded.
 			set tPath = "/model/" _ ..UrlEncode(tModel) _ "/invoke"
@@ -124,10 +143,10 @@ Method ChatCompletion(pReq As DTL.Msg.LLMRequest, Output pResp As DTL.Msg.LLMRes
 				"messages": (tMessages)
 			}
 			if tNewOpenAI {
-				set tBody."max_completion_tokens" = pReq.MaxTokens
+				set tBody."max_completion_tokens" = tMaxTokens
 				// omit temperature — these models only support the default (1)
 			} else {
-				set tBody."max_tokens" = pReq.MaxTokens
+				set tBody."max_tokens" = tMaxTokens
 				set tBody.temperature = pReq.Temperature
 			}
 			set tJsonBody = tBody.%ToJSON()
@@ -160,7 +179,25 @@ Method ChatCompletion(pReq As DTL.Msg.LLMRequest, Output pResp As DTL.Msg.LLMRes
 		// pData via $ORDER and writes each node to EntityBody. pOp must be "Post".
 		kill tData
 		set tData(1) = tJsonBody
-		set tSC = ..Adapter.SendFormDataArray(.tHttpResp, "Post", tHttpReq, "", .tData, tPath)
+		// RATE-LIMIT / TRANSIENT RETRY with exponential backoff. A 429 (rate limit /
+		// quota) or 503 (overloaded) is usually transient; rather than burning an
+		// attempt, retry a few times with growing delay, honouring a Retry-After
+		// header when the provider sends one. Capped so we never exceed the host's
+		// FailureTimeout budget.
+		set tMaxRetry = 4, tTry = 0
+		for {
+			set tTry = tTry + 1
+			set tSC = ..Adapter.SendFormDataArray(.tHttpResp, "Post", tHttpReq, "", .tData, tPath)
+			set tCode = $select($isobject($get(tHttpResp)):+tHttpResp.StatusCode, 1:0)
+			// Retry only on 429/503, only while we have budget.
+			if ((tCode = 429) || (tCode = 503)), (tTry <= tMaxRetry) {
+				set tWait = ..RetryDelay(tTry, $select($isobject($get(tHttpResp)):tHttpResp, 1:""))
+				$$$LOGWARNING("LLM HTTP " _ tCode _ " (attempt " _ tTry _ "/" _ tMaxRetry _ ") — backing off " _ tWait _ "s")
+				hang tWait
+				continue
+			}
+			quit
+		}
 		if $$$ISERR(tSC) {
 			// A non-2xx HTTP status (e.g. 400 for a bad model) surfaces here as an
 			// <Ens>ErrHTTPStatus transport error AND, usually, a populated response
@@ -231,22 +268,23 @@ Method ChatCompletion(pReq As DTL.Msg.LLMRequest, Output pResp As DTL.Msg.LLMRes
 		do pResp.RawContent.Write(tContent)
 
 		if tContent = "" {
-			set pResp.ErrorText = "Empty/unparseable completion content"
+			set pResp.ErrorText = "The model returned no content (HTTP " _ pResp.HttpStatus _ ", finish_reason '" _ pResp.FinishReason _ "')."
 			set pResp.Ok = 0
 			quit
 		}
 
-		// --- Extract the DTL class from the reply ---
-		set tClassSrc = ##class(DTL.Util.Extractor).Extract(tContent, .tClassName, .tValid)
-		do pResp.ExtractedClass.Write(tClassSrc)
-		set pResp.ClassName = tClassName
-		set pResp.Ok = tValid
-		if 'tValid set pResp.ErrorText = "Reply did not contain a valid DTL class definition"
+		// PURE CONNECTOR: the API call succeeded and returned assistant content.
+		// We do NOT inspect, validate, or extract anything from the payload here —
+		// that is the CALLER's responsibility (extracting a DTL class, parsing a
+		// concise-spec/judge JSON, etc. live in the business-process / service layer
+		// via DTL.Util.Extractor / DTL.Util.LLM.ParseJSON). Ok simply means "the
+		// transport succeeded and the model produced text".
+		set pResp.Ok = 1
 	} catch ex {
 		set pResp.Ok = 0
-		set pResp.ErrorText = "Exception: " _ ex.DisplayString()
+		set pResp.ErrorText = "Exception parsing LLM response: " _ ex.DisplayString()
 	}
-	// Always return OK; the BP decides what to do based on pResp.Ok.
+	// Always return OK; the caller decides what to do based on pResp.Ok / RawContent.
 	quit $$$OK
 }
 
@@ -314,6 +352,29 @@ ClassMethod DescribeTransport(pStatusTxt As %String, pProvider As %String) As %S
 	quit $extract(tOut, 1, 1900)
 }
 
+/// Clamp a requested output-token budget to the model's real ceiling so an
+/// over-large request can't be rejected with a 400. Only ever LOWERS the value.
+/// Ceilings reflect each family's documented max completion tokens; unknown models
+/// fall back to a safe 16384. (Mock has no real limit, so pass the request through.)
+ClassMethod ClampMaxTokens(pRequested As %Integer, pProvider As %String, pModel As %String) As %Integer
+{
+	if pRequested '> 0 quit 4096
+	set tLower = $zconvert(pModel, "L")
+	if pProvider = "mock" quit pRequested        // mock honours whatever we ask
+	if pProvider = "bedrock" {
+		// Anthropic Claude on Bedrock: Opus/Sonnet 4.x support 64K output tokens.
+		set tCap = 65536
+	} elseif (tLower [ "gpt-5") || (tLower [ "gpt-6") || (tLower ? 1"o1".e) || (tLower ? 1"o3".e) || (tLower ? 1"o4".e) {
+		// OpenAI reasoning family: large completion budgets (100K+); cap generously.
+		set tCap = 100000
+	} elseif (tLower [ "gpt-4o") || (tLower [ "gpt-4.1") || (tLower [ "gpt-4-turbo") {
+		set tCap = 16384
+	} else {
+		set tCap = 16384
+	}
+	quit $select(pRequested > tCap:tCap, 1:pRequested)
+}
+
 /// Percent-encode a Bedrock model/inference-profile id for use in the URL path
 /// (the colons in ids like "us.anthropic.claude-opus-4-8-v1:0" must be escaped).
 ClassMethod UrlEncode(pVal As %String) As %String
@@ -328,6 +389,20 @@ ClassMethod UrlEncode(pVal As %String) As %String
 		}
 	}
 	quit out
+}
+
+/// Backoff delay (seconds) for retry attempt N: honour a numeric Retry-After
+/// header if the provider sent one, else exponential 2,4,8,16 capped at 30s.
+ClassMethod RetryDelay(pTry As %Integer, pResp As %Net.HttpResponse) As %Integer
+{
+	if $isobject(pResp) {
+		try {
+			set tRA = pResp.GetHeader("Retry-After")
+			if (tRA '= ""), (tRA = +tRA), (+tRA > 0) return $select(+tRA>30:30, 1:+tRA)
+		} catch {}
+	}
+	set tWait = (2 ** pTry)
+	return $select(tWait>30:30, 1:tWait)
 }
 
 /// Resolve the API key from the configured Ens credentials entry.

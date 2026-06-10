@@ -1,6 +1,6 @@
 ---
 name: intersystems-ui-theme
-description: Building a browser UI with an InterSystems / IRIS look-and-feel — light, dark+glassmorphism, Material matte, or dark blue-forward flat — served same-origin by IRIS from a CSP static web application. Use when creating a front-end for an IRIS app, theming with InterSystems colours (green or IRIS blue)/logo, choosing dark vs light, deriving a REST API base path from the UI path, polling a long-running IRIS job, line-numbering code boxes, line-diff highlighting, copy buttons, a tabbed working pane, a saved-artifact picker + reader modal, an editable LLM plan, rendering a side-by-side HL7/text diff (scroll-synced panes, red-removed/green-added char highlighting), or giving async action buttons a spinner busy state. Includes palettes, logo URL, and a self-contained single-file SPA pattern.
+description: Building a browser UI with an InterSystems / IRIS look-and-feel — light enterprise app-shell (dark-blue sidebar + KPI cards), light, dark+glassmorphism, Material matte, or dark blue-forward flat — served same-origin by IRIS from a CSP static web application. Use when creating a front-end for an IRIS app, theming with InterSystems colours (blue #343699 / green #00b6b0, or green #1a8f6c / IRIS blue #2596be)/logo, choosing dark vs light, building a sidebar+workspace app-shell with KPI cards / progress bars / a mapping table / a validation checklist, deriving a REST API base path from the UI path, polling a long-running IRIS job, rendering a build progress bar with an elapsed timer, markdown-rendering an LLM-returned plan, line-numbering code boxes, line-diff highlighting, copy buttons, a tabbed working pane, a saved-artifact picker + reader modal, an editable LLM plan, rendering a side-by-side HL7/text diff (scroll-synced panes, red-removed/green-added char highlighting), giving async action buttons a spinner busy state, building a human-in-the-loop review gate (original-vs-structured side-by-side with provenance highlighting, an accuracy-gate verdict card, an extraction-confidence badge), or markdown-rendering an LLM plan. Includes palettes, logo URL, and a self-contained single-file SPA pattern.
 ---
 
 # InterSystems-themed web UI (served by IRIS)
@@ -10,9 +10,60 @@ and is served by IRIS itself (same-origin as the REST API, so no CORS).
 
 ## Palette & logo
 
-InterSystems IRIS primary brand colour is **`#2596be`** (IRIS blue).
+InterSystems IRIS primary brand colour is **`#2596be`** (IRIS blue). The broader
+InterSystems brand also uses a deep **blue `#343699`** + **teal-green `#00b6b0`**
+pairing (see the light enterprise variant below) — both are "correct"; pick one
+pairing and stay consistent.
 
-Light palette:
+**Light ENTERPRISE app-shell variant** (the current "InterSystems AI DTL Generator"
+look — a dark-blue sidebar + soft-grey workspace + white bordered panels; blue for
+nav/headings/primary actions, green for active/approval/success/progress). This is
+the most "product-grade" of the variants; lead with it for a dense form-based
+developer tool. Full palette:
+```css
+:root{
+  --iris-blue:#343699; --iris-green:#00b6b0;
+  --iris-blue-900:#17194f; --iris-blue-800:#242679;        /* sidebar / hovers */
+  --iris-green-100:#dffaf8; --iris-green-700:#0a6d68;       /* green chips / text-on-light */
+  --ink:#1b2240; --muted:#66708f; --soft:#f5f7fb; --paper:#fbfcff; --panel:#fff;
+  --line:#dfe4f0; --line-strong:#c8d0e3;                    /* borders */
+  --radius-lg:18px; --radius-md:12px; --radius-sm:9px;      /* sharp-but-not-playful */
+  --shadow:0 10px 28px rgba(28,34,69,.07);                  /* soft, not heavy */
+}
+```
+Essentials, load **Inter + Roboto Mono** from Google Fonts:
+- **App shell** = `display:flex` with a fixed **240px dark-blue sidebar** (`--iris-blue-900`,
+  `position:sticky;height:100vh`) holding brand + nav + a footer health pill, and a
+  flex `main` workspace. Nav links are full-width text buttons; the active link gets
+  `box-shadow:inset 3px 0 0 var(--iris-green)` + a faint green gradient wash. This
+  REPLACES the right-pane tab bar — `showView(v)` toggles `.active` on
+  `.navlink[data-view=v]` and `#view-v` (same mechanic, sidebar instead of tabs).
+- **Panels**: white, `1px var(--line)` border, `--radius-lg`, `--shadow`. Borders +
+  soft shadow, NOT glass, NOT gradients-on-surface.
+- **KPI cards** (top of the workspace): white card, `1px` border, soft shadow, a 4px
+  **gradient top-strip** `linear-gradient(90deg,var(--iris-green),var(--iris-blue))`
+  (a `::before`), a small uppercase muted label, a large 20px value, a muted status
+  line. A `setKpi(idx,val,sub)` + `updateKPIs(job)` keeps them mirroring the live job
+  (Status / Attempts / DocType / Model). Use `repeat(4,1fr)`, collapse to `repeat(2,1fr)`.
+- **Buttons**: primary = filled `--iris-blue`; **ok/approval = filled `--iris-green`**;
+  ghost = white + `--line-strong` border; danger = white + red border. All `--radius-sm`.
+- **Inputs**: white, `1px --line-strong`, green focus ring `box-shadow:0 0 0 4px rgba(0,182,176,.13)`.
+- **Status chips**: `b-SUCCESS`→green-100/green-700, `b-AWAITING_*`→amber, `b-RUNNING/GENERATING`→
+  blue tint, `b-FAILED/REJECTED`→red tint.
+- **Light-chrome / dark-code split (deliberate):** keep the diff/DTL/LLM-message
+  viewers on a **dark code surface** (`--code-bg:#0e1430; --code-fg:#e9fbff;
+  --code-line:#252c54; --code-head:#161d44`) even though the rest of the app is light —
+  monospace HL7/DTL reads best on dark, and it visually separates "generated code"
+  from "chrome". Re-tune the diff highlight alphas to the dark surface (~0.18 line
+  tint, ~0.5 char highlight) — the light-theme alphas wash out on `#0e1430`.
+- A "Mapping table" (Source→Target→Confidence), "AI mapping plan" numbered step list,
+  "Validation checklist" (green check rows + amber needs-review rows), and gradient
+  "Progress bars" (`linear-gradient(90deg,var(--iris-blue),var(--iris-green))` fill on
+  an `#e7edf7` track) are all on-brand components for this shell.
+- **Responsive**: collapse the workspace grid to one column < ~1180px, KPIs to 2-up,
+  and flip the sidebar to a horizontal scrolling bar < ~880px.
+
+Light palette (simpler, panel-on-page, IRIS-blue):
 ```css
 :root{ --is-blue:#2596be; --is-blue-d:#1d7aa0; --is-navy:#172b46;
   --bg:#eef3f7; --panel:#fff; --panel2:#f4f8fb; --line:#d4e0ea; --txt:#172b46; --muted:#5b7088; }
@@ -232,12 +283,14 @@ whole-line). Colour `cdel`/`cadd` with a STRONGER background than the line tint
 (~0.4 alpha vs ~0.15) so the exact chars pop against the already-tinted chg line.
 Thread the seg arrays through the line-numbered renderer alongside the per-line
 classes (`linedBlock(text,classes,segs)`).
-- **Colour convention: removed=red, added=GREEN (not blue).** Don't reuse the
-  `--secondary` blue accent for "added" — in a transform diff blue reads as a
-  neutral info accent, while users expect git-style red-removed / green-added.
-  Use the InterSystems-green `--primary` (`rgba(26,143,108,…)`) for `cadd` AND the
-  line-level `add` tint+gutter, keep `--bad` red for `cdel`/`del`, and amber `--warn`
-  for `chg`. Update EVERY place the colour appears together or the legend drifts from
+- **Colour convention: removed=red, added=GREEN (not blue).** Don't use a blue
+  accent for "added" — in a transform diff blue reads as a neutral info accent, while
+  users expect git-style red-removed / green-added. Use the **InterSystems green** for
+  `cadd` AND the line-level `add` tint+gutter, keep red for `cdel`/`del`, and amber for
+  `chg`. The exact green rgba depends on the theme + surface: on the light Material
+  green theme it was `rgba(26,143,108,…)`; on the **light-enterprise dark-code surface**
+  it's `rgba(0,182,176,…)` (`--iris-green`) at ~0.18 (line) / ~0.5 (char) so it pops on
+  `#0e1430`. Update EVERY place the colour appears together or the legend drifts from
   the render: the `.cadd` char highlight, the `.ln.add` line background, the `.gl.add`
   gutter number, the `.difflegend .lg.add::before` swatch, AND any inline-styled
   swatch in the legend HTML (an `rgba(...)` hardcoded in a `<span style>` won't follow
@@ -303,6 +356,82 @@ add/remove list of inputs) and POST them as `planAdditions[]` on approve. Server
 side fold them into the stored plan AND inject a user turn marking them as
 additional REQUIRED steps so the model implements them without dropping the
 original plan.
+
+## Source-grounded review gate (original vs structured, provenance-highlighted)
+When an early human checkpoint reviews an LLM-restructured artifact (e.g. a raw spec
+turned into an explicit rule list), show **original on the left, structured on the
+right, side-by-side**, and make each structured item **traceable to its source**:
+- The server returns, per item, a `sourceQuote` (verbatim snippet it came from) + an
+  `inferred` flag. Colour-code each rule by a left-border: green = grounded in
+  source, amber = inferred (verify), red = NO source (possible hallucination). Show a
+  small coverage summary ("✓ 4 grounded · ● 1 inferred · ⚠ 0 no-source").
+- On hover of a rule, **highlight the matching snippet in the original pane**:
+  rebuild that pane as text + a `<span class=provhi>` around the first
+  case-insensitive match of the quote (cap the match length). On mouseleave restore
+  the plain text. This lets the reviewer confirm at a glance that every rule is real
+  and nothing was invented — errors caught at the cheapest point.
+- Make the structured artifact **editable** (a textarea pre-filled with the markdown)
+  and send the edited version back on approve (`{action:"approve-spec", specEdit}`) —
+  what they approve becomes the authority downstream. Provide a reject that re-runs
+  the structuring with feedback (a distinct action from rejecting a later build).
+
+## Show the accuracy-gate verdict on the review card (informed, not blind, review)
+If the backend verifies a candidate against a spec before showing it (run-all-inputs
++ field-coverage + an LLM judge — see dtl-generation), render that verdict so the
+human reviews an INFORMED candidate, not a green checkmark that means "didn't
+crash". A `gateReport` card: a pass/fail header (green vs amber left-border), a row
+of ✓/✗ checks (runs on all inputs / actually transforms fields / spec-conformance
+judge NN%), per-input "N fields changed" counts, and the judge's concrete
+violations (rule + detail, severity-tagged HIGH/LOW). Colour the whole attempt card
+amber when the candidate did NOT pass, green when it did, so "this needs work" reads
+instantly. Fold `gateReport` (stringified) into the poll dedupe signature so it
+repaints when the verdict changes.
+
+## Extraction-confidence badge — flag low-confidence specs for review
+When an uploaded doc is extracted with a confidence score + warnings (scanned PDF,
+dropped tables, mojibake — see dtl-generation), surface it where the spec is picked:
+a confidence badge (green ≥0.8 / amber ≥0.5 / red below) on the upload result AND in
+the saved-spec `<select>` (append "⚠ NN%" to low-confidence options), plus an
+expandable warning list ("likely scanned — needs OCR", "tables may not have
+survived"). The goal is to make a bad extraction impossible to miss BEFORE it's used
+to generate anything.
+
+## Render an LLM plan as Markdown (some models return Markdown, not plain text)
+The plan-gate text often comes back as Markdown (headings, `**bold**`, numbered
+lists, fenced code). Dumping it as `textContent` shows literal `#`/`**`/backticks;
+render it instead. Ship a tiny self-contained `mdToHtml(src)` (no library) covering
+the subset a plan uses: ATX headings, `**`/`__` bold, `*`/`_` italic, inline `` `code` ``,
+fenced ```` ``` ```` blocks, `-`/`*`/`+` and `1.` lists, `>` blockquotes, `---` rules,
+`[text](http…)` links. Then `$("#plantext").innerHTML = mdToHtml(j.plan||"")`.
+- **SECURITY — escape FIRST, then emit your own tags.** HTML-escape every run of
+  source text (`& < >`) *before* applying any inline replacement, so the model's plan
+  can never inject markup; only your own `<h*>/<strong>/<code>/…` tags reach `innerHTML`.
+  (Verify with a `<script>` in a plan — it must render inert.)
+- Inline order matters: replace inline **code first** so its contents aren't
+  re-processed for bold/italic, then links, then bold, then italic.
+- Style the rendered block under one `.plan` scope (`.mdh` headings in the brand blue,
+  `code`/`pre.mdcode` monospace, `blockquote` with a green left-border) so it inherits
+  the panel's look. Keep `mdToHtml` pure (string→string) so it's unit-testable by
+  extracting just the md functions and exercising them in `node`/`vm` without a DOM.
+
+## Build progress bar + elapsed timer (feedback for "Approve & build")
+A button spinner (see busy-state below) covers the click→first-poll gap, but a
+multi-second server build (plan→generate→compile→repair) needs sustained feedback.
+When a job is in a WORKING state (`PLANNING`/`QUEUED`/`GENERATING`/`RUNNING`), render
+a build card in the status pane with a gradient **progress bar** + a live **m:ss
+elapsed timer**:
+- Indeterminate bar (you don't know % done): a `.pfill` that animates left→right on a
+  loop (`@keyframes`), gradient `linear-gradient(90deg,var(--iris-blue),var(--iris-green))`
+  on an `#e7edf7` track. Determinate (you have a %): set `width:N%`.
+- Timer: a `buildClock` timestamp + a 250ms `setInterval` that writes
+  `fmtElapsed(Date.now()-buildClock)` into a `#buildtimer` span. Start the clock ONLY
+  on a **successful** kick-off POST (`if(ok)buildClockReset()` after Plan & Generate /
+  Approve & build / Reject & regenerate) — so a failed request shows the error, not a
+  running timer. Stop + clear it at every terminal / awaiting-user state, alongside
+  `stopPolling()`.
+- The same card carries the contextual working message ("Drafting a plan…",
+  "Building the DTL…", "Auto-correcting from the compiler errors…") and surfaces the
+  auto-repair rounds as they stream into the attempt list above it.
 
 ## Show LLM token usage + cost in the UI
 When the backend reports per-call token usage, surface it: a **usage bar** at the

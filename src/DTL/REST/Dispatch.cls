@@ -30,6 +30,8 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
   <Route Url="/upload"          Method="POST" Call="Upload"   Cors="true"/>
   <Route Url="/specs"           Method="GET"  Call="ListSpecs" Cors="true"/>
   <Route Url="/specs/:token"    Method="GET"  Call="GetSpec"  Cors="true"/>
+  <Route Url="/specs/:token/concise"         Method="POST" Call="ConciseSpec"        Cors="true"/>
+  <Route Url="/specs/:token/approve-concise" Method="POST" Call="ApproveConcise"     Cors="true"/>
   <Route Url="/generate"        Method="POST" Call="Generate" Cors="true"/>
   <Route Url="/jobs"            Method="GET"  Call="ListJobs" Cors="true"/>
   <Route Url="/jobs/:id"        Method="GET"  Call="GetJob"   Cors="true"/>
@@ -153,9 +155,10 @@ ClassMethod BedrockModels() As %Status
 		}
 	} catch ex {
 	}
-	// Fallback to a sane built-in list if the listing produced nothing.
+	// Fallback to a sane built-in list if the listing produced nothing. The global
+	// cross-region inference profile is the preferred default (highest availability).
 	if tIds.%Size() = 0 {
-		for id = "us.anthropic.claude-opus-4-8-v1:0","us.anthropic.claude-opus-4-7-v1:0","us.anthropic.claude-sonnet-4-6-v1:0","us.anthropic.claude-haiku-4-5-v1:0" { do tIds.%Push(id) }
+		for id = "global.anthropic.claude-opus-4-8","us.anthropic.claude-opus-4-8-v1:0","us.anthropic.claude-opus-4-7-v1:0","us.anthropic.claude-sonnet-4-6-v1:0","us.anthropic.claude-haiku-4-5-v1:0" { do tIds.%Push(id) }
 		do ..Json({"models": (tIds), "note": "Could not list from Bedrock (check key/region/permissions) — showing common inference-profile ids."})
 		quit $$$OK
 	}
@@ -276,6 +279,14 @@ ClassMethod Upload() As %Status
 		set tToken = ##class(DTL.Service.JobManager).RandHex()
 		set tExt = $zconvert($piece(tName, ".", *), "L")
 		if (tExt = "") || (tExt = tName) set tExt = "txt"
+		if $zstrip(tName, "<>W") = "" set tName = "spec." _ tExt   // never store a blank name
+		// Record the ORIGINAL filename in a side global keyed by token. This is the
+		// AUTHORITATIVE source of the display name: the file the watcher service sees
+		// on disk is named "<token>.<ext>", so without this the service can only fall
+		// back to that token name. Writing it here (before the file is created) makes
+		// the original name available to the service regardless of record-commit
+		// timing or whether the pre-created SpecDoc is visible cross-process yet.
+		set ^DTL.SpecName(tToken) = tName
 		// Pre-create the SpecDoc as PENDING so the UI can poll immediately.
 		set tDoc = ##class(DTL.Data.SpecDoc).%New()
 		set tDoc.Token = tToken, tDoc.FileName = tName, tDoc.Status = "PENDING"
@@ -303,17 +314,22 @@ ClassMethod Upload() As %Status
 ClassMethod ListSpecs() As %Status
 {
 	set tArr = []
+	// Only list specs whose CONCISE specification has been reviewed and APPROVED —
+	// an un-reviewed spec must not be reusable from the picker (it would bypass the
+	// review gate). Newly-uploaded specs appear here only after the user approves.
 	set tStmt = ##class(%SQL.Statement).%New()
-	set sc = tStmt.%Prepare("SELECT Token,FileName,Status,CreatedAt FROM DTL_Data.SpecDoc ORDER BY ID DESC")
+	set sc = tStmt.%Prepare("SELECT Token,FileName,Status,CreatedAt FROM DTL_Data.SpecDoc WHERE ConciseApproved=1 ORDER BY ID DESC")
 	if $$$ISOK(sc) {
 		set rs = tStmt.%Execute()
 		while rs.%Next() {
 			set o = {}
 			set o.token = rs.%Get("Token"), o.fileName = rs.%Get("FileName")
 			set o.status = rs.%Get("Status"), o.createdAt = rs.%Get("CreatedAt")
-			// size of the extracted markdown (chars), for display
+			// size of the extracted markdown (chars) + extraction confidence, for display
 			set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(o.token, .dsc)
 			set o.size = $select($isobject(tDoc):tDoc.Text.Size, 1:0)
+			set o.confidence = $select($isobject(tDoc):tDoc.Confidence, 1:"")
+			set o.conciseApproved = $select($isobject(tDoc):tDoc.ConciseApproved, 1:0)
 			do tArr.%Push(o)
 		}
 	}
@@ -321,13 +337,60 @@ ClassMethod ListSpecs() As %Status
 	quit $$$OK
 }
 
-/// GET /specs/:token - the extraction status + text for an uploaded spec.
+/// GET /specs/:token - the extraction status + text + concise spec for an upload.
 ClassMethod GetSpec(pToken As %String) As %Status
 {
 	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
 	if '$isobject(tDoc) quit ..ErrJson(404, "No spec '" _ pToken _ "'")
-	do ..Json({"token": (tDoc.Token), "fileName": (tDoc.FileName), "status": (tDoc.Status), "text": (tDoc.TextStr()), "error": (tDoc.Error)})
+	set tMetaObj = ""
+	if tDoc.ExtractMeta '= "" { try { set tMetaObj = ##class(%DynamicAbstractObject).%FromJSON(tDoc.ExtractMeta) } catch {} }
+	set tProvObj = "" set tProv = tDoc.ConciseProvStr()
+	if tProv '= "" { try { set tProvObj = ##class(%DynamicAbstractObject).%FromJSON(tProv) } catch {} }
+	set tVerObj = ""
+	if tDoc.ConciseVerdict '= "" { try { set tVerObj = ##class(%DynamicAbstractObject).%FromJSON(tDoc.ConciseVerdict) } catch {} }
+	do ..Json({"token": (tDoc.Token), "fileName": (tDoc.FileName), "status": (tDoc.Status), "text": (tDoc.TextStr()), "error": (tDoc.Error), "confidence": (tDoc.Confidence), "meta": (tMetaObj), "conciseStatus": (tDoc.ConciseStatus), "conciseApproved": (tDoc.ConciseApproved), "conciseSpec": (tDoc.ConciseStr()), "conciseProvenance": (tProvObj), "conciseVerdict": (tVerObj), "conciseError": (tDoc.ConciseError)})
 	quit $$$OK
+}
+
+/// POST /specs/:token/concise - body {provider, model, apiKey, region}. Kicks off
+/// generation (and LLM-verify) of the concise, grouped, referenced specification in
+/// the BACKGROUND and returns 202 immediately. Generation can require several large,
+/// slow LLM calls; running it synchronously timed out the web gateway (504) on big
+/// specs. The UI polls GET /specs/:token until conciseStatus is READY or ERROR.
+ClassMethod ConciseSpec(pToken As %String) As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
+	set tProvider = tPayload.provider, tModel = tPayload.model, tKey = tPayload.apiKey, tRegion = tPayload.region
+	// Fail fast with a clear message when config is missing (a live provider needs a
+	// key + model). Saves a wasted round-trip and tells the user exactly what to fix.
+	if (tProvider = "openai") || (tProvider = "bedrock") {
+		if $zstrip(tKey, "<>W") = "" quit ..ErrJson(400, "No API key configured. Open Settings and enter your " _ $select(tProvider="bedrock":"AWS Bedrock", 1:"OpenAI") _ " API key (or switch Provider to Mock).")
+		if $zstrip(tModel, "<>W") = "" quit ..ErrJson(400, "No model selected. Open Settings, enter your API key, then choose a model.")
+	}
+	set sc = ##class(DTL.Service.SpecConcise).Start(pToken, tProvider, tModel, tKey, tRegion)
+	if $$$ISERR(sc) quit ..ErrJson(400, $system.Status.GetErrorText(sc))
+	set %response.Status = "202 Accepted"
+	do ..Json({"token": (pToken), "conciseStatus": "PENDING"})
+	quit $$$OK
+}
+
+/// POST /specs/:token/approve-concise - body {conciseSpec}. Store the human-edited
+/// concise spec and mark it APPROVED, so it drives generation without re-review.
+ClassMethod ApproveConcise(pToken As %String) As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
+	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
+	if '$isobject(tDoc) quit ..ErrJson(404, "No spec '" _ pToken _ "'")
+	set tConcise = tPayload.conciseSpec
+	if $zstrip(tConcise, "<>W") '= "" {
+		do tDoc.ConciseSpec.Clear()  do tDoc.ConciseSpec.Write(tConcise)
+	}
+	set tDoc.ConciseApproved = 1, tDoc.ConciseStatus = "READY"
+	set sc = tDoc.%Save()
+	if $$$ISERR(sc) quit ..ErrJson(500, $system.Status.GetErrorText(sc))
+	quit ..GetSpec(pToken)
 }
 
 /// POST /jobs/:id/continue - body {action: approve|accept|reject, feedback,
@@ -339,6 +402,7 @@ ClassMethod ContinueJob(pId As %String) As %Status
 	set tPayload = ..ReadBody(.tSC)
 	set tAction = $select($$$ISOK(tSC):tPayload.action, 1:"")
 	set tFeedback = $select($$$ISOK(tSC):tPayload.feedback, 1:"")
+	set tSpecEdit = $select($$$ISOK(tSC):tPayload.specEdit, 1:"")
 	// Fold any user-added plan items into one block.
 	set tAdd = ""
 	if $$$ISOK(tSC), $isobject(tPayload.planAdditions) {
@@ -348,7 +412,7 @@ ClassMethod ContinueJob(pId As %String) As %Status
 			if tv '= "" set tAdd = tAdd _ $select(tAdd'="":$char(10), 1:"") _ "- " _ tv
 		}
 	}
-	set tSC = ##class(DTL.Service.JobManager).Continue(pId, tAction, tFeedback, .tcSC, tAdd)
+	set tSC = ##class(DTL.Service.JobManager).Continue(pId, tAction, tFeedback, .tcSC, tAdd, tSpecEdit)
 	if $$$ISERR(tSC) || $$$ISERR(tcSC) {
 		quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
 	}

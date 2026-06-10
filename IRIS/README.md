@@ -47,6 +47,12 @@ the Installer). Use this after editing any `.cls` file.
 IRIS/compile.sh            # [container]  default: iris-dtl
 ```
 
+> **Incremental only.** `compile.sh` adds/updates classes but does **not** evict
+> compiled code for members or classes you *deleted* from source. If you removed a
+> property/method or a whole `.cls`, run `IRIS/run.sh` instead — it purges `DTL.*`
+> (keeping data) for a clean-slate recompile. See **Clean-slate recompile** under
+> §2 · Run.
+
 What it does: `scripts/sync.sh` copies `src/` into the container, then runs
 `$system.OBJ.LoadDir(...)` followed by `DTL.Setup.Installer.Run(srcDir, 0)`
 (load + prepare dirs + wire web apps, **without** starting the production).
@@ -70,8 +76,41 @@ IRIS/run.sh                # [container]  default: iris-dtl
 ```
 
 What it does: ensures the container is up and healthy, syncs sources, starts the
-mock LLM on `:8085`, runs `DTL.Setup.Installer.Run(srcDir, 1)` (the `1` starts the
-production), and prints the UI/API URLs.
+mock LLM on `:8085`, **purges the framework code for a clean-slate recompile**,
+runs `DTL.Setup.Installer.Run(srcDir, 1)` (the `1` starts the production), and
+prints the UI/API URLs.
+
+### Clean-slate recompile (why `run.sh` purges first)
+
+`$system.OBJ.LoadDir` only **adds/updates** classes from source — it can never
+*remove* stale compiled code. So two things would otherwise linger forever and
+break at runtime:
+
+- a **member deleted from a class** (e.g. a property removed in a refactor) stays
+  in the compiled class and throws `<PROPERTY DOES NOT EXIST>` when old code paths
+  touch it;
+- a **whole `.cls` deleted from source** leaves its compiled class behind.
+
+To guarantee that every `IRIS/run.sh` is a from-scratch recompile that can't be
+poisoned by old code, step 4 first runs:
+
+```objectscript
+do $system.OBJ.Delete("DTL.*","-d/deleteextent=0")   ; delete CODE, keep DATA
+do $system.OBJ.LoadDir(dtl_"/DTL","ck/recurse=1",.err,1)   ; reload from source
+```
+
+`/deleteextent=0` deletes only the **code** (class definitions + compiled
+artifacts); it does **not** touch the persistent **data**. The `^DTL.Data.*`
+globals for `SpecDoc` and `Job` survive untouched — those classes carry an
+explicit `Storage` map in source, so the reload restores the identical storage
+layout and existing rows (saved specs, prior jobs) remain readable. Generated
+transforms in `DTL.Generated.*` are not touched either (they're regenerated on
+demand). This is verified on every run: data row counts are unchanged and the
+health hook reports `8/8`.
+
+> Use `IRIS/compile.sh` for a fast **incremental** compile while editing; use
+> `IRIS/run.sh` when you've **deleted** a member/class and need the stale compiled
+> artifact gone.
 
 Manual equivalents:
 

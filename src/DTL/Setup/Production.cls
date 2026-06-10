@@ -18,7 +18,7 @@ XData ProductionDefinition
 {
 <Production Name="DTL.Setup.Production" LogGeneralTraceEvents="false">
   <Description>GenAI-driven HL7 DTL auto-generation framework</Description>
-  <ActorPoolSize>2</ActorPoolSize>
+  <ActorPoolSize>4</ActorPoolSize>
 
   <Item Name="DTL.Svc.PairFileService" Category="DTL" ClassName="DTL.Svc.PairFileService" PoolSize="1" Enabled="true" Foreground="false" InactivityTimeout="0" Comment="" LogTraceEvents="false" Schedule="">
     <Setting Target="Adapter" Name="FilePath"></Setting>
@@ -31,13 +31,17 @@ XData ProductionDefinition
     <Setting Target="Host" Name="SuccessPolicy">CompileMatch</Setting>
   </Item>
 
-  <Item Name="DTL.Proc.Orchestrator" Category="DTL" ClassName="DTL.Proc.Orchestrator" PoolSize="1" Enabled="true" Foreground="false" InactivityTimeout="0" Comment="" LogTraceEvents="false" Schedule="">
+  <Item Name="DTL.Proc.Orchestrator" Category="DTL" ClassName="DTL.Proc.Orchestrator" PoolSize="4" Enabled="true" Foreground="false" InactivityTimeout="0" Comment="" LogTraceEvents="false" Schedule="">
     <Setting Target="Host" Name="LLMTarget">DTL.Op.LLMConnector</Setting>
     <Setting Target="Host" Name="LLMTimeout">600</Setting>
     <Setting Target="Host" Name="ArtifactDir"></Setting>
   </Item>
 
-  <Item Name="DTL.Op.LLMConnector" Category="DTL" ClassName="DTL.Op.LLMConnector" PoolSize="1" Enabled="true" Foreground="false" InactivityTimeout="0" Comment="" LogTraceEvents="false" Schedule="">
+  <!-- PoolSize=4: allow several jobs' LLM calls to run concurrently instead of
+       serializing every call behind a single job worker. A slow reasoning model
+       on one job no longer blocks all others. (Each pool job is its own HTTP
+       conversation; the adapter is per-job.) -->
+  <Item Name="DTL.Op.LLMConnector" Category="DTL" ClassName="DTL.Op.LLMConnector" PoolSize="4" Enabled="true" Foreground="false" InactivityTimeout="0" Comment="" LogTraceEvents="false" Schedule="">
     <Setting Target="Host" Name="Mode">openai</Setting>
     <Setting Target="Host" Name="ChatPath">/v1/chat/completions</Setting>
     <Setting Target="Host" Name="Model">gpt-4o</Setting>
@@ -49,9 +53,10 @@ XData ProductionDefinition
     <!-- FailureTimeout: how long the operation keeps retrying before failing the
          request. LLM calls (esp. reasoning models like gpt-5.x) can take minutes,
          so raise it well above the 15s default. ResponseTimeout is the per-HTTP
-         read wait — raise it to match so a slow completion isn't cut off. -->
+         read wait — ALIGNED to FailureTimeout so a slow completion (a reasoning
+         model can take 5+ min) isn't cut off mid-stream and counted as a failure. -->
     <Setting Target="Host" Name="FailureTimeout">600</Setting>
-    <Setting Target="Adapter" Name="ResponseTimeout">300</Setting>
+    <Setting Target="Adapter" Name="ResponseTimeout">600</Setting>
     <Setting Target="Adapter" Name="HTTPServer">api.openai.com</Setting>
     <Setting Target="Adapter" Name="HTTPPort">443</Setting>
     <Setting Target="Adapter" Name="SSLConfig">DTLOpenAISSL</Setting>
@@ -64,7 +69,7 @@ XData ProductionDefinition
     <Setting Target="Adapter" Name="ConfirmComplete">1</Setting>
   </Item>
 
-  <Item Name="EnsLib.Testing.Service" Category="DTL" ClassName="EnsLib.Testing.Service" PoolSize="1" Enabled="true" Foreground="false" InactivityTimeout="0" Comment="Inject ForgeRequests for testing/demo" LogTraceEvents="false" Schedule="">
+  <Item Name="EnsLib.Testing.Service" Category="DTL" ClassName="EnsLib.Testing.Service" PoolSize="4" Enabled="true" Foreground="false" InactivityTimeout="0" Comment="Inject ForgeRequests + drive gated LLM calls" LogTraceEvents="false" Schedule="">
   </Item>
 
 </Production>

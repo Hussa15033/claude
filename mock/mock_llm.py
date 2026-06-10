@@ -63,6 +63,12 @@ SCENARIOS = {
         "class": "DTL.Generated.AdtA01Forge",
         "src": "2.3:ADT_A01",
         "tgt": "2.5:ADT_A01",
+        "rules": [
+            {"index": 1, "rule": "Set MSH-3 (sending application) to EPIC.", "sourceQuote": "rename the sending application to EPIC", "inferred": False},
+            {"index": 2, "rule": "Normalize facility code SITEA to 001 in MSH-4.", "sourceQuote": "normalize facility SITEA to 001", "inferred": False},
+            {"index": 3, "rule": "Upgrade the HL7 version (MSH-12) from 2.3 to 2.5.", "sourceQuote": "upgrade the message to v2.5", "inferred": False},
+            {"index": 4, "rule": "Set facility to 001 in PID-3.4 and PV1-3.4.", "sourceQuote": "across MSH/PID/PV1", "inferred": False},
+        ],
         # Stage 0: BROKEN -- the first <assign> value attribute is never closed,
         # which yields a real compile error (#5xxx) with a line number.
         "broken": (
@@ -97,6 +103,10 @@ SCENARIOS = {
         "class": "DTL.Generated.AdtA08Forge",
         "src": "2.3:ADT_A01",  # A08 uses the ADT_A01 structure in 2.3
         "tgt": "2.5:ADT_A01",
+        "rules": [
+            {"index": 1, "rule": "Upgrade the HL7 version (MSH-12) from 2.3 to 2.5.", "sourceQuote": "upgrade to 2.5", "inferred": False},
+            {"index": 2, "rule": "Map PID-8 administrative sex F->2 and M->1.", "sourceQuote": "map sex codes", "inferred": False},
+        ],
         "broken": (
             "<transform sourceClass='EnsLib.HL7.Message' targetClass='EnsLib.HL7.Message' "
             "sourceDocType='2.3:ADT_A01' targetDocType='2.5:ADT_A01' create='copy' language='objectscript'>\n"
@@ -124,6 +134,12 @@ SCENARIOS = {
         "class": "DTL.Generated.OruR01Forge",
         "src": "2.3:ORU_R01",
         "tgt": "2.5:ORU_R01",
+        "rules": [
+            {"index": 1, "rule": "Set MSH-3 (sending application) to LIS.", "sourceQuote": "sending application LIS", "inferred": False},
+            {"index": 2, "rule": "Set MSH-4 (facility) to GH.", "sourceQuote": "facility GH", "inferred": False},
+            {"index": 3, "rule": "Upgrade the HL7 version (MSH-12) to 2.5.", "sourceQuote": "version 2.5", "inferred": False},
+            {"index": 4, "rule": "Set facility GH in PID-3.4 (within the patient group).", "sourceQuote": "patient identifier facility", "inferred": False},
+        ],
         "broken": (
             "<transform sourceClass='EnsLib.HL7.Message' targetClass='EnsLib.HL7.Message' "
             "sourceDocType='2.3:ORU_R01' targetDocType='2.5:ORU_R01' create='copy' language='objectscript'>\n"
@@ -172,18 +188,122 @@ def pick_stage(prior_assistant_turns: int) -> str:
     return STAGE_ORDER[idx]
 
 
+def _system_text(messages):
+    return "\n".join(m.get("content", "") for m in messages if m.get("role") == "system")
+
+
+def _last_user(messages):
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            return m.get("content", "")
+    return ""
+
+
+def _structure_json(scenario):
+    """Reply for STEP 0 (spec structuring): an explicit rule list with provenance,
+    as strict JSON, matching DTL.Util.PromptBuilder.SpecStructurePrompt's schema."""
+    spec = SCENARIOS[scenario]
+    rules = spec.get("rules", [
+        {"index": 1, "rule": "Set MSH-3 (sending application).",
+         "sourceQuote": "sending application", "inferred": False},
+        {"index": 2, "rule": "Upgrade the HL7 version in MSH-12.",
+         "sourceQuote": "version", "inferred": False},
+    ])
+    obj = {"title": "%s interface specification" % scenario,
+           "rules": rules, "ambiguities": []}
+    return json.dumps(obj)
+
+
+def _concise_json(scenario):
+    """Reply for the CONCISE-spec generation: rules grouped by message/segment type
+    with provenance, matching PromptBuilder.ConciseSpecPrompt's schema."""
+    spec = SCENARIOS[scenario]
+    rules = spec.get("rules", [])
+    items = [{"id": "g1i%d" % (i + 1), "rule": r["rule"],
+              "sourceQuote": r.get("sourceQuote", ""), "inferred": r.get("inferred", False)}
+             for i, r in enumerate(rules)]
+    obj = {"title": "%s interface" % scenario,
+           "groups": [{"type": "%s / MSH" % scenario, "items": items}],
+           "ambiguities": ["Should the facility code be normalised in PID-3.4 as well as MSH-4?",
+                           "Is the version upgrade (2.3 -> 2.5) mandatory for all message types?"]}
+    return json.dumps(obj)
+
+
+def _concise_verify_json():
+    """Reply for the concise-spec audit: the mock concise spec is faithful+complete."""
+    return json.dumps({"complete": True, "faithful": True, "score": 1.0,
+                       "missing": [], "hallucinated": [], "notes": "Concise spec matches the original."})
+
+
+def _judge_json(messages):
+    """Reply for the LLM-as-judge: decide if the PRODUCED OUTPUT meets the spec.
+    The mock approves only the final/correct stage. It infers 'is this the correct
+    candidate' by whether the produced output in the prompt looks fully transformed
+    (contains the version bump 2.5 AND a facility/app remap) — good enough to drive
+    the loop offline."""
+    last = _last_user(messages)
+    # The judge prompt embeds INPUT and (last) PRODUCED OUTPUT. Split on the LAST
+    # occurrence of the label so we look at the actual output block, not the
+    # instruction sentence that also mentions "PRODUCED OUTPUT". The 'wrong' stage
+    # misses the version bump / facility remaps; the 'correct' stage has them.
+    out_section = last.rsplit("PRODUCED OUTPUT", 1)[-1]
+    conforms = ("2.5" in out_section) and (("001" in out_section) or ("GH" in out_section) or ("\"2\"" in out_section) or ("|2|" in out_section))
+    if conforms:
+        obj = {"conforms": True, "score": 1.0, "violations": [], "notes": "All spec rules applied."}
+    else:
+        obj = {"conforms": False, "score": 0.5,
+               "violations": [{"rule": "Apply all specified field remaps and the version bump",
+                               "detail": "Output is missing one or more required changes (facility/app remap or MSH-12 version).",
+                               "severity": "HIGH"}],
+               "notes": "Incomplete transformation."}
+    return json.dumps(obj)
+
+
 def build_completion(messages):
-    # Concatenate user content to detect scenario; count assistant turns.
     user_text = "\n".join(
         m.get("content", "") for m in messages if m.get("role") == "user"
     )
-    prior_assistant = sum(1 for m in messages if m.get("role") == "assistant")
+    sys_text = _system_text(messages)
+    last_user = _last_user(messages)
     scenario = detect_scenario(user_text)
-    stage = pick_stage(prior_assistant)
+
+    # --- Route by call type (the prompts are self-describing). ---
+    # CONCISE-spec audit -> faithful/complete verdict (check before generation: it
+    # mentions both "hallucinated" and "CONCISE SPECIFICATION").
+    if ("hallucinated" in last_user) and ("CONCISE SPECIFICATION" in last_user):
+        return _concise_verify_json(), {"scenario": scenario, "stage": "concise-verify"}
+    # CONCISE-spec generation -> grouped JSON with provenance.
+    if ("groups" in last_user) and ("GROUPED BY" in last_user):
+        return _concise_json(scenario), {"scenario": scenario, "stage": "concise"}
+    # STEP 0: spec structuring -> strict JSON rule list.
+    if ("STRICT JSON" in last_user) and ("rules" in last_user) and ("sourceQuote" in last_user):
+        return _structure_json(scenario), {"scenario": scenario, "stage": "structure"}
+    # LLM-as-judge conformance -> strict JSON verdict.
+    if ("conforms" in last_user) and ("violations" in last_user) and ("PRODUCED OUTPUT" in last_user):
+        return _judge_json(messages), {"scenario": scenario, "stage": "judge"}
+    # PLAN step -> a short markdown plan (not a class). Detect the plan instruction.
+    if ("SHORT PLAN" in last_user) or ("numbered markdown list" in last_user):
+        spec = SCENARIOS[scenario]
+        plan = "1. " + "\n2. ".join(
+            r["rule"] for r in spec.get("rules", [{"rule": "Apply the specified field changes."}])
+        )
+        return plan, {"scenario": scenario, "stage": "plan"}
+
+    # --- BUILD curriculum: count only BUILD assistant turns (skip the structuring
+    #     reply + any [spec-conformance judge] aux turns) so broken->wrong->correct
+    #     still progresses correctly through the new flow. ---
+    build_assistant = sum(
+        1 for m in messages
+        if m.get("role") == "assistant"
+        and not m.get("content", "").startswith("{")          # structuring/judge JSON
+        and "[spec-conformance judge]" not in m.get("content", "")
+        and "<transform" in m.get("content", "")              # only count DTL replies
+    )
+    stage = pick_stage(build_assistant)
     spec = SCENARIOS[scenario]
     body = spec[stage]
     content = _wrap(spec["class"], body)
-    meta = {"scenario": scenario, "stage": stage, "prior_assistant_turns": prior_assistant}
+    meta = {"scenario": scenario, "stage": stage, "prior_assistant_turns": build_assistant}
     return content, meta
 
 
@@ -226,8 +346,8 @@ class Handler(BaseHTTPRequestHandler):
 
         # Log to stderr so the demo is observable.
         sys.stderr.write(
-            f"[mock_llm] scenario={meta['scenario']} stage={meta['stage']} "
-            f"prior_assistant_turns={meta['prior_assistant_turns']}\n"
+            f"[mock_llm] scenario={meta.get('scenario')} stage={meta.get('stage')} "
+            f"prior_assistant_turns={meta.get('prior_assistant_turns', '-')}\n"
         )
         sys.stderr.flush()
 
