@@ -354,8 +354,17 @@
   .ambrow.resolved .ambq .qtag{background:var(--iris-green-100);color:var(--iris-green-700)}
   .ambrow.dismissed .ambq .qtag{background:#e7ebf3;color:var(--muted)}
   .ambrow textarea{width:100%;min-height:48px;font-size:12px;margin-bottom:7px}
-  .ambrow .ambacts{display:flex;gap:8px;flex-wrap:wrap}
+  .ambrow .ambacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
   .ambrow .ambstate{font-size:11.5px;color:var(--muted);font-style:italic}
+  /* per-ambiguity resolution options (radios) + custom input */
+  .ambopts{display:flex;flex-direction:column;gap:6px;margin-bottom:4px}
+  .ambopt{display:flex;align-items:flex-start;gap:8px;margin:0;font-size:12.5px;color:var(--ink);font-weight:500;
+    background:#fff;border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 10px;cursor:pointer;transition:.12s}
+  .ambopt:hover{border-color:var(--iris-green);background:var(--iris-green-100)}
+  .ambopt input[type=radio]{width:auto;flex:0 0 auto;margin:2px 0 0;padding:0;accent-color:var(--iris-green)}
+  .ambopt.custom{flex-direction:column;align-items:stretch}
+  .ambopt.custom .ctitle{display:flex;align-items:center;gap:8px}
+  .ambopt textarea{margin-top:7px;min-height:46px;font-size:12px}
   /* clickable concise items */
   .citem{padding:8px 10px;border:1px solid var(--line);border-left:3px solid var(--iris-green);border-radius:var(--radius-sm);margin-bottom:7px;cursor:pointer;transition:.12s}
   .citem:hover{background:var(--iris-green-100)}
@@ -585,37 +594,68 @@
   </div>
 </div>
 
-<!-- CONCISE-SPEC REVIEW modal: original (left) vs concise (right), side by side.
-     Click a concise item to jump to + highlight its source on the left. Edit the
-     concise spec, then approve — it is stored alongside the original. -->
+<!-- SPECIFICATION BUILDER modal. Two tabs:
+       • Review & Resolve — 3-pane browser (segment menu | points | original) +
+         the ambiguity-resolution list (every open question must be resolved before
+         approval, each offering concrete options or a custom answer).
+       • View Specification Markdown — the EXACT markdown that will be sent to the
+         model (editable before approval; rendered read-only once approved).
+     Once a spec is APPROVED it opens read-only: rendered markdown + original, no
+     editing/approval controls. -->
 <div class="overlay" id="cmpmodal">
   <div class="modal wide">
-    <div class="mhd"><h2 id="cmptitle">Review concise specification</h2><button class="x" id="cmpclose">✕</button></div>
+    <div class="mhd"><h2 id="cmptitle">Specification Builder</h2><span id="cmpapprovedbadge" class="vbadge ok hidden">✓ Approved (read-only)</span><button class="x" id="cmpclose">✕</button></div>
     <div class="mbd">
-      <div class="cmptools">
-        <span>Pick a <b>segment</b>, then click a <b>specification point</b> to jump to its source in the original.</span>
-        <span id="cmpverdict"></span>
-        <span style="margin-left:auto"><label style="display:inline-flex;align-items:center;gap:6px;margin:0;color:var(--muted);font-weight:600"><input type="checkbox" id="cmpedit" style="width:auto"/> view &amp; edit specification</label></span>
+      <div class="tabs" id="cmpTabs">
+        <button class="tab active" data-ctab="review">Review &amp; Resolve</button>
+        <button class="tab" data-ctab="markdown">View Specification Markdown</button>
       </div>
-      <div id="cmpbanner"></div>
-      <!-- 3-pane browser: segment menu | rules for that segment | original spec.
-           When "view & edit specification" is ticked, the two concise panes are
-           replaced by a single editable markdown textarea. -->
-      <div class="specsplit" id="cmpSplit">
-        <div class="pane seg">
-          <div class="phd"><span>Segments</span></div>
-          <div class="pbody"><div id="cmpSegs"></div></div>
+
+      <!-- TAB: Review & Resolve -->
+      <div id="cmpTabReview">
+        <div class="cmptools">
+          <span>Pick a <b>segment</b>, then click a <b>specification point</b> to jump to its source in the original.</span>
+          <span id="cmpverdict"></span>
         </div>
-        <div class="pane mid">
-          <div class="phd"><span id="cmpRulesHd">Specification points</span><span id="cmpconf" style="margin-left:auto"></span></div>
-          <div class="pbody"><div id="cmpItems"></div></div>
-        </div>
-        <div class="pane orig">
-          <div class="phd"><span>Original specification</span><span id="cmporigcopy" style="margin-left:auto"></span></div>
-          <div class="pbody" id="cmpOrigBody"><div id="cmpOrig"></div></div>
+        <div id="cmpbanner"></div>
+        <!-- 3-pane browser: segment menu | rules for that segment | original spec. -->
+        <div class="specsplit" id="cmpSplit">
+          <div class="pane seg">
+            <div class="phd"><span>Segments</span></div>
+            <div class="pbody"><div id="cmpSegs"></div></div>
+          </div>
+          <div class="pane mid">
+            <div class="phd"><span id="cmpRulesHd">Specification points</span><span id="cmpconf" style="margin-left:auto"></span></div>
+            <div class="pbody"><div id="cmpItems"></div></div>
+          </div>
+          <div class="pane orig">
+            <div class="phd"><span>Original specification</span><span id="cmporigcopy" style="margin-left:auto"></span></div>
+            <div class="pbody" id="cmpOrigBody"><div id="cmpOrig"></div></div>
+          </div>
         </div>
       </div>
-      <textarea id="cmpEdit" class="hidden" style="min-height:52vh;width:100%"></textarea>
+
+      <!-- TAB: View Specification Markdown -->
+      <div id="cmpTabMarkdown" class="hidden">
+        <!-- editable (pre-approval): the exact markdown sent to the model -->
+        <div id="cmpMdEditWrap">
+          <div class="cmptools"><span>This is the exact specification markdown that will be sent to the model (resolved ambiguities are folded in). Edit it here — your changes become the authority.</span><span id="cmpMdEditcopy" style="margin-left:auto"></span></div>
+          <textarea id="cmpEdit" style="min-height:52vh;width:100%"></textarea>
+        </div>
+        <!-- read-only (approved): rendered markdown + original side by side -->
+        <div id="cmpMdViewWrap" class="hidden">
+          <div class="specsplit" style="grid-template-columns:1fr 1fr">
+            <div class="pane mid">
+              <div class="phd"><span>Specification (markdown)</span><span id="cmpMdcopy" style="margin-left:auto"></span></div>
+              <div class="pbody plan" id="cmpMdView"></div>
+            </div>
+            <div class="pane orig">
+              <div class="phd"><span>Original specification</span><span id="cmpMdOrigcopy" style="margin-left:auto"></span></div>
+              <div class="pbody" id="cmpMdOrig" style="white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;color:var(--ink)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="mft">
       <span id="cmpmsg" style="font-size:12px;color:var(--muted)"></span>
@@ -623,6 +663,7 @@
       <span class="sp"></span>
       <button class="ghost" id="cmpregen">↻ Regenerate</button>
       <button class="ok" id="cmpapprove">✓ Approve specification</button>
+      <button class="ghost hidden" id="cmpcloseft">Close</button>
     </div>
   </div>
 </div>
@@ -946,7 +987,7 @@ $("#savedspec").onchange=async()=>{const tok=$("#savedspec").value;savedReady=nu
   if(sp.conciseStatus==="ERROR"&&sp.conciseError){conciseErrBox(info,sp.conciseError,()=>$("#reviewconcise").onclick());}
   else if(sp.conciseError){const w=el("div","specwarn");w.style.marginTop="6px";w.textContent="⚠ "+sp.conciseError;info.appendChild(w);}
   $("#savedspecreview").classList.remove("hidden");
-  $("#reviewconcise").textContent=(sp.conciseStatus==="READY")?"🔍 Review concise specification":((sp.conciseStatus==="ERROR")?"↻ Retry concise specification":"⚙ Generate concise specification");
+  $("#reviewconcise").textContent=sp.conciseApproved?"📄 View specification":((sp.conciseStatus==="READY")?"🔍 Review specification":((sp.conciseStatus==="ERROR")?"↻ Retry concise specification":"⚙ Generate concise specification"));
   showExtractWarn(info,sp);};
 $("#reviewconcise").onclick=async()=>{
   if(!currentSpecToken)return;
@@ -967,21 +1008,44 @@ function openSpecModal(title,text){$("#specmodaltitle").textContent=title||"Spec
 $("#specmodalclose").onclick=()=>$("#specmodal").classList.remove("show");
 $("#specmodal").onclick=(e)=>{if(e.target===$("#specmodal"))$("#specmodal").classList.remove("show");};
 
-// ---- concise-spec review modal (side-by-side, click-to-reference) ----------
+// ---- Specification Builder modal (side-by-side, click-to-reference) ---------
 let cmpState={token:null,orig:"",concise:"",prov:null};
+// Switch the Specification Builder's tab (review / markdown). When entering the
+// markdown tab pre-approval, refresh the editable markdown from the current
+// resolutions unless the user has manually edited it.
+function cmpShowTab(t){
+  // An approved spec is locked to the markdown viewer — no resolution tab.
+  if(cmpState.approved)t="markdown";
+  document.querySelectorAll("#cmpTabs .tab").forEach(x=>{x.classList.toggle("active",x.dataset.ctab===t);
+    if(x.dataset.ctab==="review")x.classList.toggle("hidden",!!cmpState.approved);});
+  $("#cmpTabReview").classList.toggle("hidden",t!=="review");
+  $("#cmpTabMarkdown").classList.toggle("hidden",t!=="markdown");
+  if(t==="markdown"&&!cmpState.approved&&!cmpState.mdDirty){$("#cmpEdit").value=cmpFinalMarkdown();}
+}
+document.querySelectorAll("#cmpTabs .tab").forEach(b=>b.onclick=()=>cmpShowTab(b.dataset.ctab));
+// The exact markdown that will be sent to the model: the concise spec with the
+// "Ambiguities" section rewritten into the human's resolved decisions.
+function cmpFinalMarkdown(){return foldAmbiguities(cmpState.concise,cmpState.ambs);}
 async function openCompareModal(token){
-  cmpState={token:token,orig:"",concise:"",prov:null,segs:[],activeSeg:0,ambs:null};
-  $("#cmpmsg").textContent="";$("#cmpedit").checked=false;
-  $("#cmpSplit").classList.remove("hidden");$("#cmpEdit").classList.add("hidden");
+  cmpState={token:token,orig:"",concise:"",prov:null,segs:[],activeSeg:0,ambs:null,approved:false,mdDirty:false};
+  $("#cmpmsg").textContent="";
+  cmpShowTab("review");
   $("#cmpItems").innerHTML="<div class=empty><span class=spinner></span> Loading…</div>";$("#cmpSegs").innerHTML="";$("#cmpbanner").innerHTML="";
   $("#cmpmodal").classList.add("show");
   const [ok,sp]=await jget("/specs/"+token);
   if(!ok){$("#cmpItems").innerHTML="<div class=empty>Could not load the spec.</div>";return;}
   cmpState.orig=sp.text||"";cmpState.concise=sp.conciseSpec||"";cmpState.prov=sp.conciseProvenance||null;
-  $("#cmptitle").textContent="Review concise specification — "+(sp.fileName||"");
+  cmpState.approved=!!sp.conciseApproved;
   $("#cmpOrig").textContent=cmpState.orig;
   $("#cmporigcopy").innerHTML="";$("#cmporigcopy").appendChild(copyBtn(()=>cmpState.orig));
-  $("#cmpEdit").value=cmpState.concise;
+  // APPROVED → read-only viewer: rendered markdown + original, no editing/approval.
+  if(cmpState.approved){ openApprovedSpecView(sp); return; }
+  $("#cmptitle").textContent="Specification Builder — "+(sp.fileName||"");
+  $("#cmpapprovedbadge").classList.add("hidden");
+  $("#cmpMdEditWrap").classList.remove("hidden");$("#cmpMdViewWrap").classList.add("hidden");
+  $("#cmpregen").classList.remove("hidden");$("#cmpapprove").classList.remove("hidden");$("#cmpcloseft").classList.add("hidden");
+  $("#cmpEdit").value=cmpFinalMarkdown();
+  $("#cmpMdEditcopy").innerHTML="";$("#cmpMdEditcopy").appendChild(copyBtn(()=>$("#cmpEdit").value));
   // verdict badge (LLM completeness/hallucination audit)
   const vb=$("#cmpverdict");vb.innerHTML="";
   const v=sp.conciseVerdict;
@@ -1006,6 +1070,25 @@ async function openCompareModal(token){
   // confidence on the concise pane header
   const cf=$("#cmpconf");cf.innerHTML="";const c=(sp.confidence==null?1:+sp.confidence);
   cf.appendChild(el("span","confbadge "+confClass(c),"extraction "+Math.round(c*100)+"%"));
+}
+// Read-only view for an ALREADY-APPROVED specification: the final markdown
+// (rendered) beside the original. No resolution, edit, regenerate or approve —
+// an approved spec is locked. Opens straight on the markdown tab.
+function openApprovedSpecView(sp){
+  $("#cmptitle").textContent="Specification — "+(sp.fileName||"");
+  $("#cmpapprovedbadge").classList.remove("hidden");
+  $("#cmpverdict").innerHTML="";$("#cmpbanner").innerHTML="";
+  // hide all editing/approval controls
+  $("#cmpregen").classList.add("hidden");$("#cmpapprove").classList.add("hidden");$("#cmpcloseft").classList.remove("hidden");
+  $("#cmpgatehint").textContent="";$("#cmpmsg").textContent="";
+  // disable the Review tab (no resolution on a locked spec) and force markdown tab
+  $("#cmpMdEditWrap").classList.add("hidden");$("#cmpMdViewWrap").classList.remove("hidden");
+  const md=cmpState.concise||"(no specification)";
+  $("#cmpMdView").innerHTML=mdToHtml(md);
+  $("#cmpMdcopy").innerHTML="";$("#cmpMdcopy").appendChild(copyBtn(()=>md));
+  $("#cmpMdOrig").textContent=cmpState.orig;
+  $("#cmpMdOrigcopy").innerHTML="";$("#cmpMdOrigcopy").appendChild(copyBtn(()=>cmpState.orig));
+  cmpShowTab("markdown");
 }
 // Render arbitrary text as a numbered, line-by-line monospace listing (each source
 // line gets its own row with a line number), so a raw / partial LLM reply can be
@@ -1045,10 +1128,16 @@ function renderConciseItems(){
   cmpState.segs=prov.groups;
   // Ambiguities the LLM raised — each MUST be resolved or dismissed by the human
   // before the spec can be approved (an open question must never reach the planner).
+  // An ambiguity is either a plain string (legacy) or {question, options:[...]}.
   // Initialise resolution state once per open (keep prior answers on re-render).
-  const ambs=(prov.ambiguities||[]).map(a=>String(a));
+  const ambs=(prov.ambiguities||[]).map(a=>{
+    if(a&&typeof a==="object"){
+      return {q:String(a.question||a.q||""),options:(a.options||[]).map(o=>String(o)).filter(Boolean)};
+    }
+    return {q:String(a),options:[]};
+  }).filter(a=>a.q.trim()!=="");
   if(!cmpState.ambs||cmpState.ambs.length!==ambs.length){
-    cmpState.ambs=ambs.map(q=>({q:q,status:"open",answer:""}));
+    cmpState.ambs=ambs.map(a=>({q:a.q,options:a.options,status:"open",answer:"",choice:null}));
   }
   // Build the segment menu — one entry per group, with a rule count.
   segBox.innerHTML="";
@@ -1089,9 +1178,13 @@ function updateApproveGate(){
   const hint=$("#cmpgatehint");
   if(hint)hint.textContent=open>0?("⚠ "+open+" ambiguit"+(open===1?"y":"ies")+" must be resolved before approval"):"";
 }
-// Render the ambiguity-resolution list in the middle pane.
+// Render the ambiguity-resolution list in the middle pane. Each open ambiguity
+// offers the LLM's concrete resolution OPTIONS as radio choices, plus a "Custom"
+// option with a free-text box. The user must pick an option (or type a custom
+// answer) and Resolve — or Dismiss it as not applicable — before approval.
 function selectAmbiguities(){
   cmpState.activeSeg=-1;
+  cmpState.mdDirty=false;   // resolutions changed → markdown will be regenerated
   [...$("#cmpSegs").children].forEach(c=>c.classList.toggle("sel",c.id==="ambMenuItem"));
   $("#cmpRulesHd").textContent="Ambiguities — resolve all to approve";
   const box=$("#cmpItems");box.innerHTML="";
@@ -1102,11 +1195,39 @@ function selectAmbiguities(){
     const tag=el("span","qtag",a.status==="resolved"?"RESOLVED":(a.status==="dismissed"?"N/A":"OPEN"));
     q.appendChild(tag);q.appendChild(document.createTextNode(a.q));row.appendChild(q);
     if(a.status==="open"){
-      const ta=el("textarea");ta.placeholder="Your decision — how should this be handled? (this is folded into the spec)";ta.value=a.answer||"";
-      ta.oninput=()=>{a.answer=ta.value;};
-      row.appendChild(ta);
+      const grp="amb"+i;
+      const opts=el("div","ambopts");
+      const customTa=el("textarea");customTa.placeholder="Describe how this should be handled — added to the specification.";customTa.value=(a.choice==="__custom__")?(a.answer||""):"";
+      // One radio per LLM-suggested option.
+      (a.options||[]).forEach((opt,oi)=>{
+        const lab=el("label","ambopt");
+        const r=el("input");r.type="radio";r.name=grp;r.value=String(oi);
+        if(a.choice===String(oi))r.checked=true;
+        r.onchange=()=>{a.choice=String(oi);a.answer=opt;customTa.disabled=true;};
+        lab.appendChild(r);lab.appendChild(el("span",null,opt));opts.appendChild(lab);
+      });
+      // Custom free-text option (always offered).
+      const clab=el("label","ambopt custom");
+      const ctitle=el("div","ctitle");
+      const cr=el("input");cr.type="radio";cr.name=grp;cr.value="__custom__";
+      if(a.choice==="__custom__")cr.checked=true;
+      ctitle.appendChild(cr);ctitle.appendChild(el("span",null,"Custom — type your own answer"));
+      clab.appendChild(ctitle);clab.appendChild(customTa);
+      customTa.disabled=(a.choice!=="__custom__");
+      cr.onchange=()=>{a.choice="__custom__";customTa.disabled=false;a.answer=customTa.value;customTa.focus();};
+      customTa.oninput=()=>{if(a.choice==="__custom__")a.answer=customTa.value;};
+      // Clicking the custom box selects the custom radio too.
+      customTa.onfocus=()=>{if(!cr.checked){cr.checked=true;cr.onchange();}};
+      opts.appendChild(clab);
+      row.appendChild(opts);
       const acts=el("div","ambacts");
-      const res=el("button","ok","✓ Resolve");res.onclick=()=>{if(!ta.value.trim()){$("#cmpmsg").textContent="Enter a decision before resolving (or dismiss it as not applicable).";return;}a.status="resolved";a.answer=ta.value.trim();$("#cmpmsg").textContent="";selectAmbiguities();refreshAmbMenu();updateApproveGate();};
+      const res=el("button","ok","✓ Resolve");
+      res.onclick=()=>{
+        if(a.choice==null){$("#cmpmsg").textContent="Pick an option (or choose Custom and type an answer) before resolving.";return;}
+        if(a.choice==="__custom__"&&!customTa.value.trim()){$("#cmpmsg").textContent="Type your custom answer before resolving.";return;}
+        a.answer=(a.choice==="__custom__")?customTa.value.trim():(a.options[+a.choice]||a.answer);
+        a.status="resolved";$("#cmpmsg").textContent="";selectAmbiguities();refreshAmbMenu();updateApproveGate();
+      };
       const dis=el("button","ghost","Dismiss (not applicable)");dis.onclick=()=>{a.status="dismissed";selectAmbiguities();refreshAmbMenu();updateApproveGate();};
       acts.appendChild(res);acts.appendChild(dis);row.appendChild(acts);
     } else {
@@ -1165,9 +1286,10 @@ function locateSource(quote){
   const hiRect=hi.getBoundingClientRect();const contRect=cont.getBoundingClientRect();
   cont.scrollTop=cont.scrollTop+(hiRect.top-contRect.top)-16;
 }
-// Toggle "view & edit specification": show the editable markdown textarea in place
-// of the whole 3-pane browser, and back.
-$("#cmpedit").onchange=()=>{const on=$("#cmpedit").checked;$("#cmpEdit").classList.toggle("hidden",!on);$("#cmpSplit").classList.toggle("hidden",on);};
+// Once the user manually edits the markdown, stop auto-regenerating it from the
+// resolutions (their edits become the authority).
+$("#cmpEdit").addEventListener("input",()=>{cmpState.mdDirty=true;});
+$("#cmpcloseft").onclick=()=>$("#cmpmodal").classList.remove("show");
 $("#cmpclose").onclick=()=>$("#cmpmodal").classList.remove("show");
 $("#cmpmodal").onclick=(e)=>{if(e.target===$("#cmpmodal"))$("#cmpmodal").classList.remove("show");};
 $("#cmpregen").onclick=async()=>{if(!cmpState.token)return;$("#cmpregen").disabled=true;
@@ -1195,14 +1317,14 @@ $("#cmpapprove").onclick=async()=>{if(!cmpState.token)return;
   // must never reach the planner (it would be implemented as a guess).
   const open=ambOpenCount();
   if(open>0){
-    // Make sure the resolution view is visible (leave edit mode if it's on).
-    if($("#cmpedit").checked){$("#cmpedit").checked=false;$("#cmpEdit").classList.add("hidden");$("#cmpSplit").classList.remove("hidden");}
+    cmpShowTab("review");
     selectAmbiguities();$("#cmpmsg").textContent="Resolve all "+open+" ambiguit"+(open===1?"y":"ies")+" before approving.";return;
   }
-  // If the user edited the markdown, send that; else send the current concise text
-  // with the ambiguity section rewritten into the human's resolved DECISIONS (and
-  // dismissed ones removed) so the stored/LLM-facing spec carries no open questions.
-  const edited=$("#cmpedit").checked?$("#cmpEdit").value:foldAmbiguities(cmpState.concise,cmpState.ambs);
+  // If the user manually edited the markdown tab, send that; else send the concise
+  // text with the ambiguity section rewritten into the human's resolved DECISIONS
+  // (and dismissed ones removed) so the stored/LLM-facing spec carries no open
+  // questions.
+  const edited=cmpState.mdDirty?$("#cmpEdit").value:foldAmbiguities(cmpState.concise,cmpState.ambs);
   $("#cmpapprove").innerHTML='<span class=spinner></span> Approving…';$("#cmpapprove").disabled=true;
   const [ok,sp]=await jpost("/specs/"+cmpState.token+"/approve-concise",{conciseSpec:edited});
   $("#cmpapprove").disabled=false;$("#cmpapprove").textContent="✓ Approve specification";

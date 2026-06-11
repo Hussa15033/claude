@@ -169,7 +169,20 @@ ClassMethod ApplyConcise(pDoc As DTL.Data.SpecDoc, pJson As %DynamicObject)
 	if $isobject(pJson.ambiguities), pJson.ambiguities.%Size() > 0 {
 		set tMd = tMd _ "## Ambiguities / decisions needed" _ nl
 		set it3 = pJson.ambiguities.%GetIterator()
-		while it3.%GetNext(.ak, .a) { set tMd = tMd _ "- " _ a _ nl }
+		while it3.%GetNext(.ak, .a) {
+			// An ambiguity may be a plain string (legacy) or an object
+			// {question, options:[...]} (so the reviewer gets choices).
+			if $isobject(a) {
+				set tQ = a.question
+				set tMd = tMd _ "- " _ tQ _ nl
+				if $isobject(a.options), a.options.%Size() > 0 {
+					set ito = a.options.%GetIterator()
+					while ito.%GetNext(.ok, .opt) { set tMd = tMd _ "  - option: " _ opt _ nl }
+				}
+			} else {
+				set tMd = tMd _ "- " _ a _ nl
+			}
+		}
 	}
 	do pDoc.ConciseSpec.Clear()  do pDoc.ConciseSpec.Write(tMd)
 	do pDoc.ConciseProvenance.Clear()  do pDoc.ConciseProvenance.Write(pJson.%ToJSON())

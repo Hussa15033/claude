@@ -224,8 +224,15 @@ def _concise_json(scenario):
              for i, r in enumerate(rules)]
     obj = {"title": "%s interface" % scenario,
            "groups": [{"type": "%s / MSH" % scenario, "items": items}],
-           "ambiguities": ["Should the facility code be normalised in PID-3.4 as well as MSH-4?",
-                           "Is the version upgrade (2.3 -> 2.5) mandatory for all message types?"]}
+           "ambiguities": [
+               {"question": "Should the facility code be normalised in PID-3.4 as well as MSH-4?",
+                "options": ["Normalise the facility in both MSH-4 and PID-3.4",
+                            "Normalise MSH-4 only; leave PID-3.4 unchanged"]},
+               {"question": "Is the version upgrade (2.3 -> 2.5) mandatory for all message types?",
+                "options": ["Upgrade MSH-12 to 2.5 for every message",
+                            "Only upgrade ADT messages",
+                            "Leave the version unchanged"]},
+           ]}
     return json.dumps(obj)
 
 

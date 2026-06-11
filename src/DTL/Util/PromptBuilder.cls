@@ -134,9 +134,11 @@ ClassMethod ConciseSpecPrompt(pRawSpec As %String) As %String
 	set p = p _ "    {""type"": ""<message/segment this group is about, e.g. 'ADT^A01 / MSH' or 'PID' or 'General'>""," _ nl
 	set p = p _ "     ""items"": [ {""id"": ""g1i1"", ""rule"": ""<one concrete requirement>"", ""sourceQuote"": ""<verbatim snippet from the spec, or empty if inferred>"", ""inferred"": false} ] }" _ nl
 	set p = p _ "  ]," _ nl
-	set p = p _ "  ""ambiguities"": [""<unclear/contradictory/missing things needing a human decision>""]" _ nl
+	set p = p _ "  ""ambiguities"": [ {""question"": ""<an unclear/contradictory/missing thing that needs a human decision>"", ""options"": [""<one concrete, actionable way to resolve it>"", ""<a different concrete option>""]} ]" _ nl
 	set p = p _ "}" _ nl _ nl
-	set p = p _ "Give every item a UNIQUE id (groupindex+itemindex, e.g. g2i3). sourceQuote must be copied verbatim from the SPECIFICATION below so the reviewer can locate it. Output ONLY the JSON object." _ nl _ nl
+	set p = p _ "Give every item a UNIQUE id (groupindex+itemindex, e.g. g2i3). sourceQuote must be copied verbatim from the SPECIFICATION below so the reviewer can locate it." _ nl
+	set p = p _ "For EVERY ambiguity, supply 2-4 concrete, mutually-exclusive resolution OPTIONS the reviewer can choose from (each option a short, actionable decision, e.g. ""Map F to 2 and M to 1"" or ""Leave PID-8 unchanged""). The reviewer may also type a custom answer, so the options need not be exhaustive — but make them specific, not vague. If there are genuinely no ambiguities, return an empty array." _ nl
+	set p = p _ "Output ONLY the JSON object." _ nl _ nl
 	set p = p _ "SPECIFICATION (raw extracted text):" _ nl _ pRawSpec _ nl
 	quit p
 }
