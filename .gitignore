@@ -7,3 +7,6 @@
 *.swp
 .claude
 local_llm_test
+
+# Local deployment config (copy from .env.example). Keep .env.example tracked.
+.env

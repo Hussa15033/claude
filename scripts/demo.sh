@@ -17,15 +17,25 @@
 #
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CTR="${1:-iris-dtl}"
-IMAGE="intersystemsdc/irishealth-community:latest"
+
+# Load deployment config from .env (optional; see .env.example).
+if [ -f "$HERE/.env" ]; then set -a; . "$HERE/.env"; set +a; fi
+IRIS_WEB_PORT="${IRIS_WEB_PORT:-52773}"
+IRIS_SUPERSERVER_PORT="${IRIS_SUPERSERVER_PORT:-1972}"
+IRIS_CONTAINER="${IRIS_CONTAINER:-iris-dtl}"
+IRIS_IMAGE="${IRIS_IMAGE:-intersystemsdc/irishealth-community:latest}"
+IRIS_PASSWORD="${IRIS_PASSWORD:-SYS}"
+CTR="${1:-$IRIS_CONTAINER}"
+IMAGE="$IRIS_IMAGE"
 
 say() { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
 
-# 1. Ensure the container exists and is healthy.
+# 1. Ensure the container exists and is healthy (host ports configurable via .env).
 if ! docker ps -a --format '{{.Names}}' | grep -qx "$CTR"; then
-  say "Starting IRIS for Health container '$CTR'"
-  docker run -d --name "$CTR" -p 1972:1972 -p 52773:52773 -e IRIS_PASSWORD=SYS "$IMAGE" >/dev/null
+  say "Starting IRIS for Health container '$CTR' (host ports ${IRIS_WEB_PORT}->52773, ${IRIS_SUPERSERVER_PORT}->1972)"
+  docker run -d --name "$CTR" \
+    -p "${IRIS_SUPERSERVER_PORT}:1972" -p "${IRIS_WEB_PORT}:52773" \
+    -e IRIS_PASSWORD="$IRIS_PASSWORD" "$IMAGE" >/dev/null
 fi
 docker start "$CTR" >/dev/null 2>&1 || true
 
@@ -79,6 +89,7 @@ echo "--- mock LLM curriculum (self-correction) ---"
 docker exec "$CTR" bash -lc 'tail -12 /tmp/mock.log 2>/dev/null || echo "(mock log not captured in this container session)"'
 
 say "Demo complete"
-echo "UI:                http://localhost:52773/dtl/ui/index.html"
-echo "Management Portal: http://localhost:52773/csp/sys/UtilHome.csp  (SuperUser / SYS)"
+PORT="$(docker port "$CTR" 52773/tcp 2>/dev/null | head -1 | sed 's/.*://')"; PORT="${PORT:-$IRIS_WEB_PORT}"
+echo "UI:                http://localhost:${PORT}/dtl/ui/index.html"
+echo "Management Portal: http://localhost:${PORT}/csp/sys/UtilHome.csp  (SuperUser / SYS)"
 echo "Production: USER namespace -> Interoperability -> DTL.Setup.Production"

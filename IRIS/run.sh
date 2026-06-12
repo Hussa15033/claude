@@ -38,15 +38,33 @@
 #
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CTR="${1:-iris-dtl}"
-IMAGE="intersystemsdc/irishealth-community:latest"
+
+# Load deployment config from .env (host ports, container name, image, password).
+# .env is optional; .env.example documents every setting. .env is the source of
+# truth (edit it to change ports); the built-in defaults below apply only when a
+# setting is absent from .env, and the first CLI arg still overrides the container
+# name. To override for a single run without editing .env, pass on the command line,
+# e.g.  IRIS_WEB_PORT=8443 ... — note this requires commenting that line out of .env,
+# since sourcing .env sets it. (For most users: just edit .env.)
+if [ -f "$HERE/.env" ]; then set -a; . "$HERE/.env"; set +a; fi
+IRIS_WEB_PORT="${IRIS_WEB_PORT:-52773}"
+IRIS_SUPERSERVER_PORT="${IRIS_SUPERSERVER_PORT:-1972}"
+IRIS_CONTAINER="${IRIS_CONTAINER:-iris-dtl}"
+IRIS_IMAGE="${IRIS_IMAGE:-intersystemsdc/irishealth-community:latest}"
+IRIS_PASSWORD="${IRIS_PASSWORD:-SYS}"
+MOCK_LLM_PORT="${MOCK_LLM_PORT:-8085}"
+CTR="${1:-$IRIS_CONTAINER}"
+IMAGE="$IRIS_IMAGE"
 
 say(){ printf '\n== %s ==\n' "$*"; }
 
-# 1. Ensure the container exists and is healthy.
+# 1. Ensure the container exists and is healthy. IRIS always listens on 1972/52773
+#    INSIDE the container; we publish them to the configurable HOST ports above.
 if ! docker ps -a --format '{{.Names}}' | grep -qx "$CTR"; then
-  say "Starting IRIS for Health container '$CTR'"
-  docker run -d --name "$CTR" -p 1972:1972 -p 52773:52773 -e IRIS_PASSWORD=SYS "$IMAGE" >/dev/null
+  say "Starting IRIS for Health container '$CTR' (host ports ${IRIS_WEB_PORT}->52773, ${IRIS_SUPERSERVER_PORT}->1972)"
+  docker run -d --name "$CTR" \
+    -p "${IRIS_SUPERSERVER_PORT}:1972" -p "${IRIS_WEB_PORT}:52773" \
+    -e IRIS_PASSWORD="$IRIS_PASSWORD" "$IMAGE" >/dev/null
 fi
 docker start "$CTR" >/dev/null 2>&1 || true
 say "Waiting for IRIS to be healthy"
@@ -63,9 +81,10 @@ CHOME="$(docker exec "$CTR" bash -lc 'printf %s "${HOME:-/home/irisowner}"' | tr
 SRC="$CHOME/dtlsrc"
 docker cp "$HERE/mock/mock_llm.py" "$CTR:$CHOME/mock_llm.py"
 
-# 3. Start the mock LLM (robust, idempotent — see scripts/mock.sh).
-say "Starting mock LLM on :8085"
-bash "$HERE/scripts/mock.sh" "$CTR" 8085
+# 3. Start the mock LLM (robust, idempotent — see scripts/mock.sh). Runs INSIDE the
+#    container; the production connects to it on this port via localhost.
+say "Starting mock LLM on :${MOCK_LLM_PORT}"
+bash "$HERE/scripts/mock.sh" "$CTR" "$MOCK_LLM_PORT"
 
 # 3a. Document-extraction libraries (pypdf, python-docx) are installed by the
 #     installer (DTL.Setup.Installer.Run -> DTL.Util.Py.EnsurePackages), which
@@ -111,8 +130,9 @@ do ##class(DTL.Setup.Installer).Run(dtl, 1)
 halt
 OS
 
-# 5. Show URLs.
-PORT="$(docker port "$CTR" 52773/tcp 2>/dev/null | head -1 | sed 's/.*://')"; PORT="${PORT:-52773}"
+# 5. Show URLs. Prefer the actually-published host port (handles a pre-existing
+#    container mapped differently); fall back to the configured IRIS_WEB_PORT.
+PORT="$(docker port "$CTR" 52773/tcp 2>/dev/null | head -1 | sed 's/.*://')"; PORT="${PORT:-$IRIS_WEB_PORT}"
 say "Ready"
 echo "UI:     http://localhost:${PORT}/dtl/ui/index.html"
 echo "API:    http://localhost:${PORT}/dtl/api/health   (init/health check)"
