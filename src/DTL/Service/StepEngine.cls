@@ -138,6 +138,52 @@ ClassMethod ApplyStructuredSpec(pJob As DTL.Data.Job, pReply As %String)
 /// cacheable BUILD SYSTEM PROMPT (DTL rules + HL7 schema + approved spec) and marks
 /// the build-conversation start, then asks for a short implementation plan. Moves
 /// the job to AWAITING_PLAN.
+/// Background entry point for planning (JOB'd by JobManager.StartJob for an approved
+/// concise spec). Opens the job by id and runs the synchronous Plan so the slow LLM
+/// calls (incl. the plan-coverage re-plan loop) happen OUT of the HTTP request.
+///
+/// CRITICAL: this runs in a spawned process, so the Job record is the ONLY channel
+/// back to the polling UI. If anything throws here (or in Plan) before a status is
+/// written, the job would be stuck at QUEUED/PLANNING forever with no error and the
+/// interop message stuck at "Delivered". So we wrap everything and, on ANY failure,
+/// write FAILED + the error onto the job so the UI surfaces it instead of hanging.
+ClassMethod PlanJob(pJobId As %String)
+{
+	try {
+		set tJob = ##class(DTL.Data.Job).OpenByJobId(pJobId, .sc)
+		if '$isobject(tJob) quit
+		do ..Plan(tJob)
+	} catch ex {
+		do ..FailJob(pJobId, "Planning failed: " _ ex.DisplayString())
+	}
+}
+
+/// Background entry point for in-job spec structuring (JOB'd for a never-reviewed
+/// typed spec). Same rationale + silent-death guard as PlanJob.
+ClassMethod StructureSpecJob(pJobId As %String)
+{
+	try {
+		set tJob = ##class(DTL.Data.Job).OpenByJobId(pJobId, .sc)
+		if '$isobject(tJob) quit
+		do ..StructureSpec(tJob)
+	} catch ex {
+		do ..FailJob(pJobId, "Spec structuring failed: " _ ex.DisplayString())
+	}
+}
+
+/// Mark a job FAILED with an error message — best-effort, used by the background
+/// entry points so a spawned-process crash never leaves a job silently stuck.
+ClassMethod FailJob(pJobId As %String, pMsg As %String)
+{
+	try {
+		set tJob = ##class(DTL.Data.Job).OpenByJobId(pJobId, .sc)
+		quit:'$isobject(tJob)
+		set tJob.Status = "FAILED", tJob.LastError = $extract(pMsg, 1, 1800)
+		set tJob.UpdatedAt = ##class(DTL.Data.Job).Now()
+		do tJob.%Save()
+	} catch {}
+}
+
 ClassMethod Plan(pJob As DTL.Data.Job) As %Status
 {
 	set tSC = $$$OK
@@ -157,8 +203,44 @@ ClassMethod Plan(pJob As DTL.Data.Job) As %Status
 			quit
 		}
 		set pJob.SessionId = tSession
-		set pJob.Plan = $extract(tReply, 1, 32000)
 		do ..AddAssistantTurn(pJob, tReply, tInTok, tOutTok, tCost)
+
+		// COVERAGE GATE: every specification rule THAT APPLIES TO THIS MESSAGE TYPE must
+		// be accounted for in the plan, so a conditional/"runtime" rule (e.g. a "required
+		// when…" constraint) can't be silently dropped and then missing from the DTL. We
+		// scope by the segments that exist in this message's structure, so rules for OTHER
+		// message types (ACK/SIU/REF/… segments not in this DocType) are NOT demanded —
+		// that scoping is also why the plan stays a realistic size instead of enumerating
+		// every rule in a multi-message spec. Bounded retries so a stubborn model can't loop.
+		set tSegSet = ##class(DTL.Util.HL7Schema).SegmentSet(pJob.SourceDocType)
+		for tCov = 1:1:2 {
+			set tMissing = ..UncoveredRules(tSpec, tReply, tSegSet)
+			quit:tMissing=""
+			do pJob.AddTurn("user", ##class(DTL.Util.PromptBuilder).PlanCoverageFixPrompt(tMissing))
+			set tReply2 = ..CallLLM(pJob, .tSession, .tErr, 1, .tInTok, .tOutTok, .tCost)
+			quit:tReply2=""    // transport hiccup: keep the best plan we have, don't fail the step
+			set pJob.SessionId = tSession
+			do ..AddAssistantTurn(pJob, tReply2, tInTok, tOutTok, tCost)
+			set tReply = tReply2
+		}
+
+		// CONDITIONAL-REQUIREMENT GATE: a rule the spec states as 'required when…' must be
+		// ENFORCED by the DTL (an <if>), not assumed already-present. Catch any such rule
+		// the plan downgraded to 'passed through unchanged' and make the model re-classify
+		// it. (Prompt guidance alone has flip-flopped between dropping it and truncating it;
+		// this deterministic check keeps a runtime rule from silently becoming a no-op.)
+		for tCond = 1:1:2 {
+			set tMisclass = ..MisclassifiedConditionals(tSpec, tReply, tSegSet)
+			quit:tMisclass=""
+			do pJob.AddTurn("user", ##class(DTL.Util.PromptBuilder).PlanConditionalFixPrompt(tMisclass))
+			set tReply3 = ..CallLLM(pJob, .tSession, .tErr, 1, .tInTok, .tOutTok, .tCost)
+			quit:tReply3=""
+			set pJob.SessionId = tSession
+			do ..AddAssistantTurn(pJob, tReply3, tInTok, tOutTok, tCost)
+			set tReply = tReply3
+		}
+
+		set pJob.Plan = $extract(tReply, 1, 32000)
 		set pJob.Status = "AWAITING_PLAN"
 		set pJob.UpdatedAt = ##class(DTL.Data.Job).Now()
 		do pJob.%Save()
@@ -325,30 +407,59 @@ ClassMethod AccuracyGate(pJob As DTL.Data.Job, pClassName As %String, pSpec As %
 	set tRun = ##class(DTL.Util.Verifier).RunAll(pClassName, .tInputs, pJob.SourceDocType)
 	set pReport.runAll = tRun
 
-	set tBad = ""
-	if 'tRun.ran set tBad = tBad _ "- The DTL throws a runtime error on at least one of the example inputs (it must run cleanly on all of them)." _ nl
-	if 'tRun.anyChange set tBad = tBad _ "- The DTL produced output IDENTICAL to the input for every example — no field was changed. Check that your target paths are valid (a wrong path is silently ignored), so the spec's changes are actually applied." _ nl
+	// HARD requirement: the DTL must run cleanly on every example input.
+	set tBadHigh = "", tBadLow = ""
+	if 'tRun.ran set tBadHigh = tBadHigh _ "- The DTL throws a runtime error on at least one of the example inputs (it must run cleanly on all of them)." _ nl
+	// Coverage (anyChange) is now an ADVISORY signal, NOT a hard gate: a correct
+	// transform whose changes are all conditional+untriggered (or already-matching)
+	// on these example inputs legitimately changes nothing. Surface it as LOW so the
+	// reviewer/LLM can sanity-check target paths, but don't fail the gate on it alone.
+	if 'tRun.anyChange set tBadLow = tBadLow _ "- [LOW] The DTL produced output identical to the input for every example — no field changed. If the spec mandates changes for this message, verify the target paths are valid (a wrong path is silently ignored). If the spec's changes are all conditional and not triggered by these inputs, this is expected." _ nl
 
-	// 3: LLM-as-judge conformance on the primary output.
+	// 3: LLM-as-judge conformance on the primary output (scoped to this DocType).
 	set tJudge = ..Judge(pJob, pSpec, pJob.StreamStr(pJob.SourceHL7), pPrimaryOutput)
 	set pReport.judge = tJudge
 	set pScore = $select($isobject(tJudge)&&(tJudge.score'=""):+tJudge.score, 1:0)
-	set tConforms = $select($isobject(tJudge):''tJudge.conforms, 1:0)
 
-	// Compose the human/LLM findings list from judge violations + coverage problems.
+	// Tally REAL violations by severity. The judge sometimes lists items it then
+	// describes as satisfied ("...this is satisfied", "no violation here", "correct")
+	// — defensively drop any entry whose detail self-identifies as a non-violation so
+	// such artefacts can neither block the pass nor pollute the repair feedback.
+	set tHigh = 0, tLow = 0
 	if $isobject(tJudge), $isobject(tJudge.violations) {
 		set it = tJudge.violations.%GetIterator()
 		while it.%GetNext(.k, .v) {
 			continue:'$isobject(v)
-			set tBad = tBad _ "- [" _ $select(v.severity'="":v.severity, 1:"HIGH") _ "] Rule not satisfied: " _ v.rule _ $select(v.detail'="":" — " _ v.detail, 1:"") _ nl
+			set tDetail = v.detail, tDL = $zconvert(tDetail, "L")
+			// Skip self-contradicting "actually satisfied" entries.
+			if (tDL [ "this is satisfied") || (tDL [ "no violation") || (tDL [ "satisfying the rule") || (tDL [ "satisfies the rule") || (tDL [ "satisfies rule") || (tDL [ "is satisfied") continue
+			set tSev = $zconvert($select(v.severity'="":v.severity, 1:"HIGH"), "U")
+			if tSev = "HIGH" {
+				set tHigh = tHigh + 1
+				set tBadHigh = tBadHigh _ "- [HIGH] Rule not satisfied: " _ v.rule _ $select(tDetail'="":" — " _ tDetail, 1:"") _ nl
+			} else {
+				set tLow = tLow + 1
+				set tBadLow = tBadLow _ "- [LOW] " _ v.rule _ $select(tDetail'="":" — " _ tDetail, 1:"") _ nl
+			}
 		}
 	}
-	set pFindings = tBad
+	set pReport.highCount = tHigh, pReport.lowCount = tLow
+	// Feed back HIGH findings first (the real defects to fix); include LOW items only
+	// as secondary context so the model fixes genuine bugs instead of churning on
+	// nitpicks (which is what produced identical-candidate / plateau dead-ends).
+	if tBadHigh = "" {
+		set pFindings = tBadLow
+	} elseif tBadLow '= "" {
+		set pFindings = tBadHigh _ "Secondary (LOW — address only if it does not regress the above):" _ nl _ tBadLow
+	} else {
+		set pFindings = tBadHigh
+	}
 
-	// Pass only if it ran everywhere, changed something, and the judge says it
-	// conforms (no HIGH violations). The judge is advisory on score but decisive on
-	// "conforms"; coverage/run are hard requirements.
-	set tPass = tRun.ran && tRun.anyChange && tConforms
+	// PASS when it ran everywhere and there are NO HIGH-severity violations. LOW items
+	// and the advisory coverage signal do NOT block success — they were the source of
+	// the never-passing plateau (the gate used to require an EMPTY violations list and
+	// ignored severity entirely, so any LOW nitpick blocked SUCCESS forever).
+	set tPass = tRun.ran && (tHigh = 0)
 	set pReport.pass = tPass
 	quit $select(tPass:"SUCCESS", 1:"MISMATCH")
 }
@@ -369,7 +480,7 @@ ClassMethod Judge(pJob As DTL.Data.Job, pSpec As %String, pInput As %String, pOu
 	set tSys.Role = "system", tSys.Content = "You are a strict, fair QA grader. You output only the requested JSON."
 	do tReq.Transcript.Insert(tSys)
 	set tUsr = ##class(DTL.Msg.ChatTurn).%New()
-	set tUsr.Role = "user", tUsr.Content = ##class(DTL.Util.PromptBuilder).JudgePrompt(pSpec, pInput, pOutput)
+	set tUsr.Role = "user", tUsr.Content = ##class(DTL.Util.PromptBuilder).JudgePrompt(pSpec, pInput, pOutput, pJob.SourceDocType)
 	do tReq.Transcript.Insert(tUsr)
 	set sc = ##class(Ens.Director).CreateBusinessService("EnsLib.Testing.Service", .tSvc)
 	if $$$ISERR(sc) quit ""
@@ -380,6 +491,160 @@ ClassMethod Judge(pJob As DTL.Data.Job, pSpec As %String, pInput As %String, pOu
 	set tCost = ##class(DTL.Util.Pricing).Cost(pJob.Model, tInTok, tOutTok)
 	do ..AddJudgeTurn(pJob, pJob.StreamStr(tResp.RawContent), tInTok, tOutTok, tCost)
 	quit ..ParseJSONBlock(pJob.StreamStr(tResp.RawContent))
+}
+
+/// COVERAGE CHECK (deterministic, fully generic — no segment names baked in). Given
+/// the specification markdown and the produced plan text, return a newline list of
+/// the spec rule lines whose FIELD TOKEN does not appear anywhere in the plan ("" if
+/// the plan covers them all). We only enforce rules that carry a concrete HL7 field
+/// reference (a token like SEG.field / SEG-field, e.g. OBX.2, MSH.12, PID.3.4):
+/// general prose ("support HL7 v2.4") has no field token and isn't a per-field plan
+/// item, so it's not flagged. A rule is "covered" if ANY field token it mentions
+/// appears in the plan (token match is whitespace/punctuation tolerant). This is what
+/// catches a conditional/runtime rule (e.g. OBX.2) being silently dropped.
+/// pSegSet (optional): ",MSH,PID,OBX,…," of segments that exist in THIS message's
+/// structure (from HL7Schema.SegmentSet). When supplied, a rule is only enforced if at
+/// least one of its field tokens' SEGMENTS is in that set — so rules for OTHER message
+/// types (e.g. ACK/SIU/REF segments absent from an ORU_R01) are NOT demanded. When
+/// empty, all field-token rules are enforced (back-compat).
+ClassMethod UncoveredRules(pSpec As %String, pPlan As %String, pSegSet As %String = "") As %String
+{
+	set nl = $char(10)
+	// Build the SET of field tokens the plan covers (exact membership — NOT substring,
+	// so "OBX.1" is not falsely matched by "OBX.11").
+	kill tPlanSet, tPlanToks
+	set nP = ..FieldTokens(pPlan, .tPlanToks)
+	for p = 1:1:nP { set tPlanSet(tPlanToks(p)) = 1 }
+	set tOut = "", tShown = 0
+	set tN = $length(pSpec, nl)
+	for i = 1:1:tN {
+		set tLine = $zstrip($piece(pSpec, nl, i), "<>W")
+		continue:tLine=""
+		// Only consider rule bullets ("- ...") — headings/blank/prose are not plan items.
+		continue:$extract(tLine)'="-"
+		set tRule = $zstrip($extract(tLine, 2, *), "<>W")
+		continue:tRule=""
+		// Extract every field token in the rule (SEG.field…). No token => not a per-field
+		// rule (general guidance like "support HL7 v2.4") => don't enforce coverage on it.
+		kill tToks
+		set nTok = ..FieldTokens(tRule, .tToks)
+		continue:nTok=0
+		// SCOPE: if we know this message's segments, only enforce rules whose segment
+		// exists here — skip rules that target other message types' segments.
+		if pSegSet '= "" {
+			set tInScope = 0
+			for t = 1:1:nTok { if pSegSet [ ("," _ $piece(tToks(t), ".", 1) _ ",") { set tInScope = 1  quit } }
+			continue:'tInScope
+		}
+		// Covered if ANY of its tokens is in the plan's token set (exact match).
+		set tCovered = 0
+		for t = 1:1:nTok { if $data(tPlanSet(tToks(t))) { set tCovered = 1  quit } }
+		continue:tCovered
+		set tShown = tShown + 1
+		quit:tShown>40   // safety cap on feedback size
+		set tOut = tOut _ "- " _ tRule _ nl
+	}
+	quit tOut
+}
+
+/// Generic test: does a rule line state a CONDITIONAL REQUIREMENT (a field that is
+/// required/mandated WHEN some condition holds)? Matches phrasings like "required if
+/// …", "required when …", "must … when/if …", "if … (is/are) (required|present|
+/// filled|populated)", "when … (filled|present|populated)". No segment names baked in.
+ClassMethod IsConditionalReq(pRule As %String) As %Boolean
+{
+	set r = $zconvert(pRule, "L")
+	// Must mention a requirement AND a condition keyword.
+	set tReq = (r [ "required") || (r [ "must ") || (r [ "mandatory") || (r [ "shall ")
+	set tCond = (r [ "if ") || (r [ "when ") || (r [ "whenever ") || (r [ "unless ")
+	quit (tReq && tCond)
+}
+
+/// CONDITIONAL-REQUIREMENT CHECK (deterministic, generic). Return the spec rule lines
+/// that are CONDITIONAL REQUIREMENTS but appear in the plan as 'passed through
+/// unchanged / no transform' — i.e. a runtime rule the model wrongly downgraded to a
+/// no-op. Matched by field token (same scheme as UncoveredRules); scoped to pSegSet
+/// when given. "" if none are misclassified.
+ClassMethod MisclassifiedConditionals(pSpec As %String, pPlan As %String, pSegSet As %String = "") As %String
+{
+	set nl = $char(10)
+	// Index the plan lines by field token, recording whether each is marked pass-through.
+	kill tPassTok
+	set pN = $length(pPlan, nl)
+	for i = 1:1:pN {
+		set tPL = $piece(pPlan, nl, i)
+		continue:tPL=""
+		set tIsPass = ($zconvert(tPL, "L") [ "passed through") || ($zconvert(tPL, "L") [ "no transform")
+		continue:'tIsPass
+		kill tPT
+		set nT = ..FieldTokens(tPL, .tPT)
+		for t = 1:1:nT { set tPassTok(tPT(t)) = 1 }
+	}
+	set tOut = "", tShown = 0
+	set sN = $length(pSpec, nl)
+	for i = 1:1:sN {
+		set tLine = $zstrip($piece(pSpec, nl, i), "<>W")
+		continue:$extract(tLine)'="-"
+		set tRule = $zstrip($extract(tLine, 2, *), "<>W")
+		continue:tRule=""
+		continue:'..IsConditionalReq(tRule)
+		kill tToks
+		set nTok = ..FieldTokens(tRule, .tToks)
+		continue:nTok=0
+		// scope to this message type if known
+		if pSegSet '= "" {
+			set tInScope = 0
+			for t = 1:1:nTok { if pSegSet [ ("," _ $piece(tToks(t), ".", 1) _ ",") { set tInScope = 1  quit } }
+			continue:'tInScope
+		}
+		// flagged if ANY of its tokens is marked pass-through in the plan
+		set tBad = 0
+		for t = 1:1:nTok { if $data(tPassTok(tToks(t))) { set tBad = 1  quit } }
+		continue:'tBad
+		set tShown = tShown + 1
+		quit:tShown>40
+		set tOut = tOut _ "- " _ tRule _ nl
+	}
+	quit tOut
+}
+
+/// Pull canonical "SEG.field" tokens out of a piece of text into tToks(n), returning
+/// the count. Matches an HL7 field reference: a 2-4 char segment name (first char a
+/// letter) followed by a '.' or '-' separator and a field number — e.g. "OBX.2",
+/// "MSH-12", "PID.3.4" (-> PID.3). The separator MUST be '.' or '-' (NOT a space) so
+/// ordinary prose like "version 2.4" does not yield a bogus token. Generic: segments
+/// are discovered from the text, never a hardcoded list.
+ClassMethod FieldTokens(pText As %String, Output pToks) As %Integer
+{
+	kill pToks
+	set n = 0, tU = $zconvert(pText, "U")
+	set tLen = $length(tU)
+	set i = 1
+	while i <= tLen {
+		set c = $extract(tU, i)
+		// A segment name starts with a letter; grab a run of up to 4 alnum chars.
+		if c?1A {
+			set tSeg = c, j = i + 1
+			while (j <= tLen) && ($extract(tU, j)?1AN) && ($length(tSeg) < 4) { set tSeg = tSeg _ $extract(tU, j), j = j + 1 }
+			// HL7 segment name is 2-4 chars. Require a '.' or '-' separator then a number.
+			if ($length(tSeg) >= 2) {
+				set tSep = $extract(tU, j)
+				if (tSep = ".") || (tSep = "-") {
+					set k = j + 1, tNum = ""
+					while (k <= tLen) && ($extract(tU, k)?1N) { set tNum = tNum _ $extract(tU, k), k = k + 1 }
+					if tNum '= "" {
+						set n = n + 1, pToks(n) = tSeg _ "." _ +tNum
+						set i = k
+						continue
+					}
+				}
+			}
+			set i = j
+			continue
+		}
+		set i = i + 1
+	}
+	quit n
 }
 
 /// Parse a strict-JSON object out of an LLM reply that may be wrapped in prose or a

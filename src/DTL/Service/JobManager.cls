@@ -128,12 +128,18 @@ ClassMethod StartJob(pPayload As %DynamicObject, Output pJobId As %String, Outpu
 			}
 		} elseif tHaveConcise {
 			// ----- preferred path: the APPROVED concise spec (reviewed at upload) is
-			// already the authority — go straight to planning, no in-job structuring. -----
-			set pSC = ##class(DTL.Service.StepEngine).Plan(tJob)
+			// already the authority — go straight to planning, no in-job structuring.
+			// Run planning in a BACKGROUND job so the HTTP request returns immediately:
+			// Plan makes (potentially several) slow LLM calls — the plan-coverage gate may
+			// re-plan a couple of times — and doing that synchronously inside /generate can
+			// exceed the web gateway timeout (the request then fails client-side with a
+			// misleading "production not running"). The UI polls GET /jobs/:id for progress. -----
+			job ##class(DTL.Service.StepEngine).PlanJob(pJobId)
 		} else {
 			// ----- fallback (typed-text spec, never reviewed at upload): structure it
-			// in-job so the user still gets the early spec-review checkpoint. -----
-			set pSC = ##class(DTL.Service.StepEngine).StructureSpec(tJob)
+			// in-job so the user still gets the early spec-review checkpoint. Also async
+			// (the structuring LLM call is slow) for the same gateway-timeout reason. -----
+			job ##class(DTL.Service.StepEngine).StructureSpecJob(pJobId)
 		}
 	} catch ex {
 		set pSC = ex.AsStatus()

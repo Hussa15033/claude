@@ -54,6 +54,33 @@ ClassMethod SchemaText(pDocType As %String, pMaxFields As %Integer = 0) As %Stri
 	}
 }
 
+/// The SET of distinct segment names present in a message structure, as a
+/// ",MSH,PID,OBR,…," delimited string (leading+trailing comma for easy [ membership
+/// tests). Used to scope plan-coverage to rules whose segment actually exists in this
+/// message type — so rules for OTHER message types (ACK/SIU/REF segments not in an
+/// ORU_R01, etc.) are neither demanded nor enumerated. Returns "" if the DocType
+/// doesn't resolve (caller then falls back to enforcing all rules).
+ClassMethod SegmentSet(pDocType As %String) As %String
+{
+	if pDocType = "" return ""
+	kill ^||DTL.Schema
+	try {
+		do ##class(EnsLib.HL7.Schema).GetContentArray(.tC, "source", pDocType, , 0, 0)
+		if $get(tC) = "" { kill ^||DTL.Schema  return "" }
+		merge ^||DTL.Schema = tC
+		kill tSegTypes
+		set tLines = ""
+		do ..WalkStruct("", "", .tSegTypes, .tLines, 0)
+		set tOut = ",", tSeg = ""
+		for { set tSeg = $order(tSegTypes(tSeg))  quit:tSeg=""  set tOut = tOut _ $zconvert(tSeg, "U") _ "," }
+		kill ^||DTL.Schema
+		return $select(tOut=",":"", 1:tOut)
+	} catch {
+		kill ^||DTL.Schema
+		return ""
+	}
+}
+
 /// Recursively walk the content tree in ^||DTL.Schema. Emits one line per segment
 /// with its full DTL group-prefixed path and records each distinct segment type.
 ///   pNode   = complete subscript string of the current parent ("" = top level,

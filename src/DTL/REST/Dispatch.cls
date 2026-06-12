@@ -30,6 +30,7 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
   <Route Url="/upload"          Method="POST" Call="Upload"   Cors="true"/>
   <Route Url="/specs"           Method="GET"  Call="ListSpecs" Cors="true"/>
   <Route Url="/specs/:token"    Method="GET"  Call="GetSpec"  Cors="true"/>
+  <Route Url="/specs/:token/original" Method="GET" Call="OrigDoc" Cors="true"/>
   <Route Url="/specs/:token/concise"         Method="POST" Call="ConciseSpec"        Cors="true"/>
   <Route Url="/specs/:token/approve-concise" Method="POST" Call="ApproveConcise"     Cors="true"/>
   <Route Url="/generate"        Method="POST" Call="Generate" Cors="true"/>
@@ -291,9 +292,16 @@ ClassMethod Upload() As %Status
 		set tDoc = ##class(DTL.Data.SpecDoc).%New()
 		set tDoc.Token = tToken, tDoc.FileName = tName, tDoc.Status = "PENDING"
 		set tDoc.CreatedAt = ##class(DTL.Data.Job).Now()
-		do tDoc.%Save()
-		// Decode base64 -> binary stream -> file in the watched dir.
+		// Decode base64 -> binary. Persist the ORIGINAL bytes on the record (so the UI
+		// can display the source PDF/image), then ALSO write them to the watched dir for
+		// the file-watcher service to extract. The watcher later re-opens this record by
+		// token and only sets Text/Status/etc., so OrigBytes survives.
 		set tBin = $system.Encryption.Base64Decode(tB64)
+		do tDoc.OrigBytes.Write(tBin)
+		set tDoc.OrigExt = tExt
+		set tDoc.OrigMime = ..MimeForExt(tExt)
+		do tDoc.%Save()
+		// Write the decoded bytes to a file in the watched dir.
 		set tFile = ##class(%Stream.FileBinary).%New()
 		set tFile.Filename = tSpecsDir _ tToken _ "." _ tExt
 		do tFile.Write(tBin)
@@ -352,6 +360,26 @@ ClassMethod GetSpec(pToken As %String) As %Status
 	quit $$$OK
 }
 
+/// GET /specs/:token/original - stream back the originally-uploaded document bytes
+/// with the right content-type, so the UI can show the source PDF/image inline.
+/// 404 if the spec is unknown, or if it was uploaded before original bytes were stored.
+ClassMethod OrigDoc(pToken As %String) As %Status
+{
+	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
+	if '$isobject(tDoc) quit ..ErrJson(404, "No spec '" _ pToken _ "'")
+	if tDoc.OrigBytes.Size = 0 quit ..ErrJson(404, "Original document not stored for this spec.")
+	// Serve the original document as base64 inside JSON. A raw binary body over this
+	// %CSP.REST app (CHARSET=utf-8) gets run through a device translate table that
+	// corrupts PDF/image bytes and blanks the viewer; base64 is plain ASCII, so it
+	// survives intact and the browser decodes it to a Blob client-side.
+	set %response.ContentType = "application/json"
+	set tB64 = ""
+	do tDoc.OrigBytes.Rewind()
+	while 'tDoc.OrigBytes.AtEnd { set tB64 = tB64 _ $system.Encryption.Base64Encode(tDoc.OrigBytes.Read(12288), 1) }
+	write {"mime": (tDoc.OrigMime), "ext": (tDoc.OrigExt), "fileName": (tDoc.FileName), "size": (tDoc.OrigBytes.Size), "dataBase64": (tB64)}.%ToJSON()
+	quit $$$OK
+}
+
 /// POST /specs/:token/concise - body {provider, model, apiKey, region}. Kicks off
 /// generation (and LLM-verify) of the concise, grouped, referenced specification in
 /// the BACKGROUND and returns 202 immediately. Generation can require several large,
@@ -362,13 +390,17 @@ ClassMethod ConciseSpec(pToken As %String) As %Status
 	set tPayload = ..ReadBody(.tSC)
 	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
 	set tProvider = tPayload.provider, tModel = tPayload.model, tKey = tPayload.apiKey, tRegion = tPayload.region
+	// Optional dedicated summarisation model for the concise/verify calls (cheaper +
+	// faster than the build model). Falls back to the build model when not supplied.
+	set tConciseModel = tPayload.conciseModel
+	if $zstrip(tConciseModel, "<>W") = "" set tConciseModel = tModel
 	// Fail fast with a clear message when config is missing (a live provider needs a
 	// key + model). Saves a wasted round-trip and tells the user exactly what to fix.
 	if (tProvider = "openai") || (tProvider = "bedrock") {
 		if $zstrip(tKey, "<>W") = "" quit ..ErrJson(400, "No API key configured. Open Settings and enter your " _ $select(tProvider="bedrock":"AWS Bedrock", 1:"OpenAI") _ " API key (or switch Provider to Mock).")
-		if $zstrip(tModel, "<>W") = "" quit ..ErrJson(400, "No model selected. Open Settings, enter your API key, then choose a model.")
+		if $zstrip(tConciseModel, "<>W") = "" quit ..ErrJson(400, "No model selected. Open Settings, enter your API key, then choose a model.")
 	}
-	set sc = ##class(DTL.Service.SpecConcise).Start(pToken, tProvider, tModel, tKey, tRegion)
+	set sc = ##class(DTL.Service.SpecConcise).Start(pToken, tProvider, tConciseModel, tKey, tRegion)
 	if $$$ISERR(sc) quit ..ErrJson(400, $system.Status.GetErrorText(sc))
 	set %response.Status = "202 Accepted"
 	do ..Json({"token": (pToken), "conciseStatus": "PENDING"})
@@ -534,6 +566,27 @@ ClassMethod ListJobs() As %Status
 }
 
 // ---------------- helpers ----------------
+
+/// Map a lowercase file extension to a content-type for serving the original upload.
+ClassMethod MimeForExt(pExt As %String) As %String
+{
+	quit $case(pExt,
+		"pdf":"application/pdf",
+		"png":"image/png",
+		"jpg":"image/jpeg",
+		"jpeg":"image/jpeg",
+		"gif":"image/gif",
+		"webp":"image/webp",
+		"txt":"text/plain",
+		"md":"text/plain",
+		"csv":"text/plain",
+		"hl7":"text/plain",
+		"docx":"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		"doc":"application/msword",
+		"html":"text/html",
+		"htm":"text/html",
+		:"application/octet-stream")
+}
 
 /// Parse the request body as JSON into a %DynamicObject.
 ClassMethod ReadBody(Output pSC As %Status) As %DynamicObject

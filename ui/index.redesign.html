@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>InterSystems AI DTL Generator</title>
+<link rel="icon" href="https://i.pinimg.com/736x/11/2a/b3/112ab34c423c70caa37e7f8a83d9c2a7.jpg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  /* ============================================================
+     InterSystems AI DTL Generator — guided 4-step demo UI.
+     Clean white surfaces, IRIS blue (#343699) structure,
+     IRIS green (#00b6b0) for progress / AI / success. Thin
+     borders, minimal shadow, no emoji (Lucide icons only).
+     ============================================================ */
+  :root{
+    --iris-blue:#343699; --iris-green:#00b6b0;
+    --iris-blue-950:#111348; --iris-blue-900:#171851; --iris-blue-800:#24266f; --iris-blue-700:#2c2e84;
+    --iris-blue-soft:#eef0ff; --iris-green-800:#007f7b; --iris-green-700:#008f8a; --iris-green-soft:#e6fbfa;
+    --ink:#101828; --muted:#667085; --soft:#f5f7fb; --surface:#fff; --surface-2:#f9fafb;
+    --line:#d9deea; --line-strong:#b9c0d5;
+    --success:#039855; --warning:#dc6803; --danger:#d92d20; --danger-soft:#fef3f2; --warn-soft:#fffaeb;
+    --code-bg:#0e1430; --code-fg:#e9fbff; --code-line:#252c54; --code-head:#161d44; --code-accent:#8fe9e4;
+    --mono:'Roboto Mono','SFMono-Regular',Consolas,Menlo,monospace;
+    --r-lg:16px; --r-md:12px; --r-sm:10px;
+    --shadow:0 1px 2px rgba(16,24,40,.05);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{min-height:100vh;color:var(--ink);background:var(--soft);
+    font:14px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+  i[data-lucide]{width:16px;height:16px;stroke-width:2;vertical-align:-3px;flex:0 0 auto}
+  a{color:var(--iris-blue);font-weight:600;text-decoration:none}a:hover{text-decoration:underline}
+  .hidden{display:none!important}
+  .mono{font-family:var(--mono)}
+
+  .app-shell{max-width:1240px;margin:0 auto;padding:0 24px 56px;display:flex;flex-direction:column;gap:18px}
+
+  /* ---- topbar ---- */
+  .topbar{position:sticky;top:0;z-index:30;margin:0 -24px;padding:12px 24px;display:flex;align-items:center;gap:14px;
+    background:var(--iris-blue-950);color:#dfe3ff;border-bottom:1px solid rgba(255,255,255,.08)}
+  .topbar .mark{width:36px;height:36px;border-radius:9px;object-fit:cover;flex:0 0 auto}
+  .topbar .title{font-weight:800;font-size:16px;color:#fff;letter-spacing:.2px;line-height:1.15}
+  .topbar .sub{font-size:12px;color:#9aa3d6}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+  .statpill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:#cfd6f5;
+    background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:5px 11px}
+  .statpill i{width:14px;height:14px}
+  .health{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:#cfd6f5;cursor:pointer;
+    padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}
+  .health:hover{background:rgba(255,255,255,.16)}
+  .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.4)}
+  .dot.ok{background:#33d6b8}.dot.bad{background:#ff9b9b}
+
+  /* ---- hero ---- */
+  .hero{border:1px solid var(--line);border-radius:var(--r-lg);background:
+      linear-gradient(110deg,var(--iris-blue) 0%,var(--iris-blue-700) 46%,var(--iris-green-800) 120%);
+    color:#eaf6ff;padding:18px 22px;display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+  .hero h1{margin:0;font-size:18px;font-weight:800;color:#fff;letter-spacing:.2px}
+  .hero p{margin:4px 0 0;font-size:13px;color:#d4def8;max-width:560px}
+  .hero .facts{margin-left:auto;display:flex;gap:10px;flex-wrap:wrap}
+  .fact{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:var(--r-md);
+    padding:9px 13px;min-width:96px}
+  .fact .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:#bcd0f0;font-weight:700}
+  .fact .v{font-size:15px;font-weight:800;color:#fff;margin-top:2px;white-space:nowrap}
+
+  /* ---- guide strip ---- */
+  .guide{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .gcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:13px 15px;display:flex;gap:11px;align-items:flex-start}
+  .gcard .gi{width:34px;height:34px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center;background:var(--iris-blue-soft);color:var(--iris-blue)}
+  .gcard .gi i{width:18px;height:18px}
+  .gcard h3{margin:0 0 2px;font-size:13px;font-weight:700;color:var(--ink)}
+  .gcard p{margin:0;font-size:12px;color:var(--muted);line-height:1.45}
+
+  /* ---- workflow frame + tabs ---- */
+  .frame{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+  .tabs{display:flex;gap:0;border-bottom:1px solid var(--line);background:var(--surface-2);overflow-x:auto}
+  .tab-btn{flex:1 1 0;min-width:190px;display:flex;align-items:center;gap:11px;padding:14px 18px;border:none;background:none;
+    cursor:pointer;font:inherit;text-align:left;color:var(--muted);border-bottom:3px solid transparent;transition:.15s;position:relative}
+  .tab-btn+.tab-btn{border-left:1px solid var(--line)}
+  .tab-btn:hover:not(:disabled){background:#fff;color:var(--ink)}
+  .tab-btn[aria-selected=true]{background:#fff;color:var(--ink);border-bottom-color:var(--iris-green)}
+  .tab-btn:disabled{cursor:not-allowed;opacity:.55}
+  .tab-step{width:26px;height:26px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:12px;
+    background:#e7eaf3;color:var(--muted);transition:.15s}
+  .tab-btn[aria-selected=true] .tab-step{background:var(--iris-blue);color:#fff}
+  .tab-btn.done .tab-step{background:var(--iris-green);color:#fff}
+  .tab-btn.done .tab-step i{width:15px;height:15px}
+  .tab-title{display:block;font-size:13.5px;font-weight:700;line-height:1.2}
+  .tab-caption{display:block;font-size:11.5px;color:var(--muted);font-weight:500}
+  .tab-state{margin-left:auto;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 8px;border-radius:999px}
+  .tab-state.active{background:var(--iris-green-soft);color:var(--iris-green-800)}
+  .tab-state.locked{background:#eef1f8;color:var(--muted)}
+  .tab-state.done{background:var(--iris-blue-soft);color:var(--iris-blue)}
+
+  /* ---- panels ---- */
+  .panel{display:none;padding:22px 24px 26px;animation:fade .2s ease}
+  .panel.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .phead{margin-bottom:18px}
+  .phead h2{margin:0;font-size:17px;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:9px}
+  .phead h2 i{color:var(--iris-blue);width:19px;height:19px}
+  .phead p{margin:5px 0 0;font-size:13px;color:var(--muted);max-width:680px}
+  .preadiness{margin-top:11px;display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;
+    padding:6px 12px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);color:var(--muted)}
+  .preadiness.ready{background:var(--iris-green-soft);border-color:#bff0ed;color:var(--iris-green-800)}
+  .preadiness i{width:14px;height:14px}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  @media(max-width:980px){.grid-2{grid-template-columns:1fr}.guide{grid-template-columns:1fr}}
+
+  /* ---- cards ---- */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:16px 17px;margin-bottom:16px}
+  .card>.ch{display:flex;align-items:center;gap:9px;margin-bottom:4px}
+  .card>.ch i{color:var(--iris-blue);width:17px;height:17px}
+  .card>.ch h3{margin:0;font-size:14px;font-weight:700}
+  .card>.ch .ch-r{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .card>.csub{margin:0 0 12px;font-size:12px;color:var(--muted)}
+  .card.accent{border-left:3px solid var(--iris-green)}
+  .card.accent-blue{border-left:3px solid var(--iris-blue)}
+  .card.accent-warn{border-left:3px solid var(--warning)}
+
+  /* ---- forms ---- */
+  label.fld{display:block;font-size:12px;font-weight:700;color:var(--ink);margin:14px 0 6px}
+  label.fld .req{color:var(--danger);margin-left:2px}
+  label.fld .opt{color:var(--muted);font-weight:500;margin-left:4px}
+  label.fld:first-child,.card label.fld:first-of-type{margin-top:0}
+  input,select,textarea{width:100%;border:1px solid var(--line);background:#fff;color:var(--ink);
+    border-radius:var(--r-md);padding:11px 12px;font-family:inherit;font-size:13px;outline:none;transition:.15s}
+  textarea{font-family:var(--mono);font-size:12.5px;min-height:90px;resize:vertical;line-height:1.5}
+  textarea.prose{font-family:inherit;font-size:13px}
+  input:focus,select:focus,textarea:focus{border-color:rgba(0,182,176,.75);box-shadow:0 0 0 4px rgba(0,182,176,.13)}
+  input:disabled,select:disabled,textarea:disabled{background:var(--surface-2);color:var(--muted);cursor:not-allowed}
+  .help{font-size:11.5px;color:var(--muted);margin-top:5px}
+  .fieldrow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+  /* segmented control */
+  .seg{display:inline-flex;background:#fff;border:1px solid var(--line-strong);border-radius:var(--r-sm);overflow:hidden}
+  .seg button{border:none;background:transparent;padding:9px 15px;cursor:pointer;font:inherit;font-size:12.5px;font-weight:600;
+    color:var(--muted);display:inline-flex;align-items:center;gap:7px;border-right:1px solid var(--line)}
+  .seg button:last-child{border-right:none}
+  .seg button.on{background:var(--iris-blue);color:#fff}
+  .seg button i{width:15px;height:15px}
+
+  /* ---- buttons ---- */
+  button{font-family:inherit}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:var(--r-md);
+    padding:11px 18px;font-size:13.5px;font-weight:700;cursor:pointer;border:1px solid transparent;transition:.15s;white-space:nowrap}
+  .btn i{width:16px;height:16px}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .btn-primary{background:var(--iris-blue);color:#fff}
+  .btn-primary:hover:not(:disabled){background:var(--iris-blue-800)}
+  .btn-ok{background:var(--iris-green);color:#fff}
+  .btn-ok:hover:not(:disabled){background:var(--iris-green-800)}
+  .btn-ghost{background:#fff;color:var(--iris-blue);border-color:var(--line-strong)}
+  .btn-ghost:hover:not(:disabled){background:var(--surface-2);border-color:var(--iris-blue)}
+  .btn-danger{background:#fff;color:var(--danger);border-color:#f3c0c0}
+  .btn-danger:hover:not(:disabled){background:var(--danger-soft)}
+  .btn-plain{background:none;color:var(--muted);border:none;padding:8px 10px;font-weight:600}
+  .btn-plain:hover:not(:disabled){color:var(--ink)}
+  .btn-sm{padding:7px 12px;font-size:12px;border-radius:var(--r-sm)}
+  .actionrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px}
+  .actionrow .sp{flex:1 1 auto}
+
+  /* ---- hints / cues / governance ---- */
+  .note{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.5;border-radius:var(--r-sm);
+    padding:11px 13px;margin:12px 0}
+  .note i{width:16px;height:16px;flex:0 0 auto;margin-top:1px}
+  .note.hint{background:var(--iris-blue-soft);border:1px solid #cdd3f3;color:var(--iris-blue-800)}
+  .note.hint i{color:var(--iris-blue)}
+  .note.cue{background:var(--iris-green-soft);border:1px solid #bff0ed;color:var(--iris-green-800)}
+  .note.cue i{color:var(--iris-green-700)}
+  .note.gov{background:var(--warn-soft);border:1px solid #fce3ab;color:#a15c07}
+  .note.gov i{color:var(--warning)}
+  .note.err{background:var(--danger-soft);border:1px solid #f3c0c0;color:#b42318;white-space:pre-wrap;word-break:break-word}
+  .note.err i{color:var(--danger)}
+
+  /* ---- KPI ---- */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  @media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:13px 15px}
+  .kpi .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:6px}
+  .kpi .k i{width:13px;height:13px;color:var(--iris-blue)}
+  .kpi .v{font-size:19px;font-weight:800;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi .s{font-size:11.5px;color:var(--muted);margin-top:1px}
+
+  /* ---- chips / badges ---- */
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;
+    background:var(--surface-2);border:1px solid var(--line);color:var(--muted)}
+  .chip i{width:13px;height:13px}
+  .chip.ok{background:var(--iris-green-soft);border-color:#bff0ed;color:var(--iris-green-800)}
+  .chip.warn{background:var(--warn-soft);border-color:#fce3ab;color:#a15c07}
+  .chip.bad{background:var(--danger-soft);border-color:#f3c0c0;color:#b42318}
+  .chip.blue{background:var(--iris-blue-soft);border-color:#cdd3f3;color:var(--iris-blue)}
+  .badge{display:inline-block;padding:4px 11px;border-radius:999px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+  .b-QUEUED,.b-PLANNING,.b-STRUCTURING{background:#eef1f8;color:var(--muted)}
+  .b-AWAITING_SPEC,.b-AWAITING_PLAN,.b-AWAITING_ATTEMPT{background:var(--warn-soft);color:#a15c07}
+  .b-RUNNING,.b-GENERATING,.b-JUDGING{background:var(--iris-blue-soft);color:var(--iris-blue)}
+  .b-SUCCESS{background:var(--iris-green-soft);color:var(--iris-green-800)}
+  .b-FAILED,.b-REJECTED{background:var(--danger-soft);color:#b42318}
+
+  /* ---- progress bar + timer ---- */
+  .pbar{height:8px;border-radius:999px;background:#e7edf7;overflow:hidden;position:relative}
+  .pbar .pfill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--iris-blue),var(--iris-green))}
+  .pbar.indet .pfill{position:absolute;top:0;width:40%;animation:indet 1.3s cubic-bezier(.45,.05,.35,1) infinite}
+  @keyframes indet{0%{left:-42%}60%,100%{left:100%}}
+  .timer{font-family:var(--mono);font-size:12px;color:var(--iris-blue);background:var(--iris-green-soft);padding:3px 11px;border-radius:999px;font-weight:700}
+
+  /* ---- attempt steps (progress log) ---- */
+  .step{display:flex;gap:12px;align-items:flex-start;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:9px;background:#fff}
+  .step .sn{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:12px;flex:0 0 auto;background:var(--iris-blue);color:#fff}
+  .step.ph-SUCCESS .sn{background:var(--iris-green)}
+  .step.ph-COMPILE_FAIL .sn,.step.ph-RUNTIME_FAIL .sn,.step.ph-LLM_ERROR .sn{background:var(--danger)}
+  .step.ph-MISMATCH .sn{background:var(--warning)}
+  .step .st{font-weight:700;font-size:13px}
+  .step .sm{color:var(--muted);font-size:12px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);margin-top:2px}
+  .meta{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:2px 0 12px}.meta b{color:var(--ink)}
+
+  /* ---- code / diff (dark surface) ---- */
+  .codeblock{border:1px solid var(--code-line);border-radius:var(--r-md);overflow:hidden}
+  .cbh{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--code-head);border-bottom:1px solid var(--code-line);font-size:11.5px;color:#aeb6e6;font-weight:600}
+  .cbh i{width:14px;height:14px;color:var(--code-accent)}
+  .cbh .ttl{font-weight:700;color:var(--code-accent);letter-spacing:.3px}
+  .cbh .r{margin-left:auto;display:flex;gap:6px}
+  .dtl{background:var(--code-bg);color:var(--code-fg);font-family:var(--mono);font-size:12px;overflow:auto;max-height:420px}
+  .io{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--code-line);border-radius:var(--r-md);overflow:hidden;background:var(--code-bg)}
+  .io .head{display:flex;align-items:center;gap:8px;background:var(--code-head);padding:7px 11px;font-weight:600;border-bottom:1px solid var(--code-line);color:var(--code-accent);font-size:11.5px;font-family:Inter}
+  .io .head>span:first-child{flex:1 1 auto}
+  .io .side{overflow:auto;max-height:320px}.io .side.r{border-left:1px solid var(--code-line)}
+  .lined{display:flex;font-family:var(--mono);font-size:12px;line-height:1.5}
+  .lined .gut{flex:0 0 auto;text-align:right;padding:9px 8px 9px 10px;color:#5b6aa8;user-select:none;border-right:1px solid var(--code-line);background:rgba(0,0,0,.25);white-space:pre}
+  .lined .code{flex:1 1 auto;padding:9px 11px;white-space:pre-wrap;word-break:break-word;color:var(--code-fg)}
+  .dtl .lined .gut{color:var(--code-accent)}
+  .lined.diff .code .ln{display:block;padding:0 3px;margin:0 -11px;border-left:3px solid transparent}
+  .lined.diff .code .ln.add{background:rgba(0,182,176,.18);border-left-color:var(--iris-green)}
+  .lined.diff .code .ln.del{background:rgba(217,45,32,.2);border-left-color:var(--danger)}
+  .lined.diff .code .ln.chg{background:rgba(220,104,3,.18);border-left-color:var(--warning)}
+  .lined.diff .gut .gl{display:block}
+  .lined.diff .code .ln .cdel{background:rgba(217,45,32,.5);border-radius:2px}
+  .lined.diff .code .ln .cadd{background:rgba(0,182,176,.5);border-radius:2px}
+  .difflegend{display:flex;gap:14px;margin:0 0 9px;font-size:11px;color:var(--muted);flex-wrap:wrap;align-items:center}
+  .difflegend .lg{display:inline-flex;align-items:center;gap:6px}
+  .difflegend .lg::before{content:"";width:10px;height:10px;border-radius:2px;border-left:3px solid}
+  .difflegend .lg.chg::before{background:rgba(220,104,3,.2);border-left-color:var(--warning)}
+  .difflegend .lg.del::before{background:rgba(217,45,32,.2);border-left-color:var(--danger)}
+  .difflegend .lg.add::before{background:rgba(0,182,176,.22);border-left-color:var(--iris-green)}
+  .copy{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.08);color:#cfe6ff;border:1px solid rgba(255,255,255,.14);
+    border-radius:var(--r-sm);padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:Inter}
+  .copy:hover{background:rgba(255,255,255,.16)}
+  .copy.light{background:#fff;color:var(--iris-blue);border-color:var(--line-strong)}
+  .copy.light:hover{background:var(--surface-2)}
+  .copy.done{color:#7ef0e8}.copy i{width:13px;height:13px}
+
+  /* editable line-numbered textarea */
+  .lined-ta{display:flex;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:#fff}
+  .lined-ta .gut{flex:0 0 auto;text-align:right;padding:10px 8px;color:var(--muted);user-select:none;border-right:1px solid var(--line);background:var(--surface-2);white-space:pre;font-family:var(--mono);font-size:12.5px;line-height:1.5}
+  .lined-ta textarea{border:none!important;border-radius:0;background:transparent;box-shadow:none!important;line-height:1.5;flex:1 1 auto}
+  .lined-ta:focus-within{border-color:rgba(0,182,176,.75);box-shadow:0 0 0 4px rgba(0,182,176,.13)}
+
+  /* ---- tables ---- */
+  table.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--line)}
+  table.tbl td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.tbl tr:last-child td{border-bottom:none}
+  table.tbl code{font-family:var(--mono);background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:.92em}
+
+  /* ---- checklist ---- */
+  .check{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line)}
+  .check:last-child{border-bottom:none}
+  .check .ci{width:20px;height:20px;flex:0 0 auto;margin-top:1px}
+  .check .ci.ok{color:var(--success)}.check .ci.bad{color:var(--danger)}.check .ci.warn{color:var(--warning)}.check .ci.idle{color:var(--muted)}
+  .check .cl{font-weight:700;font-size:13px}
+  .check .cx{font-size:12px;color:var(--muted);margin-top:1px}
+  .check .cstate{margin-left:auto;flex:0 0 auto}
+
+  /* ---- markdown render (plan / spec) ---- */
+  .md{font-size:13px;line-height:1.65;color:var(--ink)}
+  .md p{margin:8px 0}
+  .md .mdh{margin:14px 0 6px;color:var(--iris-blue);font-weight:800;line-height:1.3}
+  .md h3.mdh{font-size:15px}.md h4.mdh{font-size:13.5px}.md h5.mdh,.md h6.mdh{font-size:12.5px;text-transform:uppercase;letter-spacing:.4px}
+  .md ul,.md ol{margin:8px 0 8px 22px;padding:0}.md li{margin:4px 0}
+  .md strong{font-weight:700}.md em{font-style:italic}
+  .md code{font-family:var(--mono);background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:.92em;color:var(--iris-blue-800)}
+  .md pre.mdcode{background:var(--code-bg);color:var(--code-fg);border-radius:var(--r-sm);padding:12px 14px;overflow:auto;font-family:var(--mono);font-size:12px;margin:10px 0}
+  .md blockquote{border-left:3px solid var(--iris-green);margin:10px 0;padding:2px 14px;color:var(--muted)}
+  .md hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+
+  /* ---- list cards (saved jobs / classes / history) ---- */
+  .listcard{padding:13px 15px;border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:10px;background:#fff;cursor:pointer;transition:.15s}
+  .listcard:hover{background:var(--surface-2);border-color:var(--line-strong)}
+  .empty{color:var(--muted);text-align:center;padding:40px 0;font-size:13px}
+  .empty i{width:30px;height:30px;color:var(--line-strong);display:block;margin:0 auto 10px}
+  .spinner{width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-2px}
+  i.spin{animation:spin .9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .subnav{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .subnav button{padding:9px 14px;border:none;background:none;cursor:pointer;font:inherit;font-size:12.5px;font-weight:700;color:var(--muted);border-bottom:2px solid transparent;display:inline-flex;align-items:center;gap:7px}
+  .subnav button.on{color:var(--iris-blue);border-bottom-color:var(--iris-blue)}
+  .subnav button i{width:15px;height:15px}
+
+  ::-webkit-scrollbar{width:11px;height:11px}
+  ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:999px;border:3px solid var(--soft)}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  /* ---- modal / overlay ---- */
+  .overlay{position:fixed;inset:0;background:rgba(16,24,40,.5);display:none;align-items:center;justify-content:center;z-index:60;padding:28px}
+  .overlay.show{display:flex;animation:fade .18s ease}
+  .modal{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);max-width:1280px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(16,24,40,.3)}
+  .modal .mhd{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+  .modal .mhd h2{margin:0;font-size:15px;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:9px}
+  .modal .mhd h2 i{color:var(--iris-blue);width:18px;height:18px}
+  .modal .x{margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:8px;display:grid;place-items:center}
+  .modal .x:hover{background:#fff;color:var(--ink)}
+  .modal .mbd{padding:16px 18px;overflow:auto;flex:1 1 auto}
+  .modal .mft{display:flex;align-items:center;gap:10px;padding:13px 18px;border-top:1px solid var(--line);background:var(--surface-2);flex-wrap:wrap}
+  .modal .mft .sp{flex:1 1 auto}
+  .mdtext{white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;line-height:1.55}
+
+  /* Specification Builder internals */
+  .cmptools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12.5px;color:var(--muted)}
+  .specsplit{display:grid;grid-template-columns:210px minmax(280px,1fr) minmax(340px,1.4fr);border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden}
+  .specsplit .pane{display:flex;flex-direction:column;min-height:0;max-height:60vh}
+  .specsplit .pane.seg,.specsplit .pane.mid{border-right:1px solid var(--line)}
+  .specsplit .pane .phd{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--surface-2);border-bottom:1px solid var(--line);font-weight:700;font-size:12px}
+  .specsplit .pane .pbody{overflow:auto;padding:12px;flex:1 1 auto;font-size:12.5px;line-height:1.6}
+  .specsplit .pane.seg .pbody{padding:7px}
+  #cmpOrig,#cmpMdOrig{white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px}
+  .segitem{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:var(--r-sm);cursor:pointer;font-weight:600;font-size:12.5px;color:var(--ink);margin-bottom:3px;transition:.1s}
+  .segitem:hover{background:var(--iris-green-soft)}
+  .segitem.sel{background:var(--iris-blue);color:#fff}
+  .segitem .segcount{margin-left:auto;font-size:10px;font-weight:800;background:rgba(52,54,153,.1);color:var(--iris-blue);padding:1px 8px;border-radius:999px}
+  .segitem.sel .segcount{background:rgba(255,255,255,.22);color:#fff}
+  .segitem.amb{color:#b42318}.segitem.amb i{width:15px;height:15px}
+  .segitem.amb.sel{background:var(--danger);color:#fff}
+  .segitem.amb .segcount{background:var(--danger-soft);color:#b42318}
+  .segitem.amb.sel .segcount{background:rgba(255,255,255,.25);color:#fff}
+  .segitem.amb.done{color:var(--iris-green-800)}
+  .citem{padding:9px 11px;border:1px solid var(--line);border-left:3px solid var(--iris-green);border-radius:var(--r-sm);margin-bottom:8px;cursor:pointer;transition:.12s}
+  .citem:hover{background:var(--iris-green-soft)}
+  .citem.sel{background:var(--iris-green-soft);box-shadow:0 0 0 2px var(--iris-green) inset}
+  .citem.inferred{border-left-color:var(--warning)}.citem.nosrc{border-left-color:var(--danger)}
+  .citem .ci-rule{font-weight:500}
+  .citem .ci-rule code{font-family:var(--mono);background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:.92em}
+  .citem .ci-tag{font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px;margin-left:6px}
+  .citem .ci-tag.inf{background:var(--warn-soft);color:#a15c07}.citem .ci-tag.no{background:var(--danger-soft);color:#b42318}
+  .citem .ci-src{margin-top:5px;font-size:11px;color:var(--muted);font-style:italic;line-height:1.4}
+  .citem .ci-srclbl{font-style:normal;font-weight:700;color:var(--iris-blue)}
+  .cmphi{background:rgba(220,104,3,.32);border-radius:2px;box-shadow:0 0 0 2px rgba(220,104,3,.4)}
+  /* ambiguity rows + options */
+  .ambrow{border:1px solid #fce3ab;border-left:3px solid var(--warning);border-radius:var(--r-sm);padding:12px;margin-bottom:10px;background:var(--warn-soft)}
+  .ambrow.resolved{border-color:#bff0ed;border-left-color:var(--iris-green);background:var(--iris-green-soft)}
+  .ambrow.dismissed{border-color:var(--line);border-left-color:var(--muted);background:var(--surface-2);opacity:.9}
+  .ambrow .ambq{font-weight:700;font-size:12.5px;color:var(--ink);margin-bottom:9px;display:flex;gap:7px;align-items:flex-start}
+  .ambrow .ambq .qtag{font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px;background:var(--warn-soft);color:#a15c07;flex:0 0 auto;border:1px solid #fce3ab}
+  .ambrow.resolved .ambq .qtag{background:var(--iris-green-soft);color:var(--iris-green-800);border-color:#bff0ed}
+  .ambrow.dismissed .ambq .qtag{background:#eef1f8;color:var(--muted);border-color:var(--line)}
+  .ambopts{display:flex;flex-direction:column;gap:7px;margin-bottom:4px}
+  .ambopt{display:flex;align-items:flex-start;gap:9px;margin:0;font-size:12.5px;color:var(--ink);font-weight:500;
+    background:#fff;border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 11px;cursor:pointer;transition:.12s}
+  .ambopt:hover{border-color:var(--iris-green);background:var(--iris-green-soft)}
+  .ambopt input[type=radio]{width:auto;flex:0 0 auto;margin:2px 0 0;padding:0;accent-color:var(--iris-green)}
+  .ambopt.custom{flex-direction:column;align-items:stretch}
+  .ambopt.custom .ctitle{display:flex;align-items:flex-start;gap:9px}
+  .ambopt textarea{margin-top:8px;min-height:46px;font-size:12px}
+  .ambacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+  .ambstate{font-size:12px;color:var(--muted);font-style:italic}
+  .vbadge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px}
+  .vbadge.ok{background:var(--iris-green-soft);color:var(--iris-green-800)}
+  .vbadge.warn{background:var(--warn-soft);color:#a15c07}
+  .vbadge i{width:13px;height:13px}
+  .confbadge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+  .confbadge.hi{background:var(--iris-green-soft);color:var(--iris-green-800)}
+  .confbadge.mid{background:var(--warn-soft);color:#a15c07}.confbadge.lo{background:var(--danger-soft);color:#b42318}
+  .rawlines{font-family:var(--mono);font-size:12px;line-height:1.5;border:1px solid var(--line);border-radius:var(--r-sm);overflow:auto;max-height:60vh;background:var(--surface-2)}
+  .rawln{display:flex;white-space:pre}.rawln:nth-child(even){background:rgba(52,54,153,.025)}
+  .rawln .lno{flex:0 0 auto;width:3.2em;text-align:right;padding:1px 10px 1px 6px;color:var(--muted);border-right:1px solid var(--line)}
+  .rawln .lcode{flex:1 1 auto;padding:1px 10px;white-space:pre-wrap;word-break:break-word}
+  /* LLM message log */
+  .msg{border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:10px;background:#fff;overflow:hidden}
+  .msg.role-system{border-left:3px solid var(--muted)}.msg.role-user{border-left:3px solid var(--iris-blue)}.msg.role-assistant{border-left:3px solid var(--iris-green)}
+  .msg .mh{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--surface-2);cursor:pointer;font-size:12px;border-bottom:1px solid var(--line)}
+  .msg .mh .role{font-weight:800;text-transform:uppercase;letter-spacing:.5px;font-size:11px;padding:2px 8px;border-radius:999px}
+  .msg.role-system .mh .role{background:#eef1f8;color:var(--muted)}.msg.role-user .mh .role{background:var(--iris-blue-soft);color:var(--iris-blue)}.msg.role-assistant .mh .role{background:var(--iris-green-soft);color:var(--iris-green-800)}
+  .msg .mh .who{color:var(--muted)}.msg .mh .len{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:11px}
+  .msg .mh .cv{color:var(--muted);transition:transform .15s}.msg.collapsed .mh .cv{transform:rotate(-90deg)}
+  .msg .mh .tok{font-family:var(--mono);font-size:11px;color:var(--iris-blue);background:var(--iris-blue-soft);padding:2px 8px;border-radius:999px}
+  .msg .mh .cost{font-family:var(--mono);font-size:11px;font-weight:800;color:var(--iris-green-800);background:var(--iris-green-soft);padding:2px 8px;border-radius:999px}
+  .msg .mc{font-family:var(--mono);font-size:12px;max-height:440px;overflow:auto;background:var(--code-bg);color:var(--code-fg)}
+  .msg.collapsed .mc{display:none}
+  .usagebar{display:flex;flex-wrap:wrap;gap:10px;background:#fff;border:1px solid var(--line);border-left:3px solid var(--iris-green);border-radius:var(--r-md);padding:11px 14px;margin-bottom:12px;font-size:12.5px}
+  .usagebar .u{display:flex;flex-direction:column;gap:1px;padding-right:14px;border-right:1px solid var(--line)}
+  .usagebar .u:last-child{border-right:none}
+  .usagebar .u .k{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+  .usagebar .u .v{font-family:var(--mono);font-weight:800}.usagebar .u .v.big{color:var(--iris-blue)}
+
+  /* toast */
+  .toast-wrap{position:fixed;right:20px;bottom:20px;z-index:80;display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+  .toast{display:flex;align-items:center;gap:10px;background:var(--ink);color:#fff;border-radius:var(--r-md);padding:12px 15px;font-size:13px;font-weight:600;box-shadow:0 12px 28px rgba(16,24,40,.3);animation:slidein .2s ease}
+  .toast i{width:17px;height:17px}.toast.ok i{color:#5ee6c6}.toast.bad i{color:#ff9b9b}.toast.info i{color:#8fb6ff}
+  @keyframes slidein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .demo-footer{text-align:center;font-size:11.5px;color:var(--muted);padding-top:6px}
+</style>
+</head>
+<body>
+  <main class="app-shell">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <img class="mark" src="https://i.pinimg.com/736x/11/2a/b3/112ab34c423c70caa37e7f8a83d9c2a7.jpg" alt="" onerror="this.style.display='none'"/>
+      <div>
+        <div class="title">InterSystems AI DTL Generator</div>
+        <div class="sub">Generate &amp; verify HL7 Data Transformations from a specification</div>
+      </div>
+      <div class="right">
+        <span class="statpill"><i data-lucide="building-2"></i> Internal tool</span>
+        <span class="statpill"><i data-lucide="heart-pulse"></i> IRIS for Health</span>
+        <span id="jobpill" class="statpill hidden"><i data-lucide="hash"></i> <span id="jobpilltext"></span></span>
+        <div class="health" id="health" title="Re-run the initialisation / health check"><span class="dot" id="hdot"></span><span id="htxt">checking…</span></div>
+      </div>
+    </header>
+
+    <!-- HERO -->
+    <section class="hero">
+      <div>
+        <h1>From specification to verified DTL</h1>
+        <p>Describe the interface mapping in plain language. The assistant drafts an InterSystems IRIS Data Transformation, then compiles, runs and checks it against your specification — with you in control at every gate.</p>
+      </div>
+      <div class="facts">
+        <div class="fact"><div class="k">Step</div><div class="v" id="heroStep">1 of 4</div></div>
+        <div class="fact"><div class="k">Provider</div><div class="v" id="heroProvider">OpenAI</div></div>
+        <div class="fact"><div class="k">Status</div><div class="v" id="heroStatus">Ready</div></div>
+      </div>
+    </section>
+
+    <!-- GUIDE STRIP -->
+    <section class="guide">
+      <div class="gcard"><div class="gi"><i data-lucide="file-input"></i></div><div><h3>You provide</h3><p>A mapping specification (typed or uploaded) and one or more example HL7 v2 messages.</p></div></div>
+      <div class="gcard"><div class="gi"><i data-lucide="wand-sparkles"></i></div><div><h3>The assistant does</h3><p>Structures the spec, plans the changes, writes the DTL, then compiles and verifies it.</p></div></div>
+      <div class="gcard"><div class="gi"><i data-lucide="clipboard-check"></i></div><div><h3>You review &amp; export</h3><p>Approve each gate, inspect the transformed output, then copy or download the DTL.</p></div></div>
+    </section>
+
+    <!-- WORKFLOW FRAME -->
+    <section class="frame">
+      <nav class="tabs" role="tablist" aria-label="DTL generation workflow">
+        <button class="tab-btn" role="tab" aria-selected="true" data-tab="inputs">
+          <span class="tab-step" data-num="1">1</span>
+          <span><span class="tab-title">Specification</span><span class="tab-caption">Describe the mapping</span></span>
+          <span class="tab-state active">Active</span>
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false" data-tab="review" disabled>
+          <span class="tab-step" data-num="2">2</span>
+          <span><span class="tab-title">Review</span><span class="tab-caption">Confirm spec &amp; plan</span></span>
+          <span class="tab-state locked">Locked</span>
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false" data-tab="generate" disabled>
+          <span class="tab-step" data-num="3">3</span>
+          <span><span class="tab-title">Generate</span><span class="tab-caption">Build &amp; verify the DTL</span></span>
+          <span class="tab-state locked">Locked</span>
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false" data-tab="export" disabled>
+          <span class="tab-step" data-num="4">4</span>
+          <span><span class="tab-title">Validate &amp; export</span><span class="tab-caption">Check &amp; hand off</span></span>
+          <span class="tab-state locked">Locked</span>
+        </button>
+      </nav>
+
+      <!-- PANEL 1: SPECIFICATION -->
+      <section class="panel active" id="panel-inputs" role="tabpanel">
+        <div class="phead">
+          <h2><i data-lucide="file-input"></i> Provide the specification</h2>
+          <p>Tell the assistant what the transformation should do, and give it example messages so it can identify the message type and verify its work.</p>
+        </div>
+
+        <div class="grid-2">
+          <!-- left: spec -->
+          <div>
+            <div class="card accent-blue">
+              <div class="ch"><i data-lucide="file-text"></i><h3>Mapping specification</h3></div>
+              <p class="csub">Describe the interface in plain language, upload a spec document, or reuse one you have already approved.</p>
+              <div class="seg" id="specmode">
+                <button class="on" data-m="text"><i data-lucide="pencil"></i> Type</button>
+                <button data-m="file"><i data-lucide="upload"></i> Upload</button>
+                <button data-m="saved"><i data-lucide="folder-open"></i> Saved</button>
+              </div>
+
+              <div id="specText">
+                <label class="fld">Transformation specification <span class="req">*</span></label>
+                <textarea class="prose" id="spec" placeholder="e.g. Inbound ADT^A01 from EPICADT (HL7 v2.3). Rename the sending application to EPIC, normalise facility SITEA to 001 across MSH/PID/PV1, and upgrade the message to v2.5."></textarea>
+                <div class="help">Be concrete about which segments/fields change. You will get a chance to review and refine this before any DTL is written.</div>
+              </div>
+
+              <div id="specFile" class="hidden">
+                <label class="fld">Upload a specification document <span class="opt">(.pdf, .docx, .txt, .md)</span></label>
+                <input type="file" id="specfileinput" accept=".pdf,.docx,.txt,.md,.hl7,.csv,.json,.doc"/>
+                <div id="specfilestatus" style="margin-top:8px"></div>
+              </div>
+
+              <div id="specSaved" class="hidden">
+                <label class="fld" style="display:flex;align-items:center;gap:8px">Choose a previously approved specification
+                  <button class="btn btn-ghost btn-sm" id="refreshspecs" style="margin-left:auto"><i data-lucide="refresh-cw"></i> Refresh</button></label>
+                <select id="savedspec"><option value="">Select a saved specification…</option></select>
+                <div id="savedspecinfo" class="help" style="margin-top:8px"></div>
+                <div id="savedspecreview" class="hidden" style="margin-top:10px"><button class="btn btn-ghost btn-sm" id="reviewconcise"><i data-lucide="scan-search"></i> Review specification</button></div>
+              </div>
+            </div>
+
+            <div class="note cue"><i data-lucide="lightbulb"></i><span><strong>Presenter cue:</strong> the assistant proposes; the engineer approves. Nothing is built until the specification is confirmed.</span></div>
+          </div>
+
+          <!-- right: settings + inputs -->
+          <div>
+            <div class="card">
+              <div class="ch"><i data-lucide="settings-2"></i><h3>Generation settings</h3>
+                <div class="ch-r"><span id="setsaved" class="chip ok hidden"><i data-lucide="check"></i> saved</span></div></div>
+              <p class="csub">Choose the model backend. Your API key is sent only to your IRIS server and never stored server-side.</p>
+              <div class="fieldrow">
+                <div><label class="fld">Provider</label>
+                  <select id="provider"><option value="openai" selected>OpenAI (live API)</option><option value="bedrock">AWS Bedrock (Claude)</option><option value="mock">Mock (offline demo)</option></select></div>
+                <div><label class="fld">Model</label>
+                  <div style="display:flex;gap:6px"><select id="model" disabled style="flex:1"><option value="">Enter a valid API key</option></select>
+                  <button class="btn btn-ghost btn-sm" id="refreshmodels" title="Load your account's models"><i data-lucide="refresh-cw"></i></button></div></div>
+              </div>
+              <div id="openaibox">
+                <label class="fld" id="keylabel">OpenAI API key <span class="opt">(kept in this browser)</span></label>
+                <div style="display:flex;gap:8px;align-items:center"><input id="apikey" type="password" placeholder="sk-…" autocomplete="off" style="flex:1"/>
+                  <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;color:var(--muted);margin:0"><input type="checkbox" id="remember" checked style="width:auto"/> remember</label></div>
+                <div id="bedrockregionbox" class="hidden"><label class="fld">AWS region</label><input id="bedrockregion" placeholder="us-east-1" value="us-east-1"/></div>
+                <div id="modelhint" class="help"></div>
+              </div>
+              <div class="fieldrow" style="margin-top:14px">
+                <div><label class="fld">Max attempts <span class="opt">(auto-repair)</span></label><input id="maxattempts" type="number" min="1" max="20" value="5"/></div>
+                <div><label class="fld">Cost cap (USD) <span class="opt">(0 = none)</span></label><input id="costcap" type="number" min="0" step="0.10" value="0"/></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="ch"><i data-lucide="message-square-code"></i><h3>Example input messages</h3>
+                <div class="ch-r"><button class="btn btn-ghost btn-sm" id="addinput"><i data-lucide="plus"></i> Add</button></div></div>
+              <p class="csub">Used <strong>only locally</strong> to detect the message type and verify the built DTL — not sent to the model. The first is the primary message.</p>
+              <div id="inputs"></div>
+              <label class="fld">Job name <span class="opt">(optional)</span></label><input id="jobname" placeholder="ADT_A01_Admit"/>
+            </div>
+          </div>
+        </div>
+
+        <div id="formerr" class="note err hidden"><i data-lucide="alert-circle"></i><span></span></div>
+        <div class="actionrow">
+          <button class="btn btn-ghost" id="sample"><i data-lucide="sparkles"></i> Load example</button>
+          <span class="sp"></span>
+          <button class="btn btn-primary" id="go"><i data-lucide="arrow-right"></i> Continue to review</button>
+        </div>
+      </section>
+      <!-- PANEL 2: REVIEW -->
+      <section class="panel" id="panel-review" role="tabpanel">
+        <div class="phead">
+          <h2><i data-lucide="clipboard-check"></i> Review specification &amp; plan</h2>
+          <p>Catch any misunderstanding here, at the cheapest point. Confirm the assistant read your spec correctly, then approve the plan before any DTL is written.</p>
+          <div class="preadiness" id="reviewReadiness"><i data-lucide="loader"></i> Waiting for the assistant…</div>
+        </div>
+
+        <div id="reviewIdle" class="empty"><i data-lucide="clipboard-list"></i>Provide a specification on the previous step and choose <strong>Continue to review</strong>.</div>
+
+        <!-- structured-spec gate (typed-text path) -->
+        <div id="specgate" class="card accent-blue hidden">
+          <div class="ch"><i data-lucide="scan-search"></i><h3>Structured specification</h3></div>
+          <p class="csub">Your specification was rewritten into explicit, testable rules. Verify each rule against the original — hover a rule to highlight where it came from. Rules with no source are flagged for review.</p>
+          <div id="speccov" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>
+          <div class="io" style="background:#fff;border-color:var(--line)">
+            <div class="side l" style="max-height:320px"><div class="head" style="background:var(--surface-2);color:var(--ink)"><span>Original specification</span><span id="specorigcopy"></span></div><div id="specorig" style="padding:11px;font-size:12px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);color:var(--ink)"></div></div>
+            <div class="side r" style="max-height:320px"><div class="head" style="background:var(--surface-2);color:var(--ink)"><span>Structured rules</span></div><div id="specrules" style="padding:11px"></div></div>
+          </div>
+          <label class="fld" style="margin-top:14px">Edit the structured specification before approving <span class="opt">(your edits become the authority)</span></label>
+          <textarea id="specedit" class="prose" style="min-height:150px"></textarea>
+          <div class="actionrow">
+            <button class="btn btn-danger" id="rejectspec"><i data-lucide="rotate-ccw"></i> Re-structure…</button>
+            <span class="sp"></span>
+            <button class="btn btn-ok" id="approvespec"><i data-lucide="check"></i> Approve spec &amp; plan</button>
+          </div>
+        </div>
+
+        <!-- plan gate -->
+        <div id="plangate" class="card accent hidden">
+          <div class="ch"><i data-lucide="list-checks"></i><h3>Proposed transformation plan</h3></div>
+          <p class="csub">A step-by-step plan of the field-level changes the DTL will make, in spec order. Add your own required steps if anything is missing.</p>
+          <div class="md" id="plantext"></div>
+          <label class="fld" style="margin-top:14px">Add your own steps <span class="opt">(optional — added items become required transformations)</span></label>
+          <div id="planadds"></div>
+          <button class="btn btn-ghost btn-sm" id="addplanitem" style="margin-top:8px"><i data-lucide="plus"></i> Add plan item</button>
+          <div class="note gov"><i data-lucide="shield-check"></i><span><strong>Governance:</strong> the plan is your approval boundary. Whatever you approve here is exactly what the DTL implements and is verified against.</span></div>
+          <div class="actionrow">
+            <button class="btn btn-danger" id="rejectplan"><i data-lucide="rotate-ccw"></i> Revise plan…</button>
+            <span class="sp"></span>
+            <button class="btn btn-ok" id="approveplan"><i data-lucide="play"></i> Approve &amp; build</button>
+          </div>
+        </div>
+
+        <!-- working indicator (structuring / planning) -->
+        <div id="reviewBuilding" class="card hidden">
+          <div class="ch"><i data-lucide="loader"></i><h3 id="reviewBuildMsg">Working…</h3><div class="ch-r"><span class="timer" id="reviewTimer">0:00</span></div></div>
+          <div class="pbar indet"><div class="pfill"></div></div>
+          <p class="csub" style="margin:11px 0 0">This can take a moment for larger specifications or reasoning models.</p>
+        </div>
+
+        <div id="reviewErr" class="note err hidden"><i data-lucide="alert-circle"></i><span></span></div>
+      </section>
+      <!-- PANEL 3: GENERATE -->
+      <section class="panel" id="panel-generate" role="tabpanel">
+        <div class="phead">
+          <h2><i data-lucide="wand-sparkles"></i> Generate &amp; verify the DTL</h2>
+          <p>The assistant writes the transformation, compiles it, runs it on every example message, and checks it against your approved specification — auto-repairing failures along the way.</p>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi"><div class="k"><i data-lucide="activity"></i> Status</div><div class="v" id="kpiStatus">—</div><div class="s" id="kpiStatusSub">No active job</div></div>
+          <div class="kpi"><div class="k"><i data-lucide="repeat"></i> Attempts</div><div class="v" id="kpiAttempts">—</div><div class="s">Auto-repair budget</div></div>
+          <div class="kpi"><div class="k"><i data-lucide="git-branch"></i> Message type</div><div class="v" id="kpiDocType">—</div><div class="s">Resolved structure</div></div>
+          <div class="kpi"><div class="k"><i data-lucide="bot"></i> Model</div><div class="v" id="kpiModel">—</div><div class="s">LLM backend</div></div>
+        </div>
+
+        <div class="subnav" id="genSubnav">
+          <button class="on" data-g="progress"><i data-lucide="loader"></i> Progress</button>
+          <button data-g="messages"><i data-lucide="messages-square"></i> Model conversation</button>
+        </div>
+
+        <!-- progress view -->
+        <div id="genProgress">
+          <div id="genIdle" class="empty"><i data-lucide="workflow"></i>Approve the plan on the review step to start building. Each attempt appears here as it happens.</div>
+
+          <div id="statusbox" class="card hidden">
+            <div class="ch"><i data-lucide="activity"></i><h3>Build progress</h3><div class="ch-r" id="statusbadge"></div></div>
+            <div class="meta" id="statusmeta"></div>
+            <div id="steplist"></div>
+            <div id="buildline" class="hidden" style="margin-top:8px">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:13px;font-weight:700"><i data-lucide="loader" class="spin"></i><span id="buildmsg">Building…</span><span class="timer" id="buildtimer" style="margin-left:auto">0:00</span></div>
+              <div class="pbar indet"><div class="pfill"></div></div>
+            </div>
+            <div id="statuserr" class="note err hidden"><i data-lucide="alert-circle"></i><span></span></div>
+          </div>
+
+          <!-- attempt review gate -->
+          <div id="attemptgate" class="card accent-warn hidden">
+            <div class="ch"><i data-lucide="badge-help"></i><h3>Attempt <span id="atnum"></span> — your review</h3></div>
+            <div class="meta" id="atmeta"></div>
+            <div id="gatereport"></div>
+            <div class="subnav" id="attTabs" style="margin-top:4px">
+              <button class="on" data-tab="out"><i data-lucide="arrow-right-left"></i> Input → output</button>
+              <button data-tab="dtl"><i data-lucide="code-xml"></i> Generated DTL</button>
+            </div>
+            <div id="tab-out">
+              <div class="difflegend"><span class="lg chg">changed line</span><span class="lg del">only in input</span><span class="lg add">only in output</span></div>
+              <div class="io"><div class="side l"><div class="head"><span>Primary input</span><span id="dexpcopy"></span></div><div id="dexp"></div></div><div class="side r"><div class="head"><span>Produced output</span><span id="dactcopy"></span></div><div id="dact"></div></div></div>
+            </div>
+            <div id="tab-dtl" class="hidden"><div class="codeblock"><div class="cbh"><i data-lucide="code-xml"></i><span class="ttl">Generated DTL</span><span class="r" id="dtlcopy"></span></div><div class="dtl" id="dtlsrc">—</div></div></div>
+            <label class="fld" style="margin-top:13px">Feedback <span class="opt">(used if you reject this attempt)</span></label>
+            <textarea id="attfeedback" class="prose" placeholder="e.g. PID-8 should map F→2; also set MSH-4 to 001…"></textarea>
+            <div class="actionrow">
+              <button class="btn btn-danger" id="rejectattempt"><i data-lucide="rotate-ccw"></i> Reject &amp; regenerate</button>
+              <span class="sp"></span>
+              <button class="btn btn-ok" id="acceptattempt"><i data-lucide="check"></i> Accept &amp; continue</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- model conversation view -->
+        <div id="genMessages" class="hidden">
+          <div class="card" style="margin-bottom:12px">
+            <div class="ch"><i data-lucide="messages-square"></i><h3>Model conversation</h3>
+              <div class="ch-r"><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:0"><input type="checkbox" id="msgauto" style="width:auto"/> auto-refresh</label>
+              <button class="btn btn-ghost btn-sm" id="refreshmsg"><i data-lucide="refresh-cw"></i> Refresh</button></div></div>
+            <p class="csub">Every message exchanged with the model for this job, in order. Each reply shows the tokens and cost of that request.</p>
+          </div>
+          <div id="usagebar" class="usagebar hidden"></div>
+          <div id="msglist"></div>
+        </div>
+      </section>
+      <!-- PANEL 4: VALIDATE & EXPORT -->
+      <section class="panel" id="panel-export" role="tabpanel">
+        <div class="phead">
+          <h2><i data-lucide="shield-check"></i> Validate &amp; export</h2>
+          <p>Confirm the transformation passed every check, inspect the outputs it produces, then copy or download the DTL for use in your production.</p>
+        </div>
+
+        <div id="exportIdle" class="empty"><i data-lucide="package"></i>Accept a build on the previous step to validate and export it.</div>
+
+        <div id="exportReady" class="hidden">
+          <div class="kpis">
+            <div class="kpi"><div class="k"><i data-lucide="check-circle-2"></i> Result</div><div class="v" id="exVerdict">—</div><div class="s">Final verdict</div></div>
+            <div class="kpi"><div class="k"><i data-lucide="gauge"></i> Conformance</div><div class="v" id="exScore">—</div><div class="s">Judge score</div></div>
+            <div class="kpi"><div class="k"><i data-lucide="repeat"></i> Attempts</div><div class="v" id="exAttempts">—</div><div class="s">To reach success</div></div>
+            <div class="kpi"><div class="k"><i data-lucide="file-code-2"></i> Class</div><div class="v" id="exClass">—</div><div class="s">Generated DTL</div></div>
+          </div>
+
+          <div class="card accent">
+            <div class="ch"><i data-lucide="list-checks"></i><h3>Validation checks</h3></div>
+            <div id="exChecks"></div>
+            <div class="note gov"><i data-lucide="shield-alert"></i><span><strong>Governance:</strong> this transformation was AI-generated and machine-verified against your specification. Review it in a non-production namespace before deploying.</span></div>
+          </div>
+
+          <div class="card">
+            <div class="ch"><i data-lucide="code-xml"></i><h3>Generated DTL class</h3>
+              <div class="ch-r">
+                <button class="btn btn-ghost btn-sm" id="exCopy"><i data-lucide="copy"></i> Copy DTL</button>
+                <button class="btn btn-ghost btn-sm" id="exDownload"><i data-lucide="download"></i> Download .cls</button>
+              </div></div>
+            <div class="codeblock"><div class="cbh"><i data-lucide="file-code-2"></i><span class="ttl" id="exClassName">DTL.Generated</span></div><div class="dtl" id="exDtl">—</div></div>
+          </div>
+
+          <div class="subnav" id="exportSubnav">
+            <button class="on" data-x="outputs"><i data-lucide="arrow-right-left"></i> Transformed outputs</button>
+            <button data-x="live"><i data-lucide="play-circle"></i> Live test</button>
+            <button data-x="classes"><i data-lucide="boxes"></i> Classes</button>
+            <button data-x="history"><i data-lucide="history"></i> History</button>
+          </div>
+
+          <!-- outputs -->
+          <div id="x-outputs">
+            <div class="card" style="margin-bottom:12px"><div class="ch"><i data-lucide="arrow-right-left"></i><h3>Transformed outputs</h3><div class="ch-r"><button class="btn btn-ghost btn-sm" id="refreshout"><i data-lucide="refresh-cw"></i> Refresh</button></div></div>
+              <p class="csub">Every example message run through the built DTL. Correct an output and add feedback to refine the DTL further.</p></div>
+            <div id="outlist"></div>
+          </div>
+
+          <!-- live test -->
+          <div id="x-live" class="hidden">
+            <div class="card"><div class="ch"><i data-lucide="play-circle"></i><h3>Live test</h3></div>
+              <p class="csub">Paste any HL7 message and run it through the built DTL. Correct the output and give feedback to improve the transformation.</p>
+              <label class="fld">Input message</label><textarea id="liveinput" style="min-height:90px"></textarea>
+              <div class="actionrow"><button class="btn btn-primary" id="runlive"><i data-lucide="play"></i> Transform</button></div>
+              <div id="liveresult" class="hidden">
+                <label class="fld" style="display:flex;align-items:center;gap:8px">Input <span id="liveincopy" style="margin-left:auto;font-weight:400"></span></label><div id="liveIn" class="io" style="display:block"></div>
+                <label class="fld" style="display:flex;align-items:center;gap:8px">Produced output (editable) <span class="opt">changed lines vs input highlighted</span><span id="liveoutcopy" style="margin-left:auto;font-weight:400"></span></label><textarea id="liveOut" style="min-height:180px"></textarea>
+                <label class="fld">Feedback</label><textarea id="livefb" class="prose" placeholder="What's wrong / what should change…"></textarea>
+                <div class="actionrow"><button class="btn btn-ok" id="livecorrect"><i data-lucide="wand-sparkles"></i> Apply correction to the DTL</button></div>
+                <div id="livemsg" class="help" style="margin-top:8px"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- classes -->
+          <div id="x-classes" class="hidden">
+            <div class="card" style="margin-bottom:12px"><div class="ch"><i data-lucide="boxes"></i><h3>Generated DTL classes</h3><div class="ch-r"><button class="btn btn-ghost btn-sm" id="refreshcls"><i data-lucide="refresh-cw"></i> Refresh</button></div></div>
+              <p class="csub">All DTL classes generated in this session. Select one to view its source.</p></div>
+            <div style="display:grid;grid-template-columns:280px 1fr;gap:14px"><div id="clslist"></div>
+              <div class="codeblock"><div class="cbh"><i data-lucide="file-code-2"></i><span class="ttl" id="clsname">Class source</span><span class="r" id="clscopy"></span></div><div class="dtl" id="clssrc">Select a class…</div></div></div>
+          </div>
+
+          <!-- history -->
+          <div id="x-history" class="hidden">
+            <div class="card" style="margin-bottom:12px"><div class="ch"><i data-lucide="history"></i><h3>History</h3><div class="ch-r"><button class="btn btn-ghost btn-sm" id="refreshhist"><i data-lucide="refresh-cw"></i> Refresh</button></div></div>
+              <p class="csub">Every job, newest first. Refinements nest under their parent.</p></div>
+            <div id="histlist"></div>
+          </div>
+        </div>
+
+        <div class="actionrow"><span class="sp"></span><button class="btn btn-ghost" id="restart"><i data-lucide="rotate-ccw"></i> Start a new transformation</button></div>
+      </section>
+    </section>
+
+    <footer class="demo-footer">InterSystems IRIS for Health · AI-assisted DTL generation · generated transformations require developer review before production use</footer>
+  </main>
+
+  <!-- simple spec reader -->
+  <div class="overlay" id="specmodal">
+    <div class="modal" style="max-width:880px">
+      <div class="mhd"><h2><i data-lucide="file-text"></i> <span id="specmodaltitle">Specification</span></h2><span id="specmodalcopy"></span><button class="x" id="specmodalclose"><i data-lucide="x"></i></button></div>
+      <div class="mbd"><div class="mdtext" id="specmodaltext">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- SPECIFICATION BUILDER modal -->
+  <div class="overlay" id="cmpmodal">
+    <div class="modal">
+      <div class="mhd"><h2><i data-lucide="blocks"></i> <span id="cmptitle">Specification Builder</span></h2>
+        <span id="cmpapprovedbadge" class="vbadge ok hidden" style="margin-left:8px"><i data-lucide="lock"></i> Approved (read-only)</span>
+        <button class="x" id="cmpclose"><i data-lucide="x"></i></button></div>
+      <div class="mbd">
+        <div class="subnav" id="cmpTabs">
+          <button class="on" data-ctab="review"><i data-lucide="scan-search"></i> Review &amp; resolve</button>
+          <button data-ctab="markdown"><i data-lucide="file-text"></i> Specification markdown</button>
+        </div>
+
+        <!-- TAB: review -->
+        <div id="cmpTabReview">
+          <div class="cmptools">
+            <span>Pick a <strong>segment</strong>, then a <strong>specification point</strong> to jump to its source in the original.</span>
+            <span id="cmpverdict"></span>
+          </div>
+          <div id="cmpbanner"></div>
+          <div class="specsplit" id="cmpSplit">
+            <div class="pane seg"><div class="phd"><i data-lucide="layout-list"></i><span>Segments</span></div><div class="pbody"><div id="cmpSegs"></div></div></div>
+            <div class="pane mid"><div class="phd"><span id="cmpRulesHd">Specification points</span><span id="cmpconf" style="margin-left:auto"></span></div><div class="pbody"><div id="cmpItems"></div></div></div>
+            <div class="pane orig"><div class="phd"><span>Original specification</span><span id="cmporigcopy" style="margin-left:auto"></span></div><div class="pbody" id="cmpOrigBody"><div id="cmpOrig"></div></div></div>
+          </div>
+        </div>
+
+        <!-- TAB: markdown -->
+        <div id="cmpTabMarkdown" class="hidden">
+          <div id="cmpMdEditWrap">
+            <div class="cmptools"><span>This is the exact specification sent to the model (resolved decisions folded in). Edit freely — your changes become the authority.</span><span id="cmpMdEditcopy" style="margin-left:auto"></span></div>
+            <textarea id="cmpEdit" class="prose" style="min-height:50vh"></textarea>
+          </div>
+          <div id="cmpMdViewWrap" class="hidden">
+            <div class="specsplit" style="grid-template-columns:1fr 1fr">
+              <div class="pane mid"><div class="phd"><span>Specification (markdown)</span><span id="cmpMdcopy" style="margin-left:auto"></span></div><div class="pbody md" id="cmpMdView"></div></div>
+              <div class="pane orig"><div class="phd"><span>Original specification</span><span id="cmpMdOrigcopy" style="margin-left:auto"></span></div><div class="pbody" id="cmpMdOrig"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mft">
+        <span id="cmpmsg" class="help"></span>
+        <span id="cmpgatehint" style="font-size:12px;color:var(--danger);font-weight:700"></span>
+        <span class="sp"></span>
+        <button class="btn btn-ghost" id="cmpregen"><i data-lucide="refresh-cw"></i> Regenerate</button>
+        <button class="btn btn-ok" id="cmpapprove"><i data-lucide="check"></i> Approve specification</button>
+        <button class="btn btn-ghost hidden" id="cmpcloseft"><i data-lucide="x"></i> Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastwrap" aria-live="polite"></div>
+
+<script>
+function deriveApiBase(){let p=location.pathname;if(/\/[^/]*\.[^/]*$/.test(p))p=p.replace(/\/[^/]*$/,"/");p=p.replace(/\/+$/,"");return p.replace(/\/ui$/,"/api");}
+const APIBASE=deriveApiBase();const api=p=>APIBASE+p;
+const $=s=>document.querySelector(s);
+const el=(t,c,txt)=>{const e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e;};
+async function jget(p){const r=await fetch(api(p));return[r.ok,await r.json()];}
+async function jpost(p,b){const r=await fetch(api(p),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});let j;try{j=await r.json()}catch(e){j={}}return[r.ok,j];}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const norm=s=>(s||"").replace(/\r/g,"\n").replace(/\n+$/,"");
+function icons(){if(window.lucide)lucide.createIcons();}
+
+// ---- toast ----------------------------------------------------------------
+function toast(msg,kind){const w=$("#toastwrap");const t=el("div","toast "+(kind||"info"));
+  const ic={ok:"check-circle-2",bad:"alert-circle",info:"info"}[kind||"info"];
+  t.appendChild(Object.assign(document.createElement("i"),{}));t.querySelector("i").setAttribute("data-lucide",ic);
+  t.appendChild(el("span",null,msg));w.appendChild(t);icons();
+  setTimeout(()=>{t.style.opacity="0";t.style.transition="opacity .3s";setTimeout(()=>t.remove(),300);},2600);}
+
+// ---- copy button ----------------------------------------------------------
+function copyBtn(getText,light){
+  const b=el("button","copy"+(light?" light":""));b.innerHTML='<i data-lucide="copy"></i> copy';
+  b.onclick=(e)=>{e.stopPropagation();const t=(typeof getText==="function")?getText():getText;
+    const done=()=>{b.innerHTML='<i data-lucide="check"></i> copied';b.classList.add("done");icons();setTimeout(()=>{b.innerHTML='<i data-lucide="copy"></i> copy';b.classList.remove("done");icons();},1200);};
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t||"").then(done,done);}
+    else{const ta=document.createElement("textarea");ta.value=t||"";document.body.appendChild(ta);ta.select();try{document.execCommand("copy")}catch(e){}ta.remove();done();}};
+  return b;
+}
+
+// ---- markdown -------------------------------------------------------------
+function mdEsc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function mdInlineApply(s){
+  s=s.replace(/`([^`]+)`/g,(m,c)=>"<code>"+c+"</code>");
+  s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,(m,txt,url)=>'<a href="'+url+'" target="_blank" rel="noopener">'+txt+"</a>");
+  s=s.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/__([^_]+)__/g,"<strong>$1</strong>");
+  s=s.replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<em>$2</em>");
+  s=s.replace(/(^|[^_\w])_([^_\n]+)_/g,"$1<em>$2</em>");
+  return s;
+}
+function mdToHtml(src){
+  const lines=String(src==null?"":src).replace(/\r\n?/g,"\n").split("\n");
+  let html="",i=0,para=[],listType=null,listItems=[];
+  const flushPara=()=>{if(para.length){html+="<p>"+mdInlineApply(mdEsc(para.join(" ")))+"</p>";para=[];}};
+  const flushList=()=>{if(listType){html+="<"+listType+">"+listItems.map(it=>"<li>"+mdInlineApply(mdEsc(it))+"</li>").join("")+"</"+listType+">";listType=null;listItems=[];}};
+  const flushAll=()=>{flushPara();flushList();};
+  while(i<lines.length){
+    const raw=lines[i];const t=raw.trim();
+    if(/^```/.test(t)){flushAll();i++;const code=[];while(i<lines.length&&!/^```/.test(lines[i].trim())){code.push(lines[i]);i++;}i++;html+="<pre class=mdcode>"+mdEsc(code.join("\n"))+"</pre>";continue;}
+    if(t===""){flushAll();i++;continue;}
+    const h=t.match(/^(#{1,6})\s+(.*)$/);
+    if(h){flushAll();const lvl=Math.min(h[1].length+2,6);html+="<h"+lvl+" class=mdh>"+mdInlineApply(mdEsc(h[2]))+"</h"+lvl+">";i++;continue;}
+    if(/^([-*_])\1{2,}$/.test(t)){flushAll();html+="<hr/>";i++;continue;}
+    const ul=t.match(/^[-*+]\s+(.*)$/);
+    if(ul){flushPara();if(listType&&listType!=="ul")flushList();listType="ul";listItems.push(ul[1]);i++;continue;}
+    const ol=t.match(/^\d+[.)]\s+(.*)$/);
+    if(ol){flushPara();if(listType&&listType!=="ol")flushList();listType="ol";listItems.push(ol[1]);i++;continue;}
+    const bq=t.match(/^>\s?(.*)$/);
+    if(bq){flushAll();html+="<blockquote>"+mdInlineApply(mdEsc(bq[1]))+"</blockquote>";i++;continue;}
+    flushList();para.push(t);i++;
+  }
+  flushAll();
+  return html||"<p style='color:var(--muted)'>(empty)</p>";
+}
+
+// ---- line numbering + diff ------------------------------------------------
+function linedBlock(text,diffClasses,segs){
+  text=(text==null?"":String(text));const lines=text.split("\n");
+  const wrap=el("div","lined");const gut=el("div","gut");const code=el("div","code");
+  if(diffClasses){
+    wrap.classList.add("diff");
+    lines.forEach((ln,i)=>{
+      const cls=diffClasses[i]||"";
+      const gl=el("span","gl"+(cls?(" "+cls):""),String(i+1));gut.appendChild(gl);gut.appendChild(document.createTextNode("\n"));
+      const cl=el("span","ln"+(cls?(" "+cls):""));const seg=segs&&segs[i];
+      if(seg&&seg.length){seg.forEach(s=>{if(s.c){cl.appendChild(el("span",s.c,s.t));}else{cl.appendChild(document.createTextNode(s.t));}});cl.appendChild(document.createTextNode("\n"));}
+      else{cl.textContent=ln+"\n";}
+      code.appendChild(cl);
+    });
+  }else{gut.textContent=lines.map((_,i)=>i+1).join("\n");code.textContent=text;}
+  wrap.appendChild(gut);wrap.appendChild(code);return wrap;
+}
+function setLined(c,text,diffClasses,segs){c.innerHTML="";c.appendChild(linedBlock(text,diffClasses,segs));}
+function lineDiff(a,b){
+  const A=(a||"").split("\n"),B=(b||"").split("\n");const n=A.length,m=B.length;
+  const dp=Array.from({length:n+1},()=>new Array(m+1).fill(0));
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i][j]=A[i]===B[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+  const aCls=new Array(n).fill(""),bCls=new Array(m).fill("");let i=0,j=0;
+  while(i<n&&j<m){if(A[i]===B[j]){i++;j++;}else if(dp[i+1][j]>=dp[i][j+1]){aCls[i]="del";i++;}else{bCls[j]="add";j++;}}
+  while(i<n){aCls[i++]="del";}while(j<m){bCls[j++]="add";}
+  const aSeg=new Array(n),bSeg=new Array(m);let p=0,q=0;
+  while(p<n&&q<m){if(aCls[p]===""){p++;continue;}if(bCls[q]===""){q++;continue;}aCls[p]="chg";bCls[q]="chg";const cd=charDiff(A[p],B[q]);aSeg[p]=cd.aSeg;bSeg[q]=cd.bSeg;p++;q++;}
+  return {aCls,bCls,aSeg,bSeg};
+}
+function charDiff(a,b){
+  a=a||"";b=b||"";const n=a.length,m=b.length;
+  if(n>4000||m>4000){return {aSeg:[{t:a,c:a?"cdel":""}],bSeg:[{t:b,c:b?"cadd":""}]};}
+  const dp=Array.from({length:n+1},()=>new Array(m+1).fill(0));
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i][j]=a[i]===b[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+  const aSeg=[],bSeg=[];const push=(arr,t,c)=>{const last=arr[arr.length-1];if(last&&last.c===c){last.t+=t;}else{arr.push({t,c});}};
+  let i=0,j=0;
+  while(i<n&&j<m){if(a[i]===b[j]){push(aSeg,a[i],"");push(bSeg,b[j],"");i++;j++;}else if(dp[i+1][j]>=dp[i][j+1]){push(aSeg,a[i],"cdel");i++;}else{push(bSeg,b[j],"cadd");j++;}}
+  while(i<n){push(aSeg,a[i++],"cdel");}while(j<m){push(bSeg,b[j++],"cadd");}
+  return {aSeg,bSeg};
+}
+function lineNumberTextarea(ta){
+  if(ta.dataset.lined)return ta;ta.dataset.lined="1";
+  const wrap=el("div","lined-ta");const gut=el("div","gut");
+  ta.parentNode.insertBefore(wrap,ta);wrap.appendChild(gut);wrap.appendChild(ta);
+  const refresh=()=>{const n=(ta.value.match(/\n/g)||[]).length+1;let s="";for(let i=1;i<=n;i++)s+=(i>1?"\n":"")+i;gut.textContent=s;gut.scrollTop=ta.scrollTop;};
+  ta.addEventListener("input",refresh);ta.addEventListener("scroll",()=>gut.scrollTop=ta.scrollTop);refresh();return ta;
+}
+function syncScroll(els){els=els.filter(Boolean);if(els.length<2)return;let lock=false;
+  els.forEach(src=>{if(src._ss)src.removeEventListener("scroll",src._ss);const h=()=>{if(lock)return;lock=true;els.forEach(o=>{if(o!==src){o.scrollTop=src.scrollTop;o.scrollLeft=src.scrollLeft;}});lock=false;};src._ss=h;src.addEventListener("scroll",h);});}
+
+// ---- elapsed tickers ------------------------------------------------------
+function elapsedTicker(elEl,label){
+  if(!elEl)return ()=>{};const start=Date.now();
+  const fmt=()=>{const s=Math.floor((Date.now()-start)/1000);return s<60?(s+"s"):(Math.floor(s/60)+"m "+(s%60)+"s");};
+  const paint=()=>{elEl.innerHTML='<span class=spinner></span> '+label+" "+fmt();};paint();
+  const iv=setInterval(paint,250);return ()=>clearInterval(iv);
+}
+let buildClock=null,buildTimerInt=null;
+function fmtElapsed(ms){const s=Math.max(0,Math.floor(ms/1000));return Math.floor(s/60)+":"+String(s%60).padStart(2,"0");}
+function buildClockReset(){buildClock=Date.now();buildClockStart();}
+function buildClockStart(){if(buildClock==null)buildClock=Date.now();if(!buildTimerInt)buildTimerInt=setInterval(()=>{const ms=buildClock!=null?(Date.now()-buildClock):0;["#buildtimer","#reviewTimer"].forEach(id=>{const t=$(id);if(t)t.textContent=fmtElapsed(ms);});},250);}
+function buildClockStop(){buildClock=null;if(buildTimerInt){clearInterval(buildTimerInt);buildTimerInt=null;}}
+
+// ======================= STEP / TAB CONTROLLER ============================
+const STEPS=["inputs","review","generate","export"];
+const STEP_LABELS={inputs:"Specification",review:"Review",generate:"Generate",export:"Validate & export"};
+let unlocked={inputs:true,review:false,generate:false,export:false};
+let doneSteps={};
+function tabBtn(name){return document.querySelector('.tab-btn[data-tab="'+name+'"]');}
+function setTabState(name,state){ // active | locked | done | ""
+  const b=tabBtn(name);if(!b)return;const s=b.querySelector(".tab-state");const st=b.querySelector(".tab-step");
+  b.classList.toggle("done",state==="done");
+  if(state==="done"){st.innerHTML='<i data-lucide="check"></i>';}else{st.textContent=st.dataset.num;}
+  s.className="tab-state "+(state==="active"?"active":state==="done"?"done":state==="locked"?"locked":"");
+  s.textContent=state==="active"?"Active":state==="done"?"Done":state==="locked"?"Locked":"Ready";
+  icons();
+}
+function unlock(name){unlocked[name]=true;const b=tabBtn(name);if(b){b.disabled=false;if(!doneSteps[name])setTabState(name,name===currentTab?"active":"");}}
+function showStep(name){
+  if(!unlocked[name])return;
+  currentTab=name;
+  document.querySelectorAll(".tab-btn").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.tab===name)));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="panel-"+name));
+  STEPS.forEach(s=>{if(doneSteps[s])setTabState(s,"done");else if(s===name)setTabState(s,"active");else if(unlocked[s])setTabState(s,"");else setTabState(s,"locked");});
+  const idx=STEPS.indexOf(name);$("#heroStep").textContent=(idx+1)+" of 4";
+  if(name==="export"){loadOutputs();}
+  if(name==="generate"&&genSub==="messages")loadMessages();
+}
+let currentTab="inputs";
+document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>{if(!b.disabled)showStep(b.dataset.tab);}));
+icons();
+// ======================= PROVIDER / MODEL / SETTINGS =====================
+const LS_KEY="iscdtl.apikey",LS_REM="iscdtl.remember",LS_MODEL="iscdtl.model",LS_REGION="iscdtl.bedrockregion",
+      LS_PROVIDER="iscdtl.provider",LS_MAXATT="iscdtl.maxattempts",LS_COSTCAP="iscdtl.costcap";
+const BEDROCK_DEFAULT_MODEL="global.anthropic.claude-opus-4-8";
+const provider=()=>$("#provider").value;
+const isOpenAI=()=>provider()==="openai";const isBedrock=()=>provider()==="bedrock";const needsKey=()=>isOpenAI()||isBedrock();
+function providerBody(){const b={provider:provider(),model:$("#model").value,apiKey:needsKey()?$("#apikey").value.trim():""};if(isBedrock())b.region=$("#bedrockregion").value.trim()||"us-east-1";return b;}
+function flashSaved(){const b=$("#setsaved");if(!b)return;b.classList.remove("hidden");clearTimeout(flashSaved._t);flashSaved._t=setTimeout(()=>b.classList.add("hidden"),1200);}
+function saveSettings(){localStorage.setItem(LS_PROVIDER,provider());localStorage.setItem(LS_MAXATT,$("#maxattempts").value||"5");localStorage.setItem(LS_COSTCAP,$("#costcap").value||"0");localStorage.setItem(LS_REGION,$("#bedrockregion").value.trim());$("#heroProvider").textContent={openai:"OpenAI",bedrock:"Bedrock",mock:"Mock"}[provider()]||provider();flashSaved();}
+let modelsLoaded=false;
+function setModelEnabled(on,ph){const m=$("#model");m.disabled=!on;if(!on){m.innerHTML='<option value="">'+(ph||"Enter a valid API key")+"</option>";modelsLoaded=false;}$("#refreshmodels").disabled=!needsKey();}
+function syncProvider(){
+  $("#openaibox").style.display=needsKey()?"":"none";
+  $("#bedrockregionbox").classList.toggle("hidden",!isBedrock());
+  $("#refreshmodels").style.display=needsKey()?"":"none";
+  $("#keylabel").innerHTML=(isBedrock()?"AWS Bedrock API key":"OpenAI API key")+' <span class="opt">(kept in this browser)</span>';
+  $("#apikey").placeholder=isBedrock()?"Bedrock API key (bearer token)":"sk-…";
+  modelsLoaded=false;
+  if(needsKey()){setModelEnabled(false,"Enter a valid API key");$("#modelhint").textContent="Enter your "+(isBedrock()?"AWS Bedrock":"OpenAI")+" API key — models load once it's valid.";if($("#apikey").value.trim())refreshModels();}
+  else{setModelEnabled(false,"Mock — no model needed");$("#modelhint").textContent="The mock provider uses a bundled scripted model — no key or model needed.";}
+}
+$("#provider").onchange=()=>{saveSettings();syncProvider();};
+function persistKey(){if($("#remember").checked&&$("#apikey").value){localStorage.setItem(LS_KEY,$("#apikey").value);localStorage.setItem(LS_REM,"1");}else{localStorage.removeItem(LS_KEY);localStorage.setItem(LS_REM,$("#remember").checked?"1":"0");}}
+$("#apikey").addEventListener("change",()=>{persistKey();if(needsKey())refreshModels();});
+$("#remember").addEventListener("change",persistKey);
+$("#bedrockregion").addEventListener("change",()=>{localStorage.setItem(LS_REGION,$("#bedrockregion").value.trim());if(isBedrock())refreshModels();});
+function setModels(ids){const m=$("#model");m.innerHTML="";(ids||[]).forEach(id=>{const o=document.createElement("option");o.value=id;o.textContent=id;m.appendChild(o)});
+  const want=localStorage.getItem(LS_MODEL);
+  if(want&&(ids||[]).indexOf(want)>=0)m.value=want;else if(isBedrock()&&(ids||[]).indexOf(BEDROCK_DEFAULT_MODEL)>=0)m.value=BEDROCK_DEFAULT_MODEL;else if((ids||[]).length)m.value=ids[0];
+  $("#kpiModel").textContent=m.value||"—";}
+$("#model").addEventListener("change",()=>{localStorage.setItem(LS_MODEL,$("#model").value);$("#kpiModel").textContent=$("#model").value||"—";});
+$("#maxattempts").addEventListener("change",saveSettings);$("#costcap").addEventListener("change",saveSettings);
+let modelReqSeq=0;
+async function refreshModels(){
+  if(!needsKey())return;const key=$("#apikey").value.trim();
+  if(!key){setModelEnabled(false,"Enter a valid API key");$("#modelhint").textContent="Enter your "+(isBedrock()?"AWS Bedrock":"OpenAI")+" API key — models load once it's valid.";return;}
+  const seq=++modelReqSeq;
+  if(isBedrock()){
+    $("#modelhint").innerHTML='<span class=spinner></span> Validating key &amp; loading Bedrock models…';
+    const [ok,j]=await jpost("/bedrock-models",{apiKey:key,region:($("#bedrockregion").value.trim()||"us-east-1")});
+    if(seq!==modelReqSeq)return;
+    if(!ok||!j.models||!j.models.length){setModelEnabled(false,"Enter a valid API key");$("#modelhint").textContent="Invalid key or no models"+(j&&j.error?(": "+j.error):"")+".";return;}
+    setModelEnabled(true,"model id");modelsLoaded=true;setModels(j.models);$("#modelhint").textContent=(j.note?j.note:((j.models?j.models.length:0)+" Bedrock models available."));return;
+  }
+  $("#modelhint").innerHTML='<span class=spinner></span> Validating key &amp; loading models…';
+  const [ok,j]=await jpost("/models",{apiKey:key});if(seq!==modelReqSeq)return;
+  if(!ok||!j.models||!j.models.length){setModelEnabled(false,"Enter a valid API key");$("#modelhint").textContent="Invalid key or no models"+(j&&j.error?(": "+j.error):"")+".";return;}
+  setModelEnabled(true,"model id");modelsLoaded=true;setModels(j.models);$("#modelhint").textContent=(j.models?j.models.length:0)+" chat models available.";
+}
+$("#refreshmodels").onclick=refreshModels;
+
+// ======================= SPEC MODE ========================================
+let specReady=null,savedReady=null,currentSpecToken=null;
+function specMode(){return $("#specmode").querySelector("button.on").dataset.m;}
+$("#specmode").querySelectorAll("button").forEach(b=>b.onclick=()=>{$("#specmode").querySelectorAll("button").forEach(x=>x.classList.remove("on"));b.classList.add("on");const m=b.dataset.m;
+  $("#specText").classList.toggle("hidden",m!=="text");$("#specFile").classList.toggle("hidden",m!=="file");$("#specSaved").classList.toggle("hidden",m!=="saved");if(m==="saved")loadSavedSpecs();});
+function fileToB64(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.readAsDataURL(f);});}
+function confClass(c){return c>=0.8?"hi":(c>=0.5?"mid":"lo");}
+function confLabel(c){return c>=0.8?"high confidence":(c>=0.5?"review recommended":"low confidence — review carefully");}
+function showExtractWarn(box,sp){
+  const c=(sp.confidence==null?1:+sp.confidence);const warns=(sp.meta&&sp.meta.warnings)||[];
+  const b=el("div");b.style.marginTop="6px";b.appendChild(el("span","confbadge "+confClass(c),"extraction: "+confLabel(c)+" ("+Math.round(c*100)+"%)"));box.appendChild(b);
+  if(c<0.8||warns.length){const w=el("div","note gov");w.style.margin="8px 0 0";w.innerHTML='<i data-lucide="triangle-alert"></i>';const sp2=el("span");const t=el("strong",null,"Check the extraction before relying on it. ");sp2.appendChild(t);(warns.length?warns:["Open the document to verify it matches the source."]).forEach(x=>{sp2.appendChild(document.createTextNode(x+" "));});w.appendChild(sp2);box.appendChild(w);icons();}
+}
+$("#specfileinput").onchange=async e=>{const f=e.target.files[0];if(!f)return;$("#specfilestatus").innerHTML="";currentSpecToken=null;
+  const chip=el("div","chip blue");chip.innerHTML='<i data-lucide="file-text"></i>';chip.appendChild(el("span",null,f.name));const st=el("span",null," — uploading…");chip.appendChild(st);$("#specfilestatus").appendChild(chip);icons();
+  const b64=await fileToB64(f);const [ok,d]=await jpost("/upload",{filename:f.name,dataBase64:b64});
+  if(!ok){st.textContent=" — upload failed: "+(d.error||"");return;}
+  specReady=null;let sp=null;
+  for(let i=0;i<25;i++){await sleep(1200);const [o2,r]=await jget("/specs/"+d.token);if(o2&&r.status!=="PENDING"){sp=r;break;}}
+  if(!sp){st.textContent=" — still processing…";return;}
+  if(sp.status!=="READY"){st.textContent=" — extraction error: "+(sp.error||"");return;}
+  specReady=sp.text;currentSpecToken=d.token;st.textContent=" — extracted "+sp.text.length+" chars";
+  showExtractWarn($("#specfilestatus"),sp);
+  const gst=el("div");gst.style.cssText="margin-top:10px;font-size:12px;color:var(--muted)";$("#specfilestatus").appendChild(gst);
+  const stopT=elapsedTicker(gst,"Building the specification…");
+  const csp=await generateConcise(d.token);stopT();
+  if(!csp.ok){gst.innerHTML="";conciseErrBox($("#specfilestatus"),csp.error,()=>$("#specfileinput").onchange({target:{files:[f]}}));return;}
+  gst.innerHTML="";const done=el("span",null,"Specification ready. ");done.style.color="var(--iris-green-800)";done.style.fontWeight="600";gst.appendChild(done);
+  const rl=el("a",null,"Open the Specification Builder");rl.href="#";rl.onclick=(ev)=>{ev.preventDefault();openCompareModal(d.token);};gst.appendChild(rl);
+  if(csp.conciseError){const w=el("div","note gov");w.innerHTML='<i data-lucide="triangle-alert"></i>';w.appendChild(el("span",null,csp.conciseError));$("#specfilestatus").appendChild(w);icons();}
+  loadSavedSpecs();openCompareModal(d.token);
+};
+async function generateConcise(token){
+  const [sok,start]=await jpost("/specs/"+token+"/concise",providerBody());
+  if(!sok)return{ok:false,error:(start&&start.error)||"Could not start specification build."};
+  for(let i=0;i<300;i++){await sleep(1000);const [gok,sp]=await jget("/specs/"+token);if(!gok)continue;
+    if(sp.conciseStatus==="READY")return Object.assign({ok:true},sp);
+    if(sp.conciseStatus==="ERROR")return{ok:false,error:sp.conciseError||"Specification build failed.",conciseStatus:"ERROR"};}
+  return{ok:false,error:"Specification build timed out. Try again, or use a faster model."};
+}
+function conciseErrBox(box,msg,retryFn){
+  const e=el("div","note err");e.innerHTML='<i data-lucide="alert-circle"></i>';const s=el("span");s.appendChild(el("strong",null,"Specification build failed. "));s.appendChild(document.createTextNode(msg||"The model returned no content."));
+  const row=el("div");row.style.cssText="margin-top:8px;display:flex;gap:14px";
+  if(retryFn){const ra=el("a",null,"Retry");ra.href="#";ra.onclick=(ev)=>{ev.preventDefault();retryFn();};row.appendChild(ra);}
+  s.appendChild(row);e.appendChild(s);box.appendChild(e);icons();
+}
+async function loadSavedSpecs(){const sel=$("#savedspec");const [ok,j]=await jget("/specs");
+  const cur=sel.value;sel.innerHTML="<option value=''>Select a saved specification…</option>";
+  if(ok&&j.specs){j.specs.filter(s=>s.status==="READY"&&s.size>0).forEach(s=>{const o=document.createElement("option");const cf=(s.confidence==null?1:+s.confidence);o.value=s.token;o.textContent=s.fileName+" · "+s.size+" chars"+(cf<0.8?(" · "+Math.round(cf*100)+"%"):"");sel.appendChild(o);});}
+  if([...sel.options].some(o=>o.value===cur))sel.value=cur;}
+$("#refreshspecs").onclick=loadSavedSpecs;
+$("#savedspec").onchange=async()=>{const tok=$("#savedspec").value;savedReady=null;currentSpecToken=null;const info=$("#savedspecinfo");info.innerHTML="";$("#savedspecreview").classList.add("hidden");
+  if(!tok)return;info.innerHTML='<span class=spinner></span> Loading…';
+  const [ok,sp]=await jget("/specs/"+tok);
+  if(!ok||sp.status!=="READY"){info.textContent="Could not load this specification.";return;}
+  savedReady=sp.text;currentSpecToken=tok;info.innerHTML="";
+  const span=el("span",null,sp.fileName+" — "+(sp.text||"").length+" chars. ");span.style.fontWeight="600";info.appendChild(span);
+  const link=el("a",null,"Open original");link.href="#";link.onclick=(e)=>{e.preventDefault();openSpecModal(sp.fileName,sp.text);};info.appendChild(link);
+  const cs=el("div");cs.style.cssText="margin-top:6px";
+  if(sp.conciseApproved){const a=el("span",null,"Specification approved.");a.style.cssText="color:var(--iris-green-800);font-weight:600";cs.appendChild(a);}
+  else if(sp.conciseStatus==="ERROR"){const a=el("span",null,"Specification build failed.");a.style.color="var(--danger)";cs.appendChild(a);}
+  else if(sp.conciseStatus==="READY"){const a=el("span",null,"Specification needs your review.");a.style.color="#a15c07";cs.appendChild(a);}
+  else{const a=el("span",null,"No specification built yet.");a.style.color="var(--muted)";cs.appendChild(a);}
+  info.appendChild(cs);
+  if(sp.conciseStatus==="ERROR"&&sp.conciseError){conciseErrBox(info,sp.conciseError,()=>$("#reviewconcise").onclick());}
+  $("#savedspecreview").classList.remove("hidden");
+  const lbl=$("#reviewconcise");lbl.innerHTML=sp.conciseApproved?'<i data-lucide="file-text"></i> View specification':(sp.conciseStatus==="READY"?'<i data-lucide="scan-search"></i> Review specification':(sp.conciseStatus==="ERROR"?'<i data-lucide="refresh-cw"></i> Retry build':'<i data-lucide="settings-2"></i> Build specification'));icons();
+  showExtractWarn(info,sp);};
+$("#reviewconcise").onclick=async()=>{if(!currentSpecToken)return;
+  const [ok,sp]=await jget("/specs/"+currentSpecToken);
+  if(ok&&sp.conciseStatus==="READY"){openCompareModal(currentSpecToken);return;}
+  const lbl=$("#reviewconcise").innerHTML;$("#reviewconcise").disabled=true;
+  const stopT=elapsedTicker($("#reviewconcise"),"Building specification…");
+  const csp=await generateConcise(currentSpecToken);stopT();$("#reviewconcise").disabled=false;$("#reviewconcise").innerHTML=lbl;icons();
+  if(!csp.ok){conciseErrBox($("#savedspecinfo"),csp.error,()=>$("#reviewconcise").onclick());return;}
+  openCompareModal(currentSpecToken);
+};
+function openSpecModal(title,text){$("#specmodaltitle").textContent=title||"Specification";$("#specmodaltext").textContent=text||"(empty)";$("#specmodalcopy").innerHTML="";$("#specmodalcopy").appendChild(copyBtn(()=>text||"",true));$("#specmodal").classList.add("show");}
+$("#specmodalclose").onclick=()=>$("#specmodal").classList.remove("show");
+$("#specmodal").onclick=(e)=>{if(e.target===$("#specmodal"))$("#specmodal").classList.remove("show");};
+
+// ======================= INPUT LIST =======================================
+function addInput(val=""){const box=$("#inputs");const wrap=el("div","card");wrap.style.cssText="padding:11px;margin-bottom:10px;background:var(--surface-2)";
+  const ph=el("div","ch");ph.appendChild(Object.assign(el("h3",null,"Input message"),{}));const tag=el("span","chip blue");tag.textContent="primary";ph.appendChild(tag);
+  const rm=el("button","btn btn-plain btn-sm");rm.innerHTML='<i data-lucide="trash-2"></i>';rm.style.marginLeft="auto";rm.onclick=()=>{wrap.remove();renumber();};ph.appendChild(rm);
+  wrap.appendChild(ph);const ta=el("textarea");ta.placeholder="Example HL7 v2 message…";ta.value=val;wrap.appendChild(ta);box.appendChild(wrap);renumber();icons();}
+function renumber(){[...document.querySelectorAll("#inputs .card")].forEach((p,i)=>{p.querySelector("h3").textContent="Input "+(i+1);const t=p.querySelector(".chip");if(t)t.style.display=i===0?"":"none";});}
+function collectInputs(){return [...document.querySelectorAll("#inputs textarea")].map(t=>t.value).filter(v=>v.trim());}
+$("#addinput").onclick=()=>addInput();
+
+// ======================= HEALTH ===========================================
+async function checkHealth(){$("#htxt").textContent="checking…";$("#hdot").className="dot";
+  try{const [ok,j]=await jget("/health");$("#hdot").className="dot "+(j.ok?"ok":"bad");$("#htxt").textContent=(j.ok?"healthy":"degraded")+" · "+j.passed+"/"+j.total;
+    $("#health").title=(j.checks||[]).map(c=>(c.ok?"OK ":"FAIL ")+c.name+(c.detail?" — "+c.detail:"")).join("\n");}
+  catch(e){$("#hdot").className="dot bad";$("#htxt").textContent="API unreachable";}}
+$("#health").onclick=checkHealth;
+// ======================= JOB LIFECYCLE ===================================
+let currentJob=null,pollTimer=null,lastRenderSig=null;
+const REST_STATES={SUCCESS:1,FAILED:1,REJECTED:1,AWAITING_SPEC:1,AWAITING_PLAN:1,AWAITING_ATTEMPT:1};
+function showFormErr(m){const e=$("#formerr");e.querySelector("span").textContent=m;e.classList.remove("hidden");icons();toast(m,"bad");}
+function resetGo(){$("#go").disabled=false;$("#go").innerHTML='<i data-lucide="arrow-right"></i> Continue to review';icons();}
+
+$("#go").onclick=async()=>{
+  $("#formerr").classList.add("hidden");
+  const inputs=collectInputs();
+  let spec=$("#spec").value;const m=specMode();let specToken=null,approved=false;
+  if(m==="file"||m==="saved"){
+    const ready=(m==="file"?specReady:savedReady);
+    if(!ready)return showFormErr(m==="file"?"Upload a spec document and wait for extraction.":"Select a saved specification.");
+    if(!currentSpecToken)return showFormErr("Specification not ready — re-select it.");
+    specToken=currentSpecToken;spec=ready;
+    const [sok,sp]=await jget("/specs/"+specToken);approved=sok&&sp.conciseApproved;
+    if(!approved){if(sok&&sp.conciseStatus==="READY"){openCompareModal(specToken);return showFormErr("Review & approve the specification first (opened for you).");}return showFormErr("Build & approve the specification first — use ‘Review specification’.");}
+  }
+  if(!spec.trim())return showFormErr("Provide a specification (text, document, or saved spec).");
+  if(!inputs.length)return showFormErr("Add at least one example input message.");
+  if(needsKey()&&!$("#apikey").value.trim())return showFormErr("Enter your "+(isBedrock()?"AWS Bedrock":"OpenAI")+" API key in Generation settings (or switch to Mock).");
+  if(needsKey()&&!$("#model").value.trim())return showFormErr("Select a model — enter a valid API key, then pick one.");
+  persistKey();
+  const body={inputSpec:spec,inputName:$("#jobname").value.trim(),provider:provider(),model:$("#model").value,apiKey:needsKey()?$("#apikey").value.trim():"",autoApprove:false,inputs};
+  if(specToken)body.specToken=specToken;
+  body.maxAttempts=+($("#maxattempts").value||5);body.costCap=+($("#costcap").value||0);
+  if(isBedrock())body.bedrockRegion=$("#bedrockregion").value.trim()||"us-east-1";
+  $("#go").disabled=true;$("#go").innerHTML='<span class=spinner></span> '+(approved?"Planning…":"Structuring…");
+  const [ok,j]=await jpost("/generate",body);
+  if(!ok){showFormErr(j.error||"generate failed");resetGo();return;}
+  currentJob=j.jobId;$("#jobpilltext").textContent=j.jobId;$("#jobpill").classList.remove("hidden");
+  doneSteps={};setTabState("inputs","done");doneSteps.inputs=1;
+  unlock("review");unlock("generate");unlock("export");
+  $("#reviewIdle").classList.add("hidden");$("#genIdle").classList.add("hidden");
+  showStep("review");loadLinks(currentJob);buildClockReset();startPolling();
+};
+
+function startPolling(){if(pollTimer)clearInterval(pollTimer);lastRenderSig=null;const tick=async()=>{const [ok,j]=await jget("/jobs/"+currentJob);if(ok)render(j);};tick();pollTimer=setInterval(tick,1200);}
+function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
+function jobSig(j){const atts=(j.attempts||[]).map(a=>a.number+":"+a.phase+":"+(a.message||"")).join("|");
+  return [j.status,j.verdict,j.attemptsUsed,j.maxAttempts,j.sourceDocType,j.model,j.generatedClassName,j.lastError||"",j.plan||"",atts,norm(j.sourceHL7||j.expectedHL7),norm(j.actualHL7),j.finalDTL||"",j.structuredSpec||"",JSON.stringify(j.gateReport||"")].join("");}
+
+function render(j){
+  // KPIs + hero
+  $("#kpiStatus").textContent=(j.status||"—").replace(/_/g," ");$("#kpiStatusSub").textContent=j.verdict||"current job";
+  $("#kpiAttempts").textContent=(j.attemptsUsed||0)+" / "+(j.maxAttempts||0);
+  $("#kpiDocType").textContent=j.sourceDocType||"—";$("#kpiModel").textContent=j.model||"—";
+  $("#heroStatus").textContent=(j.status||"Ready").replace(/_/g," ");
+  const sig=jobSig(j);
+  if(sig===lastRenderSig){if(REST_STATES[j.status]){stopPolling();buildClockStop();}return;}
+  lastRenderSig=sig;
+  renderStatus(j);
+  // review gates
+  const ss=j.status==="AWAITING_SPEC";$("#specgate").classList.toggle("hidden",!ss);if(ss){resetGo();renderSpecGate(j);}
+  const sp=j.status==="AWAITING_PLAN";$("#plangate").classList.toggle("hidden",!sp);if(sp){$("#plantext").innerHTML=mdToHtml(j.plan||"");resetGo();icons();}
+  // review working indicator
+  const reviewBusy=(j.status==="STRUCTURING"||j.status==="PLANNING"||(j.status==="QUEUED"));
+  $("#reviewBuilding").classList.toggle("hidden",!reviewBusy);
+  if(reviewBusy){$("#reviewBuildMsg").textContent=j.status==="PLANNING"?"Drafting the implementation plan…":"Structuring the specification for your review…";buildClockStart();}
+  $("#reviewReadiness").innerHTML=ss?'<i data-lucide="user-check"></i> Your turn — review the structured specification':(sp?'<i data-lucide="user-check"></i> Your turn — review the plan':'<i data-lucide="loader"></i> Working…');
+  $("#reviewReadiness").classList.toggle("ready",ss||sp);
+  // when review gates are active, surface the review step
+  if((ss||sp)&&currentTab!=="review"&&!doneSteps.review)showStep("review");
+  if(ss||sp){/* keep on review */}
+  // attempt gate (generate step)
+  const sa=j.status==="AWAITING_ATTEMPT";$("#attemptgate").classList.toggle("hidden",!sa);
+  if(sa){resetGo();renderAttempt(j);if(currentTab==="review"){doneSteps.review=1;setTabState("review","done");showStep("generate");}}
+  // plan approved → move to generate visually
+  if((j.status==="GENERATING"||j.status==="JUDGING")&&currentTab==="review"){doneSteps.review=1;setTabState("review","done");showStep("generate");}
+  // terminal
+  if(j.status==="SUCCESS"){doneSteps.review=1;doneSteps.generate=1;setTabState("review","done");setTabState("generate","done");renderExport(j);if(currentTab!=="export"){showStep("export");toast("Transformation accepted — ready to export","ok");}}
+  if(REST_STATES[j.status]){stopPolling();resetGo();buildClockStop();loadLinks(currentJob);}
+  if(genSub==="messages")loadMessages();
+  icons();
+}
+
+function phaseLabel(p){return{GENERATING:"Asked the model",COMPILE_FAIL:"Did not compile",RUNTIME_FAIL:"Compiled, failed at runtime",MISMATCH:"Ran, but does not meet the spec",SUCCESS:"Compiled, ran & conforms to the spec",LLM_ERROR:"Model call problem"}[p]||p;}
+function renderStatus(j){
+  $("#genIdle").classList.add("hidden");$("#statusbox").classList.remove("hidden");
+  $("#statusbadge").innerHTML="";$("#statusbadge").appendChild(el("span","badge b-"+j.status,(j.status||"").replace(/_/g," ")));
+  if(j.verdict){$("#statusbadge").appendChild(el("span","chip",j.verdict));}
+  $("#statusmeta").innerHTML="<span>Message type: <b>"+(j.sourceDocType||"?")+"</b></span><span>Model: <b>"+(j.model||"?")+"</b></span><span>Class: <b>"+(j.generatedClassName||"—")+"</b></span>";
+  const atts=j.attempts||[];const list=$("#steplist");list.innerHTML="";
+  atts.forEach((a,i)=>{const d=el("div","step ph-"+(a.phase||""));const n=el("div","sn");if(a.phase==="SUCCESS")n.innerHTML='<i data-lucide="check"></i>';else n.textContent=a.number;d.appendChild(n);
+    const b=el("div");b.style.flex="1";let lbl=phaseLabel(a.phase);if((a.phase==="COMPILE_FAIL"||a.phase==="RUNTIME_FAIL")&&i<atts.length-1)lbl+=" — auto-correcting";
+    b.appendChild(el("div","st",lbl));if(a.message)b.appendChild(el("div","sm",a.message));d.appendChild(b);list.appendChild(d);});
+  const busy=(j.status==="GENERATING"||j.status==="JUDGING"||j.status==="QUEUED"||j.status==="RUNNING");
+  $("#buildline").classList.toggle("hidden",!busy);
+  if(busy){buildClockStart();const lastFail=atts.length&&/FAIL|MISMATCH/.test(atts[atts.length-1].phase);
+    $("#buildmsg").textContent=j.status==="JUDGING"?"Verifying the DTL against the spec (all inputs + conformance)…":(j.status==="QUEUED"?"Queued — starting…":(lastFail?"Auto-correcting from the previous attempt…":"Building the DTL…"));}
+  const er=$("#statuserr");if(j.lastError){er.classList.remove("hidden");er.querySelector("span").textContent=j.lastError;}else er.classList.add("hidden");
+  icons();
+}
+function renderAttempt(j){
+  $("#atnum").textContent=j.attemptsUsed;
+  $("#atmeta").innerHTML="<span>Verdict: <b>"+(j.verdict||"")+"</b></span><span>Class: <b>"+(j.generatedClassName||"—")+"</b></span>";
+  const passed=(j.verdict==="SUCCESS");
+  $("#attemptgate").classList.toggle("accent-warn",!passed);
+  renderGateReport(j.gateReport,passed);
+  const inp=norm(j.sourceHL7||j.expectedHL7),out=norm(j.actualHL7);const d=lineDiff(inp,out);
+  setLined($("#dexp"),inp,d.aCls,d.aSeg);setLined($("#dact"),out||"(no output)",out?d.bCls:null,out?d.bSeg:null);setLined($("#dtlsrc"),j.finalDTL||"(none)");
+  $("#dexpcopy").innerHTML="";$("#dexpcopy").appendChild(copyBtn(()=>inp));
+  $("#dactcopy").innerHTML="";$("#dactcopy").appendChild(copyBtn(()=>out));
+  $("#dtlcopy").innerHTML="";$("#dtlcopy").appendChild(copyBtn(()=>j.finalDTL||""));
+  syncScroll([$("#dexp").closest(".side"),$("#dact").closest(".side")]);icons();
+}
+function renderGateReport(gr,passed){
+  const box=$("#gatereport");box.innerHTML="";if(!gr||typeof gr!=="object")return;
+  const card=el("div","note "+(passed?"cue":"gov"));card.style.flexDirection="column";card.style.alignItems="stretch";
+  const h=el("div");h.style.cssText="display:flex;align-items:center;gap:8px;font-weight:700";
+  h.innerHTML='<i data-lucide="'+(passed?"shield-check":"triangle-alert")+'"></i>';h.appendChild(el("span",null,passed?"Verified against the specification":"Does not yet meet the specification"));card.appendChild(h);
+  const ra=gr.runAll||{};const chk=el("div");chk.style.cssText="display:flex;gap:16px;flex-wrap:wrap;margin-top:7px";
+  const mk=(ok,t)=>{const s=el("span");s.style.cssText="display:inline-flex;align-items:center;gap:5px;font-weight:600;color:"+(ok?"var(--iris-green-800)":"var(--danger)");s.innerHTML='<i data-lucide="'+(ok?"check":"x")+'" style="width:14px;height:14px"></i>';s.appendChild(el("span",null,t));return s;};
+  chk.appendChild(mk(!!ra.ran,"runs on all inputs"));chk.appendChild(mk(!!ra.anyChange,"actually transforms fields"));
+  const jdg=gr.judge||{};if(jdg&&typeof jdg==="object")chk.appendChild(mk(!!jdg.conforms,"conformance judge"+(jdg.score!=null?(" ("+Math.round(jdg.score*100)+"%)"):"")));
+  card.appendChild(chk);
+  if(jdg.violations&&jdg.violations.length){const v=el("div");v.style.marginTop="8px";v.appendChild(el("div",null,"Unmet rules:")).style.fontWeight="700";
+    jdg.violations.forEach(x=>{const row=el("div");row.style.cssText="padding:3px 0;font-size:12px";const sev=el("span","chip "+((x.severity==="LOW")?"warn":"bad"));sev.textContent=x.severity||"HIGH";sev.style.marginRight="6px";row.appendChild(sev);row.appendChild(document.createTextNode((x.rule||"")+(x.detail?(" — "+x.detail):"")));v.appendChild(row);});card.appendChild(v);}
+  box.appendChild(card);icons();
+}
+// spec gate
+let specOrigText="";
+function renderSpecGate(j){
+  specOrigText=j.inputSpec||"";$("#specorig").textContent=specOrigText;
+  $("#specorigcopy").innerHTML="";$("#specorigcopy").appendChild(copyBtn(()=>specOrigText));
+  $("#specedit").value=j.structuredSpec||"";
+  const prov=Array.isArray(j.specProvenance)?j.specProvenance:[];const box=$("#specrules");box.innerHTML="";
+  let grounded=0,inferred=0,nosrc=0;
+  prov.forEach(p=>{const hasSrc=(p.sourceQuote&&String(p.sourceQuote).trim()!=="");const inf=!!p.inferred;
+    if(inf)inferred++;else if(!hasSrc)nosrc++;else grounded++;
+    const r=el("div","citem"+(inf?" inferred":(hasSrc?"":" nosrc")));
+    const head=el("div");head.style.fontWeight="600";head.appendChild(el("span",null,(p.ruleIndex||"")+". "+(p.rule||"")));
+    if(inf)head.appendChild(el("span","ci-tag inf","inferred"));else if(!hasSrc)head.appendChild(el("span","ci-tag no","no source"));
+    r.appendChild(head);
+    if(hasSrc){const q=el("div","ci-src");q.appendChild(el("span","ci-srclbl","source: "));q.appendChild(el("span",null,"“"+p.sourceQuote+"”"));r.appendChild(q);
+      r.onmouseenter=()=>highlightSource(p.sourceQuote);r.onmouseleave=()=>{$("#specorig").textContent=specOrigText;};}
+    box.appendChild(r);});
+  if(!prov.length)box.appendChild(el("div","empty","No structured rules returned — edit the spec below directly."));
+  const cov=$("#speccov");cov.innerHTML="";
+  const add=(t,cls)=>{cov.appendChild(el("span","chip "+cls,t));};
+  add(grounded+" grounded in source","ok");if(inferred)add(inferred+" inferred","warn");if(nosrc)add(nosrc+" no source","bad");
+}
+function highlightSource(quote){const orig=specOrigText;if(!quote){$("#specorig").textContent=orig;return;}
+  const idx=orig.toLowerCase().indexOf(String(quote).toLowerCase().slice(0,40));const pane=$("#specorig");pane.innerHTML="";
+  if(idx<0){pane.textContent=orig;return;}
+  const end=idx+Math.min(String(quote).length,40);
+  pane.appendChild(document.createTextNode(orig.slice(0,idx)));pane.appendChild(el("span","cmphi",orig.slice(idx,end)));pane.appendChild(document.createTextNode(orig.slice(end)));}
+
+// attempt sub-tabs
+document.querySelectorAll("#attTabs button").forEach(t=>t.onclick=()=>{document.querySelectorAll("#attTabs button").forEach(x=>x.classList.remove("on"));t.classList.add("on");$("#tab-out").classList.toggle("hidden",t.dataset.tab!=="out");$("#tab-dtl").classList.toggle("hidden",t.dataset.tab!=="dtl");});
+
+// busy helper
+async function busyBtn(btn,label,fn,siblings){
+  if(!btn)return fn&&fn();const all=[btn].concat(siblings||[]);const saved=all.map(b=>({b,html:b.innerHTML,dis:b.disabled}));
+  all.forEach(b=>b.disabled=true);btn.innerHTML='<span class=spinner></span> '+label;
+  try{return await fn();}finally{saved.forEach(s=>{s.b.innerHTML=s.html;s.b.disabled=s.dis;});icons();}
+}
+// plan additions
+function addPlanItem(val=""){const box=$("#planadds");const wrap=el("div");wrap.style.cssText="display:flex;gap:8px;align-items:center;margin-bottom:8px";
+  const ta=el("input");ta.placeholder="e.g. Also blank out PID-19 (SSN) for privacy";ta.value=val;ta.style.flex="1";
+  const rm=el("button","btn btn-plain btn-sm");rm.innerHTML='<i data-lucide="trash-2"></i>';rm.onclick=()=>wrap.remove();
+  wrap.appendChild(ta);wrap.appendChild(rm);box.appendChild(wrap);ta.focus();icons();}
+function collectPlanAdditions(){return [...document.querySelectorAll("#planadds input")].map(t=>t.value.trim()).filter(Boolean);}
+$("#addplanitem").onclick=()=>addPlanItem();
+
+$("#approvespec").onclick=()=>busyBtn($("#approvespec"),"Planning…",async()=>{const edit=$("#specedit").value;const [ok]=await jpost("/jobs/"+currentJob+"/continue",{action:"approve-spec",specEdit:edit});if(ok)buildClockReset();startPolling();},[$("#rejectspec")]);
+$("#rejectspec").onclick=()=>{const fb=prompt("What should change about the structured spec?");if(fb==null)return;busyBtn($("#rejectspec"),"Re-structuring…",async()=>{const [ok]=await jpost("/jobs/"+currentJob+"/continue",{action:"reject",feedback:"Re-structure the specification: "+fb});if(ok)buildClockReset();startPolling();},[$("#approvespec")]);};
+$("#approveplan").onclick=()=>busyBtn($("#approveplan"),"Building…",async()=>{const adds=collectPlanAdditions();$("#planadds").innerHTML="";const [ok]=await jpost("/jobs/"+currentJob+"/continue",{action:"approve",planAdditions:adds});if(ok){buildClockReset();doneSteps.review=1;setTabState("review","done");showStep("generate");}startPolling();},[$("#rejectplan")]);
+$("#rejectplan").onclick=()=>{const fb=prompt("How should the plan change?");if(fb==null)return;busyBtn($("#rejectplan"),"Revising…",async()=>{const [ok]=await jpost("/jobs/"+currentJob+"/continue",{action:"reject",feedback:"Revise the plan: "+fb});if(ok)buildClockReset();startPolling();},[$("#approveplan")]);};
+$("#acceptattempt").onclick=()=>busyBtn($("#acceptattempt"),"Finalising…",async()=>{await jpost("/jobs/"+currentJob+"/continue",{action:"accept"});startPolling();},[$("#rejectattempt")]);
+$("#rejectattempt").onclick=()=>{const fb=$("#attfeedback").value.trim();busyBtn($("#rejectattempt"),"Regenerating…",async()=>{const [ok]=await jpost("/jobs/"+currentJob+"/continue",{action:"reject",feedback:fb||"Please improve the transformation."});$("#attfeedback").value="";if(ok)buildClockReset();startPolling();},[$("#acceptattempt")]);};
+
+async function loadLinks(jobId){try{const [ok,j]=await jget("/links"+(jobId?("/"+jobId):""));}catch(e){}}
+
+// generate sub-nav
+let genSub="progress";
+document.querySelectorAll("#genSubnav button").forEach(b=>b.onclick=()=>{genSub=b.dataset.g;document.querySelectorAll("#genSubnav button").forEach(x=>x.classList.toggle("on",x===b));$("#genProgress").classList.toggle("hidden",genSub!=="progress");$("#genMessages").classList.toggle("hidden",genSub!=="messages");if(genSub==="messages")loadMessages();});
+// ======================= VALIDATE & EXPORT ===============================
+const fmtScore=x=>(x==null||x==="")?"—":(Math.round(x*100)+"%");
+let exportJobData=null;
+function renderExport(j){
+  exportJobData=j;
+  $("#exportIdle").classList.add("hidden");$("#exportReady").classList.remove("hidden");
+  $("#exVerdict").textContent=(j.verdict||"SUCCESS").replace(/_/g," ");
+  $("#exScore").textContent=fmtScore(j.finalScore);
+  $("#exAttempts").textContent=(j.attemptsUsed||0)+" / "+(j.maxAttempts||0);
+  $("#exClass").textContent=(j.generatedClassName||"—").replace(/^DTL\.Generated\./,"");
+  $("#exClassName").textContent=j.generatedClassName||"DTL.Generated";
+  setLined($("#exDtl"),j.finalDTL||"(none)");
+  // checks
+  const gr=j.gateReport||{};const ra=gr.runAll||{};const jdg=gr.judge||{};const box=$("#exChecks");box.innerHTML="";
+  const check=(state,label,detail,stateText)=>{const d=el("div","check");const ic=el("i","ci "+state);ic.setAttribute("data-lucide",state==="ok"?"check-circle-2":state==="bad"?"x-circle":state==="warn"?"alert-triangle":"circle");d.appendChild(ic);
+    const b=el("div");b.style.flex="1";b.appendChild(el("div","cl",label));b.appendChild(el("div","cx",detail));d.appendChild(b);
+    const cs=el("span","cstate");cs.appendChild(el("span","chip "+(state==="ok"?"ok":state==="bad"?"bad":"warn"),stateText));d.appendChild(cs);box.appendChild(d);};
+  check("ok","Compiles","The generated DTL compiles into a valid IRIS transformation class.","Pass");
+  check(ra.ran?"ok":"bad","Runs on all inputs",ra.ran?"Executes cleanly against every example message.":"Failed at runtime on at least one input.",ra.ran?"Pass":"Fail");
+  check(ra.anyChange?"ok":"warn","Transforms fields",ra.anyChange?"Actually changes the message — assigns are landing on valid paths.":"Produced output identical to input — check the target paths.",ra.anyChange?"Pass":"Review");
+  check(jdg.conforms?"ok":"warn","Conforms to specification",jdg.conforms?("Conformance judge agrees with the spec ("+fmtScore(jdg.score)+").")+"":"Conformance judge flagged differences from the spec.",jdg.conforms?"Pass":"Review");
+  check("warn","Developer review","AI-generated transformations must be reviewed before production use.","Required");
+  icons();
+}
+$("#exCopy").onclick=()=>{const t=exportJobData&&exportJobData.finalDTL||"";navigator.clipboard&&navigator.clipboard.writeText(t);toast("DTL copied to clipboard","ok");};
+$("#exDownload").onclick=()=>{const t=exportJobData&&exportJobData.finalDTL||"";const name=((exportJobData&&exportJobData.generatedClassName)||"DTL.Generated.Final")+".cls";const blob=new Blob([t],{type:"text/plain"});const a=el("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href);toast("Downloaded "+name,"ok");};
+
+// export sub-nav
+document.querySelectorAll("#exportSubnav button").forEach(b=>b.onclick=()=>{const x=b.dataset.x;document.querySelectorAll("#exportSubnav button").forEach(y=>y.classList.toggle("on",y===b));
+  ["outputs","live","classes","history"].forEach(v=>$("#x-"+v).classList.toggle("hidden",v!==x));
+  if(x==="outputs")loadOutputs();if(x==="classes")loadClasses();if(x==="history")loadHistory();});
+
+// OUTPUTS
+async function loadOutputs(){const box=$("#outlist");if(!box)return;box.innerHTML="";if(!currentJob){box.appendChild(el("div","empty","Build a DTL first."));return;}
+  const [ok,j]=await jget("/jobs/"+currentJob+"/outputs");if(!ok||!j.outputs.length){box.innerHTML="";const e=el("div","empty");e.innerHTML='<i data-lucide="inbox"></i>No outputs yet — accept a build first.';box.appendChild(e);icons();return;}
+  j.outputs.forEach(r=>{const c=el("div","card");if(r.error)c.classList.add("accent-warn");else c.classList.add("accent");
+    c.appendChild(el("div","ch")).appendChild(el("h3",null,"Input "+r.index));
+    const inT=norm(r.input),outT=r.error?("[runtime error] "+r.error):norm(r.output);const d=r.error?{aCls:null,bCls:null}:lineDiff(inT,outT);
+    const io=el("div","io");const sIn=el("div","side");const hIn=el("div","head");hIn.appendChild(el("span",null,"Input"));hIn.appendChild(copyBtn(()=>inT));sIn.appendChild(hIn);sIn.appendChild(linedBlock(inT,d.aCls,d.aSeg));
+    const sOut=el("div","side r");const hOut=el("div","head");hOut.appendChild(el("span",null,"Output"));hOut.appendChild(copyBtn(()=>outT));sOut.appendChild(hOut);sOut.appendChild(linedBlock(outT,d.bCls,d.bSeg));
+    io.appendChild(sIn);io.appendChild(sOut);c.appendChild(io);syncScroll([sIn,sOut]);
+    c.appendChild(el("label","fld","Correct this output / give feedback"));
+    const ta=el("textarea");ta.value=norm(r.output);ta.style.minHeight="70px";c.appendChild(ta);lineNumberTextarea(ta);
+    const fb=el("textarea","prose");fb.placeholder="Feedback (optional)…";fb.style.minHeight="40px";c.appendChild(fb);
+    const btn=el("button","btn btn-ok btn-sm");btn.style.marginTop="9px";btn.innerHTML='<i data-lucide="wand-sparkles"></i> Apply correction';
+    const cmsg=el("div","help");cmsg.style.marginTop="6px";
+    btn.onclick=async()=>{btn.disabled=true;btn.innerHTML='<span class=spinner></span> Rebuilding…';cmsg.textContent="";
+      const [ok,jj]=await jpost("/jobs/"+currentJob+"/correct",{input:r.input,produced:r.output,corrected:ta.value,feedback:fb.value});
+      btn.disabled=false;btn.innerHTML='<i data-lucide="wand-sparkles"></i> Apply correction';icons();
+      if(!ok||(jj&&jj.lastError)){cmsg.style.color="var(--danger)";cmsg.textContent="Correction failed: "+((jj&&(jj.error||jj.lastError))||"unknown");return;}
+      toast("DTL rebuilt and inputs re-transformed","ok");await loadOutputs();};
+    c.appendChild(btn);c.appendChild(cmsg);box.appendChild(c);});icons();
+}
+$("#refreshout").onclick=loadOutputs;
+
+// LIVE
+$("#runlive").onclick=async()=>{if(!currentJob){$("#livemsg").textContent="Build a DTL first.";return;}const inp=$("#liveinput").value;if(!inp.trim())return;
+  $("#runlive").innerHTML='<span class=spinner></span> Transforming…';const [ok,j]=await jpost("/jobs/"+currentJob+"/transform",{input:inp});$("#runlive").innerHTML='<i data-lucide="play"></i> Transform';icons();
+  const inN=norm(inp),outN=j.error?("[runtime error] "+j.error):norm(j.output);const d=j.error?{aCls:null,aSeg:null}:lineDiff(inN,outN);
+  $("#liveresult").classList.remove("hidden");setLined($("#liveIn"),inN,d.aCls,d.aSeg);$("#liveOut").value=outN;lineNumberTextarea($("#liveOut"));$("#livemsg").textContent="";
+  $("#liveincopy").innerHTML="";$("#liveincopy").appendChild(copyBtn(()=>inN,true));
+  $("#liveoutcopy").innerHTML="";$("#liveoutcopy").appendChild(copyBtn(()=>$("#liveOut").value,true));};
+$("#livecorrect").onclick=async()=>{const inp=$("#liveinput").value;$("#livecorrect").innerHTML='<span class=spinner></span> Rebuilding…';
+  const [ok,j]=await jpost("/jobs/"+currentJob+"/correct",{input:inp,produced:"",corrected:$("#liveOut").value,feedback:$("#livefb").value});
+  $("#livecorrect").innerHTML='<i data-lucide="wand-sparkles"></i> Apply correction to the DTL';icons();
+  $("#livemsg").textContent=ok?("DTL rebuilt — class "+(j.generatedClassName||"")+". Re-run to see the new output."):("Failed: "+(j.error||""));if(ok)toast("DTL rebuilt","ok");};
+
+// CLASSES
+function showClass(c){setLined($("#clssrc"),c.source||"(no source)");$("#clsname").textContent=c.className;$("#clscopy").innerHTML="";$("#clscopy").appendChild(copyBtn(()=>c.source||""));}
+async function loadClasses(){const box=$("#clslist");box.innerHTML="";const [ok,j]=await jget("/classes");if(!ok||!j.classes.length){box.innerHTML="";const e=el("div","empty");e.innerHTML='<i data-lucide="boxes"></i>No classes yet.';box.appendChild(e);icons();return;}
+  j.classes.forEach(c=>{const card=el("div","listcard");card.style.cssText+=";font-family:var(--mono);font-size:12px;word-break:break-all;font-weight:600";card.textContent=c.className;card.onclick=()=>showClass(c);box.appendChild(card);});
+  showClass(j.classes[0]);}
+$("#refreshcls").onclick=loadClasses;
+
+// HISTORY
+async function loadHistory(){const [ok,j]=await jget("/history");const box=$("#histlist");box.innerHTML="";if(!ok||!j.history||!j.history.length){const e=el("div","empty");e.innerHTML='<i data-lucide="history"></i>No transformations yet.';box.appendChild(e);icons();return;}
+  j.history.forEach(h=>{const row=el("div","listcard");row.style.cssText+=";display:flex;align-items:center;gap:12px";if(h.parentJobId)row.style.marginLeft="26px";
+    row.appendChild(el("span","badge b-"+h.status,(h.status||"").replace(/_/g," ")));const info=el("div");info.style.flex="1";info.appendChild(el("div",null,h.inputName||h.jobId)).style.fontWeight="700";
+    const sub=el("div",null,(h.attemptsUsed||0)+" attempts · "+(h.model||"")+(h.parentJobId?(" · refines "+h.parentJobId):"")+" · "+(h.updatedAt||""));sub.style.cssText="color:var(--muted);font-size:12px";info.appendChild(sub);row.appendChild(info);
+    row.onclick=()=>{currentJob=h.jobId;unlock("export");showStep("export");};box.appendChild(row);});}
+$("#refreshhist").onclick=loadHistory;
+
+// LLM MESSAGES
+function roleWho(r){return {system:"instructions to the model",user:"sent to the model",assistant:"reply from the model"}[r]||r;}
+const money=x=>{x=+x||0;return x===0?"$0":(x<0.01?("$"+x.toFixed(5)):("$"+x.toFixed(4)));};
+const kt=n=>{n=+n||0;return n>=1000?((n/1000).toFixed(n>=10000?0:1)+"k"):(""+n);};
+function renderUsageBar(u){const bar=$("#usagebar");if(!u){bar.classList.add("hidden");return;}bar.classList.remove("hidden");bar.innerHTML="";
+  const cell=(k,v,big)=>{const d=el("div","u");d.appendChild(el("div","k",k));d.appendChild(el("div","v"+(big?" big":""),v));bar.appendChild(d);};
+  cell("This job — cost",money(u.cost),true);cell("This job — tokens",(+u.inputTokens||0)+" in / "+(+u.outputTokens||0)+" out");cell("Calls",""+(+u.calls||0));cell("Model",u.model||"—");cell("All jobs — cost",money(u.allTimeCost));cell("All jobs — tokens",kt(u.allTimeTokens));}
+let lastMsgSig=null;
+async function loadMessages(){if(!currentJob){lastMsgSig=null;$("#usagebar").classList.add("hidden");$("#msglist").innerHTML="";const e=el("div","empty");e.innerHTML='<i data-lucide="messages-square"></i>The conversation appears here as it happens.';$("#msglist").appendChild(e);icons();return;}
+  const [ok,j]=await jget("/jobs/"+currentJob+"/messages");const box=$("#msglist");
+  if(!ok||!j.messages||!j.messages.length){lastMsgSig="empty:"+currentJob;$("#usagebar").classList.add("hidden");box.innerHTML="";box.appendChild(el("div","empty","No messages yet for this job."));return;}
+  const u=j.usage||{};const sig=currentJob+":"+(u.cost||0)+":"+j.messages.map(m=>m.role+":"+(m.content||"").length+":"+(m.cost||0)).join("|");
+  if(sig===lastMsgSig)return;lastMsgSig=sig;renderUsageBar(u);box.innerHTML="";
+  j.messages.forEach(m=>{const wrap=el("div","msg role-"+m.role);const h=el("div","mh");
+    h.appendChild(el("span","cv","▾"));h.appendChild(el("span","role",m.role));h.appendChild(el("span","who",roleWho(m.role)));h.appendChild(el("span","len",(m.content||"").length+" chars"));
+    if(m.role==="assistant"&&((+m.inputTokens)||(+m.outputTokens)||(+m.cost))){h.appendChild(el("span","tok",(+m.inputTokens||0)+"↓ / "+(+m.outputTokens||0)+"↑"));h.appendChild(el("span","cost",money(m.cost)));}
+    const c=el("div","mc");c.appendChild(linedBlock(m.content||""));h.onclick=()=>wrap.classList.toggle("collapsed");
+    if(m.role==="system")wrap.classList.add("collapsed");wrap.appendChild(h);wrap.appendChild(c);box.appendChild(wrap);});}
+$("#refreshmsg").onclick=loadMessages;
+let msgAutoTimer=null;
+$("#msgauto").onchange=e=>{if(msgAutoTimer){clearInterval(msgAutoTimer);msgAutoTimer=null;}if(e.target.checked){loadMessages();msgAutoTimer=setInterval(()=>{if(genSub==="messages"&&currentTab==="generate")loadMessages();},2000);}};
+
+// RESTART
+$("#restart").onclick=()=>{stopPolling();buildClockStop();currentJob=null;lastRenderSig=null;exportJobData=null;
+  doneSteps={};unlocked={inputs:true,review:false,generate:false,export:false};
+  ["review","generate","export"].forEach(s=>{const b=tabBtn(s);if(b)b.disabled=true;setTabState(s,"locked");});
+  $("#jobpill").classList.add("hidden");$("#exportReady").classList.add("hidden");$("#exportIdle").classList.remove("hidden");
+  $("#statusbox").classList.add("hidden");$("#genIdle").classList.remove("hidden");$("#attemptgate").classList.add("hidden");
+  $("#specgate").classList.add("hidden");$("#plangate").classList.add("hidden");$("#reviewBuilding").classList.add("hidden");$("#reviewIdle").classList.remove("hidden");
+  showStep("inputs");toast("Ready for a new transformation","info");};
+
+// ======================= SPECIFICATION BUILDER ===========================
+let cmpState={token:null,orig:"",concise:"",prov:null,approved:false,mdDirty:false,ambs:null};
+function cmpShowTab(t){
+  if(cmpState.approved)t="markdown";
+  document.querySelectorAll("#cmpTabs button").forEach(x=>{x.classList.toggle("on",x.dataset.ctab===t);if(x.dataset.ctab==="review")x.classList.toggle("hidden",!!cmpState.approved);});
+  $("#cmpTabReview").classList.toggle("hidden",t!=="review");$("#cmpTabMarkdown").classList.toggle("hidden",t!=="markdown");
+  if(t==="markdown"&&!cmpState.approved&&!cmpState.mdDirty)$("#cmpEdit").value=cmpFinalMarkdown();
+}
+document.querySelectorAll("#cmpTabs button").forEach(b=>b.onclick=()=>cmpShowTab(b.dataset.ctab));
+function cmpFinalMarkdown(){return foldAmbiguities(cmpState.concise,cmpState.ambs);}
+async function openCompareModal(token){
+  cmpState={token,orig:"",concise:"",prov:null,segs:[],activeSeg:0,ambs:null,approved:false,mdDirty:false};
+  $("#cmpmsg").textContent="";$("#cmpgatehint").textContent="";cmpShowTab("review");
+  $("#cmpItems").innerHTML='<div class=empty><span class=spinner></span> Loading…</div>';$("#cmpSegs").innerHTML="";$("#cmpbanner").innerHTML="";
+  $("#cmpmodal").classList.add("show");
+  const [ok,sp]=await jget("/specs/"+token);
+  if(!ok){$("#cmpItems").innerHTML='<div class=empty>Could not load the specification.</div>';return;}
+  cmpState.orig=sp.text||"";cmpState.concise=sp.conciseSpec||"";cmpState.prov=sp.conciseProvenance||null;cmpState.approved=!!sp.conciseApproved;
+  $("#cmpOrig").textContent=cmpState.orig;$("#cmporigcopy").innerHTML="";$("#cmporigcopy").appendChild(copyBtn(()=>cmpState.orig,true));
+  if(cmpState.approved){openApprovedSpecView(sp);return;}
+  $("#cmptitle").textContent="Specification Builder — "+(sp.fileName||"");
+  $("#cmpapprovedbadge").classList.add("hidden");
+  $("#cmpMdEditWrap").classList.remove("hidden");$("#cmpMdViewWrap").classList.add("hidden");
+  $("#cmpregen").classList.remove("hidden");$("#cmpapprove").classList.remove("hidden");$("#cmpcloseft").classList.add("hidden");
+  $("#cmpEdit").value=cmpFinalMarkdown();$("#cmpMdEditcopy").innerHTML="";$("#cmpMdEditcopy").appendChild(copyBtn(()=>$("#cmpEdit").value,true));
+  const vb=$("#cmpverdict");vb.innerHTML="";const v=sp.conciseVerdict;
+  if(v&&typeof v==="object"){const ok2=(v.complete&&v.faithful);const b=el("span","vbadge "+(ok2?"ok":"warn"));b.innerHTML='<i data-lucide="'+(ok2?"shield-check":"triangle-alert")+'"></i>';b.appendChild(el("span",null,ok2?("Verified complete & faithful"+(v.score!=null?(" ("+Math.round(v.score*100)+"%)"):"")):"Issues flagged — review"));vb.appendChild(b);
+    if(!ok2){const issues=[].concat((v.missing||[]).map(m=>"Missing: "+m)).concat((v.hallucinated||[]).map(h=>"Hallucinated: "+h));if(issues.length){const w=el("div","note gov");w.innerHTML='<i data-lucide="triangle-alert"></i>';const ul=el("ul");ul.style.cssText="margin:0;padding-left:16px";issues.forEach(t=>ul.appendChild(el("li",null,t)));const s=el("span");s.appendChild(ul);w.appendChild(s);$("#cmpbanner").appendChild(w);}}}
+  renderConciseItems();
+  if(sp.conciseError){const isErr=(sp.conciseStatus==="ERROR")||!cmpState.concise;const w=el("div","note "+(isErr?"err":"gov"));w.innerHTML='<i data-lucide="'+(isErr?"alert-circle":"triangle-alert")+'"></i>';w.appendChild(el("span",null,sp.conciseError));$("#cmpbanner").insertBefore(w,$("#cmpbanner").firstChild);}
+  const cf=$("#cmpconf");cf.innerHTML="";const c=(sp.confidence==null?1:+sp.confidence);cf.appendChild(el("span","confbadge "+confClass(c),"extraction "+Math.round(c*100)+"%"));
+  icons();
+}
+function openApprovedSpecView(sp){
+  $("#cmptitle").textContent="Specification — "+(sp.fileName||"");
+  $("#cmpapprovedbadge").classList.remove("hidden");$("#cmpverdict").innerHTML="";$("#cmpbanner").innerHTML="";
+  $("#cmpregen").classList.add("hidden");$("#cmpapprove").classList.add("hidden");$("#cmpcloseft").classList.remove("hidden");
+  $("#cmpgatehint").textContent="";$("#cmpmsg").textContent="This specification is approved and locked.";
+  $("#cmpMdEditWrap").classList.add("hidden");$("#cmpMdViewWrap").classList.remove("hidden");
+  const md=cmpState.concise||"(no specification)";
+  $("#cmpMdView").innerHTML=mdToHtml(md);$("#cmpMdcopy").innerHTML="";$("#cmpMdcopy").appendChild(copyBtn(()=>md,true));
+  $("#cmpMdOrig").textContent=cmpState.orig;$("#cmpMdOrigcopy").innerHTML="";$("#cmpMdOrigcopy").appendChild(copyBtn(()=>cmpState.orig,true));
+  cmpShowTab("markdown");icons();
+}
+function renderRawLines(text){const wrap=el("div");const tools=el("div");tools.style.cssText="display:flex;align-items:center;gap:10px;margin-bottom:6px";
+  tools.appendChild(el("span",null,"Raw model reply — "+text.split("\n").length+" lines"));tools.querySelector("span").style.cssText="font-size:12px;color:var(--muted)";tools.appendChild(copyBtn(()=>text,true));wrap.appendChild(tools);
+  const pane=el("div","rawlines");text.split("\n").forEach((line,i)=>{const row=el("div","rawln");row.appendChild(el("span","lno",String(i+1)));const code=el("span","lcode");code.textContent=line;row.appendChild(code);pane.appendChild(row);});wrap.appendChild(pane);return wrap;}
+function renderConciseItems(){
+  const segBox=$("#cmpSegs");const ruleBox=$("#cmpItems");const prov=cmpState.prov;
+  if(!prov||!prov.groups||!prov.groups.length){$(".pane.seg").classList.add("hidden");segBox.innerHTML="";ruleBox.innerHTML="";$("#cmpRulesHd").textContent="Raw reply";ruleBox.appendChild(renderRawLines(cmpState.concise||"(empty)"));return;}
+  $(".pane.seg").classList.remove("hidden");cmpState.segs=prov.groups;
+  const ambs=(prov.ambiguities||[]).map(a=>{if(a&&typeof a==="object")return{q:String(a.question||a.q||""),options:(a.options||[]).map(o=>String(o)).filter(Boolean)};return{q:String(a),options:[]};}).filter(a=>a.q.trim()!=="");
+  if(!cmpState.ambs||cmpState.ambs.length!==ambs.length){cmpState.ambs=ambs.map(a=>({q:a.q,options:a.options,status:"open",answer:"",choice:null}));}
+  segBox.innerHTML="";
+  prov.groups.forEach((g,i)=>{const s=el("div","segitem");s.appendChild(el("span",null,g.type||"General"));s.appendChild(el("span","segcount",String((g.items||[]).length)));s.onclick=()=>selectSegment(i);segBox.appendChild(s);});
+  if(cmpState.ambs.length){const a=el("div","segitem amb");a.id="ambMenuItem";a.innerHTML='<i data-lucide="triangle-alert"></i>';a.appendChild(el("span",null,"Ambiguities"));a.appendChild(el("span","segcount","0"));a.onclick=()=>selectAmbiguities();segBox.appendChild(a);}
+  refreshAmbMenu();
+  if(prov.groups.length)selectSegment(0);else if(cmpState.ambs.length)selectAmbiguities();
+  updateApproveGate();icons();
+}
+function ambOpenCount(){return (cmpState.ambs||[]).filter(a=>a.status==="open").length;}
+function refreshAmbMenu(){const m=$("#ambMenuItem");if(!m)return;const open=ambOpenCount();m.querySelector(".segcount").textContent=String(open);m.classList.toggle("done",open===0);}
+function updateApproveGate(){const open=ambOpenCount();const btn=$("#cmpapprove");btn.disabled=(open>0);
+  btn.title=open>0?("Resolve "+open+" ambiguit"+(open===1?"y":"ies")+" before approving"):"";
+  const hint=$("#cmpgatehint");if(hint)hint.textContent=open>0?(open+" ambiguit"+(open===1?"y":"ies")+" must be resolved before approval"):"";}
+function selectAmbiguities(){
+  cmpState.activeSeg=-1;cmpState.mdDirty=false;
+  [...$("#cmpSegs").children].forEach(c=>c.classList.toggle("sel",c.id==="ambMenuItem"));
+  $("#cmpRulesHd").textContent="Ambiguities — resolve all to approve";
+  const box=$("#cmpItems");box.innerHTML="";
+  if(!cmpState.ambs.length){box.appendChild(el("div","empty","No ambiguities — nothing to resolve."));return;}
+  cmpState.ambs.forEach((a,i)=>{
+    const row=el("div","ambrow"+(a.status==="resolved"?" resolved":(a.status==="dismissed"?" dismissed":"")));
+    const q=el("div","ambq");q.appendChild(el("span","qtag",a.status==="resolved"?"RESOLVED":(a.status==="dismissed"?"N/A":"OPEN")));q.appendChild(el("span",null,a.q));row.appendChild(q);
+    if(a.status==="open"){
+      const grp="amb"+i;const opts=el("div","ambopts");
+      const customTa=el("textarea");customTa.placeholder="Describe how this should be handled — added to the specification.";customTa.value=(a.choice==="__custom__")?(a.answer||""):"";
+      (a.options||[]).forEach((opt,oi)=>{const lab=el("label","ambopt");const r=el("input");r.type="radio";r.name=grp;r.value=String(oi);if(a.choice===String(oi))r.checked=true;
+        r.onchange=()=>{a.choice=String(oi);a.answer=opt;customTa.disabled=true;};lab.appendChild(r);lab.appendChild(el("span",null,opt));opts.appendChild(lab);});
+      const clab=el("label","ambopt custom");const ctitle=el("div","ctitle");const cr=el("input");cr.type="radio";cr.name=grp;cr.value="__custom__";if(a.choice==="__custom__")cr.checked=true;
+      ctitle.appendChild(cr);ctitle.appendChild(el("span",null,"Custom — type your own answer"));clab.appendChild(ctitle);clab.appendChild(customTa);customTa.disabled=(a.choice!=="__custom__");
+      cr.onchange=()=>{a.choice="__custom__";customTa.disabled=false;a.answer=customTa.value;customTa.focus();};
+      customTa.oninput=()=>{if(a.choice==="__custom__")a.answer=customTa.value;};
+      customTa.onfocus=()=>{if(!cr.checked){cr.checked=true;cr.onchange();}};
+      opts.appendChild(clab);row.appendChild(opts);
+      const acts=el("div","ambacts");
+      const res=el("button","btn btn-ok btn-sm");res.innerHTML='<i data-lucide="check"></i> Resolve';
+      res.onclick=()=>{if(a.choice==null){$("#cmpmsg").textContent="Pick an option (or choose Custom and type an answer) before resolving.";return;}
+        if(a.choice==="__custom__"&&!customTa.value.trim()){$("#cmpmsg").textContent="Type your custom answer before resolving.";return;}
+        a.answer=(a.choice==="__custom__")?customTa.value.trim():(a.options[+a.choice]||a.answer);a.status="resolved";$("#cmpmsg").textContent="";selectAmbiguities();refreshAmbMenu();updateApproveGate();};
+      const dis=el("button","btn btn-ghost btn-sm");dis.innerHTML='<i data-lucide="x"></i> Dismiss';dis.onclick=()=>{a.status="dismissed";selectAmbiguities();refreshAmbMenu();updateApproveGate();};
+      acts.appendChild(res);acts.appendChild(dis);row.appendChild(acts);
+    }else{
+      row.appendChild(el("div","ambstate",a.status==="resolved"?("Decision: "+a.answer):"Dismissed as not applicable."));
+      const acts=el("div","ambacts");const edit=el("button","btn btn-ghost btn-sm");edit.innerHTML='<i data-lucide="rotate-ccw"></i> Reopen';edit.onclick=()=>{a.status="open";selectAmbiguities();refreshAmbMenu();updateApproveGate();};acts.appendChild(edit);row.appendChild(acts);
+    }
+    box.appendChild(row);
+  });icons();
+}
+function selectSegment(i){
+  cmpState.activeSeg=i;[...$("#cmpSegs").children].forEach((c,k)=>c.classList.toggle("sel",k===i&&c.id!=="ambMenuItem"));
+  const g=(cmpState.segs||[])[i];const box=$("#cmpItems");box.innerHTML="";$("#cmpRulesHd").textContent=(g&&g.type)?g.type:"Specification points";if(!g)return;
+  (g.items||[]).forEach(item=>{const hasSrc=item.sourceQuote&&String(item.sourceQuote).trim()!=="";const inf=!!item.inferred;
+    const r=el("div","citem"+(inf?" inferred":(hasSrc?"":" nosrc")));const rule=el("div","ci-rule");rule.innerHTML=mdToHtml(item.rule||"").replace(/^<p>|<\/p>\s*$/g,"");
+    if(inf)rule.appendChild(el("span","ci-tag inf","inferred"));else if(!hasSrc)rule.appendChild(el("span","ci-tag no","no source"));r.appendChild(rule);
+    if(hasSrc){const q=el("div","ci-src");q.appendChild(el("span","ci-srclbl","source: "));q.appendChild(el("span",null,"“"+item.sourceQuote+"”"));r.appendChild(q);}
+    r.onclick=()=>{box.querySelectorAll(".citem").forEach(x=>x.classList.remove("sel"));r.classList.add("sel");locateSource(item.sourceQuote);};box.appendChild(r);});icons();
+}
+function locateSource(quote){
+  const pane=$("#cmpOrig");const cont=$("#cmpOrigBody");const orig=cmpState.orig;
+  if(!quote||String(quote).trim()===""){pane.textContent=orig;$("#cmpmsg").textContent="This item was inferred — no direct source in the original.";return;}
+  $("#cmpmsg").textContent="";const firstLine=String(quote).split(/\r?\n/)[0].trim();let needle=firstLine.slice(0,50).toLowerCase();let idx=needle?orig.toLowerCase().indexOf(needle):-1;
+  if(idx<0){needle=String(quote).slice(0,40).toLowerCase();idx=orig.toLowerCase().indexOf(needle);}
+  pane.innerHTML="";if(idx<0){pane.textContent=orig;$("#cmpmsg").textContent="Source not found verbatim (it may be paraphrased or split across pages).";return;}
+  const end=idx+needle.length;pane.appendChild(document.createTextNode(orig.slice(0,idx)));const hi=el("span","cmphi",orig.slice(idx,end));pane.appendChild(hi);pane.appendChild(document.createTextNode(orig.slice(end)));
+  const hiRect=hi.getBoundingClientRect();const contRect=cont.getBoundingClientRect();cont.scrollTop=cont.scrollTop+(hiRect.top-contRect.top)-16;
+}
+$("#cmpEdit").addEventListener("input",()=>{cmpState.mdDirty=true;});
+$("#cmpcloseft").onclick=()=>$("#cmpmodal").classList.remove("show");
+$("#cmpclose").onclick=()=>$("#cmpmodal").classList.remove("show");
+$("#cmpmodal").onclick=(e)=>{if(e.target===$("#cmpmodal"))$("#cmpmodal").classList.remove("show");};
+$("#cmpregen").onclick=async()=>{if(!cmpState.token)return;$("#cmpregen").disabled=true;const stopT=elapsedTicker($("#cmpregen"),"Regenerating…");
+  const csp=await generateConcise(cmpState.token);stopT();$("#cmpregen").disabled=false;$("#cmpregen").innerHTML='<i data-lucide="refresh-cw"></i> Regenerate';icons();
+  if(!csp.ok){$("#cmpmsg").textContent="Regenerate failed: "+(csp.error||"");return;}openCompareModal(cmpState.token);};
+function foldAmbiguities(md,ambs){
+  let body=String(md||"");
+  body=body.replace(/\n*##\s*(ambiguit|resolved decision)[^\n]*\n[\s\S]*?(?=\n##\s|$)/i,"").replace(/\s+$/,"");
+  const resolved=(ambs||[]).filter(a=>a.status==="resolved");
+  if(resolved.length){body+="\n\n## Resolved decisions\n"+resolved.map(a=>"- "+a.q.replace(/\s+$/,"")+" → **"+a.answer.replace(/\s+/g," ").trim()+"**").join("\n");}
+  return body+"\n";
+}
+$("#cmpapprove").onclick=async()=>{if(!cmpState.token)return;
+  const open=ambOpenCount();
+  if(open>0){cmpShowTab("review");selectAmbiguities();$("#cmpmsg").textContent="Resolve all "+open+" ambiguit"+(open===1?"y":"ies")+" before approving.";return;}
+  const edited=cmpState.mdDirty?$("#cmpEdit").value:foldAmbiguities(cmpState.concise,cmpState.ambs);
+  $("#cmpapprove").innerHTML='<span class=spinner></span> Approving…';$("#cmpapprove").disabled=true;
+  const [ok,sp]=await jpost("/specs/"+cmpState.token+"/approve-concise",{conciseSpec:edited});
+  $("#cmpapprove").disabled=false;$("#cmpapprove").innerHTML='<i data-lucide="check"></i> Approve specification';icons();
+  if(!ok){$("#cmpmsg").textContent="Approve failed: "+(sp.error||"");return;}
+  $("#cmpmodal").classList.remove("show");toast("Specification approved","ok");
+  loadSavedSpecs();if(currentSpecToken===cmpState.token){$("#savedspec").dispatchEvent(new Event("change"));}
+};
+
+$("#sample").onclick=()=>{
+  $("#spec").value="Inbound ADT^A01 admit from EPICADT (HL7 v2.3). Rename the sending application to EPIC, normalise the facility code SITEA to 001 across MSH/PID/PV1, and upgrade the message to v2.5.";
+  $("#jobname").value="ADT_A01_Admit";document.querySelectorAll("#inputs .card").forEach(p=>p.remove());
+  addInput("MSH|^~\\&|EPICADT|SITEA|CANONICAL|ENTERPRISE|20260608120000||ADT^A01|MSG00001|P|2.3\nEVN|A01|20260608115500\nPID|1||12345^^^SITEA^MR||DOE^JOHN^Q||19800101|M|||123 MAIN ST^^METROPOLIS^NY^10001||(555)555-1234|||M|CAT|987654321\nPV1|1|I|WEST^389^1^SITEA||||1234^SMITH^JANE^A^^^MD|||SUR||||ADM|A0");
+  toast("Example loaded","info");
+};
+
+// ======================= INIT =============================================
+(function init(){
+  const pv=localStorage.getItem(LS_PROVIDER);if(pv)$("#provider").value=pv;
+  if(localStorage.getItem(LS_REM)==="0")$("#remember").checked=false;
+  const k=localStorage.getItem(LS_KEY);if(k)$("#apikey").value=k;
+  const rg=localStorage.getItem(LS_REGION);if(rg)$("#bedrockregion").value=rg;
+  const ma=localStorage.getItem(LS_MAXATT);if(ma)$("#maxattempts").value=ma;
+  const cc=localStorage.getItem(LS_COSTCAP);if(cc)$("#costcap").value=cc;
+  $("#heroProvider").textContent={openai:"OpenAI",bedrock:"Bedrock",mock:"Mock"}[provider()]||"OpenAI";
+  syncProvider();addInput();checkHealth();icons();
+})();
+</script>
+</body>
+</html>

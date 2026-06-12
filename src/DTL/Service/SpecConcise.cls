@@ -123,6 +123,10 @@ ClassMethod Generate(pToken As %String, pProvider As %String, pModel As %String,
 			}
 		} else {
 			do ..ApplyConcise(tDoc, tJson)
+			// Deterministic scoping guardrail: flag likely mis-scoped generic rules so a
+			// reviewer catches them before generation silently drops them for some types.
+			set tScopeWarn = ..ScopeWarnings(tJson)
+			if tScopeWarn '= "" set tDoc.ConciseError = $select(tDoc.ConciseError'="":tDoc.ConciseError _ $char(10,10), 1:"") _ tScopeWarn
 		}
 		// 2) Verify the concise spec against the original (LLM half of verification).
 		// A failure here is non-fatal: we still have a concise spec to review; record a
@@ -160,7 +164,12 @@ ClassMethod ApplyConcise(pDoc As DTL.Data.SpecDoc, pJson As %DynamicObject)
 				set it2 = g.items.%GetIterator()
 				while it2.%GetNext(.ik, .item) {
 					continue:'$isobject(item)
-					set tMd = tMd _ "- " _ item.rule _ $select(''item.inferred:"  _(inferred)_", 1:"") _ nl
+					// Render the message-type scope inline so it survives into the approved
+					// spec, the plan and the judge. "*" (all types) is left implicit; a
+					// narrowed scope is shown so a generic rule wrongly pinned to one type
+					// is visible to the reviewer.
+					set tScope = ..AppliesToText(item.appliesTo)
+					set tMd = tMd _ "- " _ item.rule _ tScope _ $select(''item.inferred:"  _(inferred)_", 1:"") _ nl
 				}
 			}
 			set tMd = tMd _ nl
@@ -186,6 +195,86 @@ ClassMethod ApplyConcise(pDoc As DTL.Data.SpecDoc, pJson As %DynamicObject)
 	}
 	do pDoc.ConciseSpec.Clear()  do pDoc.ConciseSpec.Write(tMd)
 	do pDoc.ConciseProvenance.Clear()  do pDoc.ConciseProvenance.Write(pJson.%ToJSON())
+}
+
+/// Render an item's message-type scope as an inline markdown tag. The wildcard
+/// "*" (or an empty/absent value) means ALL message types and is left implicit
+/// (no tag) to keep the spec clean; a NARROWED scope is shown explicitly as
+/// "  _(applies to: ADT^A01, ORU^R01)_" so it travels with the rule into the plan
+/// and the judge, and a wrongly-narrowed generic rule is visible to the reviewer.
+ClassMethod AppliesToText(pAppliesTo As %DynamicArray) As %String
+{
+	quit:'$isobject(pAppliesTo) ""
+	set tList = "", tWild = 0
+	set it = pAppliesTo.%GetIterator()
+	while it.%GetNext(.k, .v) {
+		set v = $zstrip($select($isobject(v):"", 1:v), "<>W")
+		continue:v=""
+		if v = "*" set tWild = 1  quit
+		set tList = tList _ $select(tList'="":", ", 1:"") _ v
+	}
+	quit:tWild ""
+	quit:tList="" ""
+	quit "  _(applies to: " _ tList _ ")_"
+}
+
+/// DETERMINISTIC scoping guardrail (no LLM). Inspect the concise JSON and return a
+/// human-readable list of likely SCOPING MISTAKES, so a generic segment rule that
+/// the model wrongly pinned to a single message type (which would be silently
+/// dropped when a DTL is built for a different type) is caught on EVERY spec rather
+/// than hoped away. Heuristics, conservative (warn, don't block):
+///   - A rule on a clearly GENERIC/shared segment (MSH/PID/PV1/NTE/OBX/OBR/ORC) whose
+///     appliesTo names specific message type(s) instead of "*" — generic header/demographic
+///     rules almost always apply to all types; a single-type scope is suspicious.
+///   - appliesTo missing/empty on an item (ambiguous scope — defaulted to all, flagged
+///     so the reviewer confirms).
+/// Returns "" when nothing looks wrong.
+ClassMethod ScopeWarnings(pJson As %DynamicObject) As %String
+{
+	quit:'$isobject(pJson) ""
+	quit:'$isobject(pJson.groups) ""
+	set nl = $char(10), tOut = "", tN = 0
+	// Segments whose rules are, in HL7, shared across message types.
+	set tGeneric = ",MSH,PID,PV1,PV2,NTE,EVN,"
+	set git = pJson.groups.%GetIterator()
+	while git.%GetNext(.gk, .g) {
+		continue:'$isobject(g)
+		set tType = $zconvert(g.type, "U")
+		// Derive the bare segment name from the group type (e.g. "MSH" from "ADT^A01 / MSH").
+		set tSeg = tType
+		if tSeg [ "/" set tSeg = $zstrip($piece(tSeg, "/", $length(tSeg, "/")), "<>W")
+		set tSeg = $piece(tSeg, " ", 1)
+		set tIsGeneric = (tGeneric [ ("," _ tSeg _ ","))
+		continue:'$isobject(g.items)
+		set iit = g.items.%GetIterator()
+		while iit.%GetNext(.ik, .item) {
+			continue:'$isobject(item)
+			set tHasWild = 0, tNarrow = "", tCount = 0
+			if $isobject(item.appliesTo) {
+				set ait = item.appliesTo.%GetIterator()
+				while ait.%GetNext(.ak, .av) {
+					set av = $zstrip($select($isobject(av):"", 1:av), "<>W")
+					continue:av=""
+					set tCount = tCount + 1
+					if av = "*" set tHasWild = 1
+					else  set tNarrow = tNarrow _ $select(tNarrow'="":", ", 1:"") _ av
+				}
+			}
+			set tRuleTxt = $extract(item.rule, 1, 90)
+			// (1) Generic segment rule narrowed to specific type(s) -> suspicious.
+			if tIsGeneric, 'tHasWild, tNarrow '= "" {
+				set tN = tN + 1
+				set tOut = tOut _ "- " _ tSeg _ " rule scoped to '" _ tNarrow _ "' but " _ tSeg _ " is a shared segment — it likely applies to ALL message types (use *). Rule: " _ tRuleTxt _ nl
+			}
+			// (2) No scope at all -> ambiguous (treated as all; confirm).
+			elseif tCount = 0 {
+				set tN = tN + 1
+				set tOut = tOut _ "- No message-type scope on rule (assumed: all types). Rule: " _ tRuleTxt _ nl
+			}
+		}
+	}
+	quit:tN=0 ""
+	quit "Scoping check flagged " _ tN _ " item(s) that may be mis-scoped (generic rules should apply to all message types). Review the 'applies to' tags:" _ nl _ tOut
 }
 
 }

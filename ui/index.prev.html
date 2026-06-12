@@ -8,9 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-<script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-<!-- PDF.js is only needed for the spec parse-review step; loaded lazily on demand (see ensurePdfJs) -->
-<script>window.__PDFJS_SRC="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";window.__PDFJS_WORKER="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <style>
   /* ===========================================================================
      InterSystems AI DTL Generator — LIGHT enterprise theme.
@@ -34,25 +31,10 @@
     --code-bg:#0e1430; --code-fg:#e9fbff; --code-line:#252c54; --code-head:#161d44;
     --code-accent:#8fe9e4;
     --mono:'Roboto Mono','SFMono-Regular',Consolas,Menlo,monospace;
-    /* sharper corners than before (was 18/12/9) */
-    --radius-lg:10px; --radius-md:8px; --radius-sm:6px;
-    --shadow:0 1px 2px rgba(16,24,40,.06);
+    --radius-lg:18px; --radius-md:12px; --radius-sm:9px;
+    --shadow:0 10px 28px rgba(28,34,69,.07);
   }
   *{box-sizing:border-box}
-  /* ---- Lucide icons: small, consistent, vertically centred to text ----
-     NOTE: lucide.createIcons() REPLACES each <i data-lucide> with an <svg
-     class="lucide …"> (default 24×24), so the size MUST be set on the generated
-     svg, not just the <i>. Target both so icons are correct before AND after render. */
-  i[data-lucide],svg.lucide{width:14px;height:14px;stroke-width:2;flex:0 0 auto;display:inline-block;vertical-align:-2px}
-  .ic-sm i[data-lucide],i.ic-sm,.ic-sm svg.lucide{width:12px;height:12px}
-  /* an icon sitting beside text in a flex row stays centred */
-  .iwrap{display:inline-flex;align-items:center;gap:6px}
-  /* in flex contexts (tabs, buttons-as-iwrap, segmented controls) align icon to text */
-  .rtab i[data-lucide],.seg button i[data-lucide],.tab i[data-lucide],.viewhd i[data-lucide],
-  .rtab svg.lucide,.seg button svg.lucide,.tab svg.lucide,.viewhd svg.lucide{vertical-align:middle}
-  /* compact icons in dense nav contexts (segmented spec-mode + right-pane tabs) */
-  .seg button svg.lucide,.seg button i[data-lucide],
-  .rtab svg.lucide,.rtab i[data-lucide]{width:13px;height:13px}
   body{margin:0;min-height:100vh;color:var(--ink);background:var(--soft);
     font:14px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow)}
@@ -83,8 +65,8 @@
   .viewpanel{padding:0;overflow:hidden;display:flex;flex-direction:column}
   .rtabs{display:flex;gap:2px;padding:8px 8px 0;border-bottom:1px solid var(--line);background:var(--soft);
     border-radius:var(--radius-lg) var(--radius-lg) 0 0;flex-wrap:wrap}
-  .rtab{display:flex;align-items:center;gap:6px;padding:10px 13px;border:none;background:none;color:var(--muted);
-    font:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:.15s;border-radius:10px 10px 0 0;position:relative;white-space:nowrap}
+  .rtab{display:flex;align-items:center;gap:7px;padding:11px 16px;border:none;background:none;color:var(--muted);
+    font:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:.15s;border-radius:10px 10px 0 0;position:relative;white-space:nowrap}
   .rtab .ic{flex:0 0 auto}
   .rtab:hover{color:var(--ink);background:rgba(52,54,153,.05)}
   .rtab.active{color:var(--iris-blue);background:var(--panel)}
@@ -128,22 +110,20 @@
   .ex .ph .rm:hover{background:var(--bad-bg)}
   .tagp{font-size:10px;background:var(--iris-green-100);color:var(--iris-green-700);padding:2px 9px;border-radius:999px;font-weight:700}
 
-  /* ---- buttons (compact) ---- */
+  /* ---- buttons ---- */
   button{font-family:inherit}
   button.primary{position:relative;background:var(--iris-blue);color:#fff;border:none;border-radius:var(--radius-sm);
-    padding:9px 16px;font-weight:600;cursor:pointer;font-size:13px;letter-spacing:.1px;transition:background .15s;overflow:hidden}
+    padding:12px 26px;font-weight:600;cursor:pointer;font-size:14px;letter-spacing:.2px;transition:background .15s;overflow:hidden}
   button.primary:hover{background:var(--iris-blue-800)}
   button.primary:disabled{background:var(--line-strong);color:#fff}
-  button.ghost{background:#fff;color:var(--iris-blue);border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:8px 13px;cursor:pointer;font-weight:600;font-size:13px;transition:.15s}
+  button.ghost{background:#fff;color:var(--iris-blue);border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:9px 16px;cursor:pointer;font-weight:600;transition:.15s}
   button.ghost:hover{background:var(--soft);border-color:var(--iris-blue)}
-  button.ok{background:var(--iris-green);color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;transition:background .15s}
+  button.ok{background:var(--iris-green);color:#fff;border:none;border-radius:var(--radius-sm);padding:11px 18px;font-weight:600;cursor:pointer;transition:background .15s}
   button.ok:hover{background:#019b96}
-  button.blue{background:var(--iris-blue);color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;transition:background .15s}
+  button.blue{background:var(--iris-blue);color:#fff;border:none;border-radius:var(--radius-sm);padding:11px 18px;font-weight:600;cursor:pointer;transition:background .15s}
   button.blue:hover{background:var(--iris-blue-800)}
-  button.danger{background:#fff;color:var(--bad);border:1px solid var(--bad-line);border-radius:var(--radius-sm);padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;transition:background .15s}
+  button.danger{background:#fff;color:var(--bad);border:1px solid var(--bad-line);border-radius:var(--radius-sm);padding:11px 18px;font-weight:600;cursor:pointer;transition:background .15s}
   button.danger:hover{background:var(--bad-bg)}
-  /* modal footer buttons stay tidy regardless of label length */
-  .modal .mft button{font-size:12.5px;padding:8px 14px}
 
   .badge{display:inline-block;padding:4px 11px;border-radius:999px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
   .b-QUEUED,.b-PLANNING{background:#eef1f8;color:var(--muted)}
@@ -179,31 +159,6 @@
   .plan blockquote{border-left:3px solid var(--iris-green);margin:10px 0;padding:2px 14px;color:var(--muted)}
   .plan hr{border:none;border-top:1px solid var(--line);margin:14px 0}
   .plan a{color:var(--iris-blue)}
-  /* split plan: active transforms vs collapsed pass-through rules */
-  .planpre{margin-bottom:10px}
-  .planhd{font-weight:800;color:var(--iris-blue);font-size:13px;margin:4px 0 6px}
-  .planlist{margin:6px 0 6px 22px;padding:0}
-  .planlist li{margin:5px 0;font-size:13px;line-height:1.55}
-  .planlist.muted li{color:var(--muted)}
-  .plancollapse{margin-top:12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface-2)}
-  .plancollapse>summary{cursor:pointer;padding:9px 12px;font-size:12.5px;font-weight:700;color:var(--muted);list-style:none;user-select:none}
-  .plancollapse>summary::-webkit-details-marker{display:none}
-  .plancollapse>summary::before{content:"▸ ";color:var(--line-strong)}
-  .plancollapse[open]>summary::before{content:"▾ "}
-  .plancollapse[open]>summary{border-bottom:1px solid var(--line);color:var(--ink)}
-  .plancollapse .planlist{margin:8px 0 10px 26px}
-  /* rendered markdown tables */
-  .mdtable{border-collapse:collapse;width:100%;margin:10px 0;font-size:12px;display:block;overflow-x:auto}
-  .mdtable th,.mdtable td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
-  .mdtable thead th{background:var(--soft);color:var(--iris-blue-800);font-weight:700;position:sticky;top:0}
-  .mdtable tbody tr:nth-child(even){background:rgba(52,54,153,.025)}
-  .mdtable code{font-family:var(--mono);font-size:.92em;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
-  /* table of contents (dot-leader lines) */
-  .mdtoc{margin:10px 0;border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 12px;background:var(--soft)}
-  .mdtoc-e{display:flex;align-items:baseline;gap:6px;padding:2px 0;font-size:12.5px;line-height:1.5}
-  .mdtoc-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
-  .mdtoc-d{flex:1 1 auto;border-bottom:1px dotted var(--line-strong);transform:translateY(-3px);min-width:18px}
-  .mdtoc-p{flex:0 0 auto;color:var(--muted);font-variant-numeric:tabular-nums}
 
   /* ---- build progress bar + timer ---- */
   .buildcard{margin-top:12px;background:#fff;border:1px solid var(--line);border-left:4px solid var(--iris-green);
@@ -299,38 +254,9 @@
   .listcard:hover{background:var(--soft);border-color:var(--line-strong)}
   .filechip{display:inline-flex;align-items:center;gap:8px;background:var(--iris-green-100);color:var(--iris-green-700);border-radius:999px;padding:8px 12px;margin-top:8px;font-size:12px}
   .seg{display:inline-flex;background:#fff;border:1px solid var(--line-strong);border-radius:var(--radius-sm);overflow:hidden}
-  .seg button{display:inline-flex;align-items:center;gap:6px;border:none;background:transparent;padding:7px 12px;cursor:pointer;font-size:12px;color:var(--muted);font-weight:600;transition:.15s;border-right:1px solid var(--line)}
+  .seg button{border:none;background:transparent;padding:8px 15px;cursor:pointer;font-size:12.5px;color:var(--muted);font-weight:600;transition:.15s;border-right:1px solid var(--line)}
   .seg button:last-child{border-right:none}
   .seg button.on{background:var(--iris-blue);color:#fff}
-  /* tiny "opens a modal/new view" indicator */
-  .ic-ext{width:12px;height:12px;opacity:.75}
-  svg.lucide.ic-ext{width:12px;height:12px}
-  /* spec source chooser (radio cards) */
-  .specchoice{display:flex;flex-direction:column;gap:8px;margin:4px 0 12px}
-  .schoice{display:block;cursor:pointer;margin:0}
-  .schoice input{position:absolute;opacity:0;width:0;height:0}
-  .schoice .sc-b{display:flex;align-items:center;gap:11px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:11px 13px;transition:.12s;background:#fff}
-  .schoice:hover .sc-b{border-color:var(--iris-blue)}
-  .schoice input:checked+.sc-b{border-color:var(--iris-blue);background:rgba(52,54,153,.04);box-shadow:0 0 0 1px var(--iris-blue) inset}
-  .schoice input:focus-visible+.sc-b{box-shadow:0 0 0 3px rgba(0,182,176,.25)}
-  .schoice .sc-i{width:30px;height:30px;flex:0 0 auto;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;background:var(--iris-green-100);color:var(--iris-blue)}
-  .schoice .sc-i svg.lucide,.schoice .sc-i i[data-lucide]{width:16px;height:16px}
-  .schoice input:checked+.sc-b .sc-i{background:var(--iris-blue);color:#fff}
-  .schoice .sc-t{display:flex;flex-direction:column;gap:1px;min-width:0}
-  .schoice .sc-h{font-size:13px;font-weight:700;color:var(--ink)}
-  .schoice .sc-d{font-size:11.5px;color:var(--muted)}
-  /* builder Start tab: Type vs Upload choice cards */
-  .startgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:6px 0 14px}
-  @media(max-width:640px){.startgrid{grid-template-columns:1fr}}
-  .startcard{display:flex;flex-direction:column;align-items:flex-start;gap:7px;text-align:left;cursor:pointer;
-    border:1px solid var(--line-strong);border-radius:var(--radius-md);background:#fff;padding:18px;transition:.12s;font-family:inherit}
-  .startcard:hover{border-color:var(--iris-blue);background:rgba(52,54,153,.03);transform:translateY(-1px)}
-  .startcard.on{border-color:var(--iris-blue);box-shadow:0 0 0 1px var(--iris-blue) inset}
-  .startcard .st-i{width:38px;height:38px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;background:var(--iris-green-100);color:var(--iris-blue)}
-  .startcard .st-i svg.lucide,.startcard .st-i i[data-lucide]{width:19px;height:19px}
-  .startcard .st-h{font-size:14px;font-weight:700;color:var(--ink)}
-  .startcard .st-d{font-size:12px;color:var(--muted);line-height:1.45}
-  .fldlbl{display:block;font-size:11.5px;color:var(--ink);margin:4px 0 6px;font-weight:700}
   .spinner{width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-2px;opacity:.9}
   @keyframes spin{to{transform:rotate(360deg)}}
   ::-webkit-scrollbar{width:12px;height:12px}::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:999px;border:3px solid var(--soft)}::-webkit-scrollbar-track{background:transparent}
@@ -390,9 +316,8 @@
   .qmodel .qmlbl{text-transform:uppercase;letter-spacing:.5px}
   .qmodel select{width:auto;max-width:200px;padding:6px 8px;font-size:12px;border-radius:var(--radius-sm)}
   .qmodel select:disabled{opacity:.7}
-  .cog{width:30px;height:30px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line-strong);background:#fff;border-radius:var(--radius-sm);cursor:pointer;line-height:1;color:var(--iris-blue);transition:background .15s,border-color .15s}
-  .cog svg.lucide,.cog i[data-lucide]{width:15px;height:15px;vertical-align:middle}
-  .cog:hover{background:var(--soft);border-color:var(--iris-blue)}
+  .cog{width:34px;height:34px;flex:0 0 auto;border:1px solid var(--line-strong);background:#fff;border-radius:var(--radius-sm);cursor:pointer;font-size:16px;line-height:1;color:var(--iris-blue);transition:.15s}
+  .cog:hover{background:var(--soft);border-color:var(--iris-blue);transform:rotate(30deg)}
 
   /* settings panel */
   .setgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
@@ -456,78 +381,12 @@
   .cgrp{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--iris-blue);font-weight:800;margin:12px 0 6px;padding-bottom:3px;border-bottom:1px solid var(--line)}
   .cgrp:first-child{margin-top:0}
   .cmphi{background:rgba(245,166,35,.4);border-radius:2px;box-shadow:0 0 0 2px rgba(245,166,35,.55)}
-  /* flash highlight applied to a rendered-markdown element when its source is located */
-  .cmphi-flash{background:rgba(245,166,35,.28);border-radius:3px;box-shadow:0 0 0 2px rgba(245,166,35,.5);transition:background .3s,box-shadow .3s}
   .cmptools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:var(--muted)}
   .vbadge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
   .vbadge.ok{background:var(--iris-green-100);color:var(--iris-green-700)}
   .vbadge.warn{background:var(--warn-bg);color:#9a6a00}
   .modal .mft{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--line);background:var(--soft);flex-wrap:wrap}
   .modal .mft .sp{flex:1 1 auto}
-
-  /* ---- guided stepper (sits above the workspace; reflects job state) ---- */
-  .stepper{display:flex;align-items:stretch;gap:0;background:var(--panel);border:1px solid var(--line);
-    border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
-  .stepper .stp{flex:1 1 0;display:flex;align-items:center;gap:11px;padding:13px 18px;position:relative;min-width:0}
-  .stepper .stp+.stp{border-left:1px solid var(--line)}
-  .stepper .stp .sdot{width:26px;height:26px;flex:0 0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    font-weight:800;font-size:12px;background:#eef1f8;color:var(--muted);transition:.18s}
-  .stepper .stp .sdot i{width:15px;height:15px}
-  .stepper .stp .stxt{min-width:0;display:flex;flex-direction:column;gap:2px}
-  .stepper .stp .stt{display:block;font-size:13px;font-weight:700;color:var(--ink);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .stepper .stp .scap{display:block;font-size:11px;line-height:1.2;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .stepper .stp.active .sdot{background:var(--iris-blue);color:#fff}
-  .stepper .stp.active{background:linear-gradient(180deg,rgba(0,182,176,.06),transparent)}
-  .stepper .stp.active::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--iris-green)}
-  .stepper .stp.done .sdot{background:var(--iris-green);color:#fff}
-  .stepper .stp.done .stt{color:var(--iris-green-700)}
-  .stepper .stp .sstate{margin-left:auto;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;
-    padding:2px 8px;border-radius:999px;background:#eef1f8;color:var(--muted);flex:0 0 auto}
-  .stepper .stp.active .sstate{background:var(--iris-green-100);color:var(--iris-green-700)}
-  .stepper .stp.done .sstate{background:var(--iris-green-100);color:var(--iris-green-700)}
-  @media(max-width:880px){.stepper{flex-wrap:wrap}.stepper .stp{flex:1 1 45%}.stepper .stp .scap,.stepper .stp .sstate{display:none}}
-
-  /* ---- spec builder: parse-review (step 1) — original doc vs rendered markdown ---- */
-  .cmpsteps{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-  .cmpstep{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--muted);
-    padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:#fff}
-  .cmpstep .cs-n{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;background:#eef1f8;color:var(--muted)}
-  .cmpstep.active{color:var(--iris-blue);border-color:var(--iris-blue)}
-  .cmpstep.active .cs-n{background:var(--iris-blue);color:#fff}
-  .cmpstep.done{color:var(--iris-green-700);border-color:#bfeeea;background:var(--iris-green-100)}
-  .cmpstep.done .cs-n{background:var(--iris-green);color:#fff}
-  .cmpstep .cs-n i{width:11px;height:11px}
-  .cmpsteparrow{color:var(--line-strong)}.cmpsteparrow i{width:15px;height:15px}
-  .parsesplit{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden;min-height:0}
-  .parsesplit .pane{display:flex;flex-direction:column;min-height:0;max-height:62vh}
-  .parsesplit .pane.l{border-right:1px solid var(--line)}
-  .parsesplit .pane .phd{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--soft);border-bottom:1px solid var(--line);font-weight:700;font-size:12px;color:var(--ink);flex:0 0 auto}
-  .parsesplit .pane .phd .htoggle{margin-left:auto;display:inline-flex;gap:0}
-  .parsesplit .pane .pbody{overflow:auto;flex:1 1 auto;background:var(--paper)}
-  #parseDocPane{background:#33384d;display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px}
-  #parseDocPane .pdfpage{width:100%;display:flex;flex-direction:column;align-items:center;gap:8px}
-  #parseDocPane canvas{max-width:100%;box-shadow:0 2px 8px rgba(0,0,0,.3);background:#fff}
-  #parseDocPane embed,#parseDocPane iframe{width:100%;height:100%;border:0;background:#fff}
-  #parseDocPane .docnote{color:#c7cdf0;font-size:12px;text-align:center;padding:20px}
-  #parseMdRendered{padding:14px 16px}
-  /* raw extracted-markdown listing sits on the dark code surface so the light .lined
-     code text (near-white) is legible inside the otherwise-white pane */
-  #parseMdRaw{display:none;background:var(--code-bg)}
-  #parseMdRaw .lined{min-height:100%}
-  .pageno{align-self:flex-start;color:#8b93c4;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
-  .miniseg{display:inline-flex;border:1px solid var(--line-strong);border-radius:var(--radius-sm);overflow:hidden;background:#fff}
-  .miniseg button{border:none;background:transparent;padding:4px 10px;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;border-right:1px solid var(--line)}
-  .miniseg button:last-child{border-right:none}
-  .miniseg button.on{background:var(--iris-blue);color:#fff}
-  /* circular progress loader (shown in the markdown pane while extraction runs) */
-  .ploader{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;height:100%;min-height:300px;padding:30px;text-align:center}
-  .pring{--pct:0;width:104px;height:104px;border-radius:50%;display:grid;place-items:center;
-    background:conic-gradient(var(--iris-green) calc(var(--pct)*1%),var(--line) 0);transition:background .4s ease}
-  .pring .inner{width:82px;height:82px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
-  .pring .pnum{font-size:22px;font-weight:800;color:var(--iris-blue);font-variant-numeric:tabular-nums;line-height:1}
-  .pring .pof{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-  .ploader .plabel{font-size:13px;font-weight:700;color:var(--ink)}
-  .ploader .psub{font-size:11.5px;color:var(--muted);max-width:280px}
 
   /* responsive */
   @media(max-width:1180px){.workspace{grid-template-columns:1fr}}
@@ -554,14 +413,6 @@
   <!-- MAIN WORKSPACE -->
   <main class="main">
 
-    <!-- GUIDED STEPPER — reflects where the active job is in the workflow -->
-    <nav class="stepper" id="stepper" aria-label="Workflow progress">
-      <div class="stp active" data-step="spec"><span class="sdot">1</span><span class="stxt"><span class="stt">Specification</span><span class="scap">Describe the mapping</span></span><span class="sstate">Active</span></div>
-      <div class="stp" data-step="review"><span class="sdot">2</span><span class="stxt"><span class="stt">Review</span><span class="scap">Confirm spec &amp; plan</span></span><span class="sstate">Next</span></div>
-      <div class="stp" data-step="build"><span class="sdot">3</span><span class="stxt"><span class="stt">Generate</span><span class="scap">Build &amp; verify the DTL</span></span><span class="sstate">Next</span></div>
-      <div class="stp" data-step="done"><span class="sdot">4</span><span class="stxt"><span class="stt">Validate</span><span class="scap">Review &amp; hand off</span></span><span class="sstate">Next</span></div>
-    </nav>
-
     <!-- KPI cards (reflect the active job) -->
     <section class="kpi-grid" id="kpis">
       <div class="kpi"><div class="k">Status</div><div class="v">—</div><div class="s">No active job</div></div>
@@ -577,38 +428,29 @@
           <div class="lpanehd">
             <h2 style="margin:0">1 · Specification</h2>
             <div class="lpanetools">
-              <label class="qmodel" id="qmodelwrap" title="Model used for generation">
+              <label class="qmodel" id="qmodelwrap" title="Model used for generation"><span class="qmlbl">Model</span>
                 <select id="quickmodel" disabled><option value="">—</option></select></label>
-              <button class="cog" id="opensettings" title="Generator settings"><i data-lucide="settings-2"></i></button>
+              <button class="cog" id="opensettings" title="Generator settings">⚙</button>
             </div>
           </div>
           <div class="note">The DTL is generated <b>from the specification</b>. Provide example <b>input</b> messages only — there are no expected outputs. The first input is the one the generated DTL is run on.</div>
-          <!-- Two clear ways to supply a spec: reuse a saved one, or create a new one
-               (which opens the Specification Builder where you type or upload). -->
-          <div class="specchoice" id="specchoice">
-            <label class="schoice"><input type="radio" name="specsrc" value="saved"/><span class="sc-b"><span class="sc-i"><i data-lucide="folder-open"></i></span><span class="sc-t"><span class="sc-h">Use a saved specification</span><span class="sc-d">Reuse one you've already reviewed &amp; approved</span></span></span></label>
-            <label class="schoice"><input type="radio" name="specsrc" value="new" checked/><span class="sc-b"><span class="sc-i"><i data-lucide="plus"></i></span><span class="sc-t"><span class="sc-h">Create a new specification</span><span class="sc-d">Type one, or upload a document to extract</span></span></span></label>
-          </div>
-
-          <div id="specSaved" class="hidden"><label style="display:flex;align-items:center;gap:8px">Choose a previously approved specification <button class="ghost" id="refreshspecs" style="margin-left:auto;padding:4px 10px;font-size:11px"><i data-lucide="refresh-cw"></i></button></label>
+          <div class="seg" id="specmode"><button class="on" data-m="text">Type text</button><button data-m="file">Upload document</button><button data-m="saved">Saved spec</button></div>
+          <div id="specText"><label>Describe the transformation the DTL should perform</label>
+            <textarea class="spec" id="spec" placeholder="e.g. Inbound ADT^A01 from EPICADT (HL7 v2.3). Rename the sending application to EPIC, normalize facility SITEA to 001 across MSH/PID/PV1, and upgrade the message to v2.5."></textarea></div>
+          <div id="specFile" class="hidden"><label>Upload a specification document (.pdf, .docx, .txt, .md …) — processed once, then reusable from “Saved spec”</label>
+            <input type="file" id="specfileinput" accept=".pdf,.docx,.txt,.md,.hl7,.csv,.json,.doc"/><div id="specfilestatus"></div></div>
+          <div id="specSaved" class="hidden"><label style="display:flex;align-items:center;gap:8px">Choose a previously uploaded specification <button class="ghost" id="refreshspecs" style="margin-left:auto;padding:4px 10px;font-size:11px">⟳</button></label>
             <select id="savedspec"><option value="">— select a saved specification —</option></select>
             <div id="savedspecinfo" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
-            <div id="savedspecreview" class="hidden" style="margin-top:8px"><button class="ghost" id="reviewconcise"><span class="iwrap"><i data-lucide="scan-search"></i> Review specification <i data-lucide="arrow-up-right" class="ic-ext"></i></span></button></div></div>
-
-          <div id="specNew"><button class="ghost" id="openbuilder" style="width:100%;justify-content:center"><span class="iwrap"><i data-lucide="blocks"></i> Open the Specification Builder <i data-lucide="arrow-up-right" class="ic-ext"></i></span></button>
-            <div id="specNewStatus" style="font-size:12px;color:var(--muted);margin-top:8px">Type a specification or upload a document (PDF, DOCX, …) inside the builder.</div></div>
-
-          <!-- hidden file input used by the builder's Upload option -->
-          <input type="file" id="specfileinput" accept=".pdf,.docx,.txt,.md,.hl7,.csv,.json,.doc" style="display:none"/>
-
+            <div id="savedspecreview" class="hidden" style="margin-top:8px"><button class="ghost" id="reviewconcise">🔍 Review concise specification</button></div></div>
           <label>Job name <span class="opt">(optional)</span></label><input id="jobname" placeholder="ADT_A01_Admit"/>
 
           <h2 style="margin-top:24px">2 · Example input messages</h2>
           <div class="note" style="font-size:12px">The input message is used <b>only locally</b> to identify the message type and verify the built DTL — it is <b>not sent to the LLM</b>. The DTL is generated from the specification.</div>
           <div id="inputs"></div>
-          <button class="ghost" id="addinput"><span class="iwrap"><i data-lucide="plus"></i> Add input message</span></button>
+          <button class="ghost" id="addinput">＋ Add input message</button>
 
-          <div class="row"><button class="primary" id="go"><span class="iwrap"><i data-lucide="arrow-right"></i> Plan &amp; Generate</span></button><button class="ghost" id="sample"><span class="iwrap"><i data-lucide="sparkles"></i> Load example</span></button></div>
+          <div class="row"><button class="primary" id="go">Plan &amp; Generate ▶</button><button class="ghost" id="sample">Load example</button></div>
           <div id="formerr" class="err hidden"></div>
         </article>
       </div>
@@ -617,13 +459,13 @@
       <div class="right-column">
         <article class="panel viewpanel">
           <nav class="rtabs">
-            <button class="rtab active" data-view="progress"><i data-lucide="list-checks"></i> Progress</button>
-            <button class="rtab hidden" id="rtab-messages" data-view="messages"><i data-lucide="messages-square"></i> LLM messages</button>
-            <button class="rtab" data-view="outputs"><i data-lucide="arrow-right-left"></i> Outputs</button>
-            <button class="rtab" data-view="live"><i data-lucide="play-circle"></i> Live test</button>
-            <button class="rtab" data-view="classes"><i data-lucide="boxes"></i> Classes</button>
-            <button class="rtab hidden" id="rtab-history" data-view="history"><i data-lucide="history"></i> History</button>
-            <button class="rtab" data-view="settings" style="margin-left:auto"><i data-lucide="settings-2"></i> Settings</button>
+            <button class="rtab active" data-view="progress"><span class="ic">◷</span> Progress</button>
+            <button class="rtab" data-view="messages"><span class="ic">💬</span> LLM messages</button>
+            <button class="rtab" data-view="outputs"><span class="ic">📤</span> Outputs</button>
+            <button class="rtab" data-view="live"><span class="ic">⚡</span> Live test</button>
+            <button class="rtab" data-view="classes"><span class="ic">📦</span> Classes</button>
+            <button class="rtab" data-view="history"><span class="ic">🕮</span> History</button>
+            <button class="rtab" data-view="settings" style="margin-left:auto"><span class="ic">⚙</span> Settings</button>
           </nav>
           <div class="rbody">
 
@@ -645,15 +487,15 @@
                 </div>
                 <label style="margin-top:12px">Edit the structured specification before approving <span class="opt">(markdown — your edits become the authority)</span></label>
                 <textarea id="specedit" style="min-height:150px"></textarea>
-                <div class="row"><button class="ok" id="approvespec"><span class="iwrap"><i data-lucide="check"></i> Approve spec &amp; plan</span></button><button class="danger" id="rejectspec"><span class="iwrap"><i data-lucide="rotate-ccw"></i> Re-structure…</span></button></div>
+                <div class="row"><button class="ok" id="approvespec">✓ Approve spec &amp; plan</button><button class="danger" id="rejectspec">✗ Re-structure…</button></div>
               </div>
 
               <div id="plangate" class="card hidden">
                 <h2>Proposed transformation plan</h2><div class="plan" id="plantext"></div>
                 <label style="margin-top:14px">Add your own steps to the plan <span class="opt">(optional — added items become required transformations)</span></label>
                 <div id="planadds"></div>
-                <button class="ghost" id="addplanitem" style="margin-top:8px"><span class="iwrap"><i data-lucide="plus"></i> Add plan item</span></button>
-                <div class="row"><button class="ok" id="approveplan"><span class="iwrap"><i data-lucide="play"></i> Approve &amp; build</span></button><button class="danger" id="rejectplan"><span class="iwrap"><i data-lucide="rotate-ccw"></i> Revise plan…</span></button></div>
+                <button class="ghost" id="addplanitem" style="margin-top:8px">＋ Add plan item</button>
+                <div class="row"><button class="ok" id="approveplan">✓ Approve &amp; build</button><button class="danger" id="rejectplan">✗ Revise plan…</button></div>
               </div>
               <div id="attemptgate" class="card warn hidden">
                 <h2>Attempt <span id="atnum"></span> — review</h2><div class="meta" id="atmeta"></div>
@@ -667,7 +509,7 @@
                 <div id="tab-dtl" class="hidden"><div class="cbh" style="border:1px solid var(--code-line);border-bottom:none"><span class="ttl">Generated DTL</span><span id="dtlcopy" style="margin-left:auto"></span></div><div class="dtl" id="dtlsrc">—</div></div>
                 <label style="margin-top:12px">Feedback <span class="opt">(used if you reject this attempt)</span></label>
                 <textarea id="attfeedback" placeholder="e.g. PID-8 should map F→2; also set MSH-4 to 001…"></textarea>
-                <div class="row"><button class="ok" id="acceptattempt"><span class="iwrap"><i data-lucide="check"></i> Accept &amp; transform all inputs</span></button><button class="danger" id="rejectattempt"><span class="iwrap"><i data-lucide="rotate-ccw"></i> Reject &amp; regenerate</span></button></div>
+                <div class="row"><button class="ok" id="acceptattempt">✓ Accept &amp; transform all inputs</button><button class="danger" id="rejectattempt">✗ Reject &amp; regenerate</button></div>
               </div>
             </div>
 
@@ -675,7 +517,7 @@
             <div id="view-messages" class="rview">
               <div class="viewhd"><h2>LLM messages</h2><span id="msgjob" class="pill"></span>
                 <label style="display:flex;align-items:center;gap:5px;margin:0;color:var(--muted);font-size:12px;font-weight:400"><input type="checkbox" id="msgauto" style="width:auto"/> auto-refresh</label>
-                <button class="ghost" id="refreshmsg" style="margin-left:auto"><span class="iwrap"><i data-lucide="refresh-cw"></i> Refresh</span></button></div>
+                <button class="ghost" id="refreshmsg" style="margin-left:auto">⟳ Refresh</button></div>
               <p style="color:var(--muted);font-size:13px">Every message sent to and received from the model for this job, in order — system / user / assistant. Each model reply shows the tokens it used and that request's cost.</p>
               <div id="usagebar" class="usagebar hidden"></div>
               <div id="msglist"></div>
@@ -683,7 +525,7 @@
 
             <!-- OUTPUTS -->
             <div id="view-outputs" class="rview">
-              <div class="viewhd"><h2>Transformed outputs</h2><span id="outjob" class="pill"></span><button class="ghost" id="refreshout" style="margin-left:auto"><span class="iwrap"><i data-lucide="refresh-cw"></i> Refresh</span></button></div>
+              <div class="viewhd"><h2>Transformed outputs</h2><span id="outjob" class="pill"></span><button class="ghost" id="refreshout" style="margin-left:auto">⟳ Refresh</button></div>
               <p style="color:var(--muted);font-size:13px">Every input message run through the built DTL. Correct an output and/or add feedback — the DTL is rebuilt and all inputs re-transformed.</p>
               <div id="outlist"></div>
             </div>
@@ -693,39 +535,38 @@
               <div class="viewhd"><h2>Live test</h2><span id="livejob" class="pill"></span></div>
               <p style="color:var(--muted);font-size:13px">Paste any input message and run it through the built DTL. Correct the output and give feedback to improve the DTL.</p>
               <label>Input message</label><textarea id="liveinput" style="min-height:90px"></textarea>
-              <div class="row"><button class="blue" id="runlive"><span class="iwrap"><i data-lucide="play"></i> Transform</span></button></div>
+              <div class="row"><button class="blue" id="runlive">⚡ Transform</button></div>
               <div id="liveresult" class="hidden">
                 <label style="display:flex;align-items:center;gap:8px">Input <span id="liveincopy" style="margin-left:auto;font-weight:400"></span></label><div id="liveIn" class="io" style="display:block"></div>
                 <label style="display:flex;align-items:center;gap:8px">Produced output (editable) <span class="opt">— changed lines vs input are highlighted</span><span id="liveoutcopy" style="margin-left:auto;font-weight:400"></span></label><textarea id="liveOut" style="min-height:200px"></textarea>
                 <label>Feedback</label><textarea id="livefb" placeholder="What's wrong / what should change…"></textarea>
-                <div class="row"><button class="ok" id="livecorrect"><span class="iwrap"><i data-lucide="wand-sparkles"></i> Apply correction + feedback to the DTL</span></button></div>
+                <div class="row"><button class="ok" id="livecorrect">✓ Apply correction + feedback to the DTL</button></div>
                 <div id="livemsg" style="color:var(--muted);font-size:12px;margin-top:8px"></div>
               </div>
             </div>
 
             <!-- CLASSES -->
             <div id="view-classes" class="rview">
-              <div class="viewhd"><h2>Generated DTL classes</h2><button class="ghost" id="refreshcls" style="margin-left:auto"><span class="iwrap"><i data-lucide="refresh-cw"></i> Refresh</span></button></div>
+              <div class="viewhd"><h2>Generated DTL classes</h2><button class="ghost" id="refreshcls" style="margin-left:auto">⟳ Refresh</button></div>
               <p style="color:var(--muted);font-size:13px">All DTL classes generated in this session. Click one to view its source.</p>
               <div style="display:grid;grid-template-columns:260px 1fr;gap:14px"><div id="clslist"></div><div><div class="cbh" style="border:1px solid var(--code-line);border-bottom:none"><span class="ttl" id="clsname">Class source</span><span id="clscopy" style="margin-left:auto"></span></div><div class="dtl" id="clssrc">Select a class…</div></div></div>
             </div>
 
             <!-- HISTORY -->
             <div id="view-history" class="rview">
-              <div class="viewhd"><h2>History</h2><button class="ghost" id="refreshhist" style="margin-left:auto"><span class="iwrap"><i data-lucide="refresh-cw"></i> Refresh</span></button></div>
+              <div class="viewhd"><h2>History</h2><button class="ghost" id="refreshhist" style="margin-left:auto">⟳ Refresh</button></div>
               <p style="color:var(--muted);font-size:13px">Every job, newest first. Refinements nest under their parent.</p>
               <div id="histlist"></div>
             </div>
 
             <!-- SETTINGS — generator configuration, persisted in localStorage -->
             <div id="view-settings" class="rview">
-              <div class="viewhd"><h2>Generator settings</h2><span id="setsaved" class="savedbar hidden"><span class="iwrap"><i data-lucide="check"></i> saved</span></span></div>
+              <div class="viewhd"><h2>Generator settings</h2><span id="setsaved" class="savedbar hidden">✓ saved</span></div>
               <p style="color:var(--muted);font-size:13px">LLM provider, model and run limits. Stored in this browser (localStorage) and reloaded on refresh; the API key is sent only to your IRIS server, never persisted server-side.</p>
               <div class="setgrid">
                 <div class="setsec full">LLM provider</div>
                 <div><label>Provider</label><select id="provider"><option value="openai" selected>OpenAI (live API)</option><option value="bedrock">AWS Bedrock (Claude)</option><option value="mock">Mock (offline demo)</option></select></div>
-                <div><label>Build model</label><div style="display:flex;gap:6px"><select id="model" disabled style="flex:1"><option value="">Enter a valid API key</option></select><button class="ghost" id="refreshmodels" title="Load your account's models" style="padding:9px 11px"><i data-lucide="refresh-cw"></i></button></div><div style="color:var(--muted);font-size:11px;margin-top:4px">Writes &amp; auto-repairs the DTL and judges spec conformance — use your most capable model here.</div></div>
-                <div><label>Concise-spec model</label><select id="concisemodel" disabled style="width:100%"><option value="">Enter a valid API key</option></select><div style="color:var(--muted);font-size:11px;margin-top:4px">Summarises the uploaded spec into the reviewable specification. A cheaper/faster model is ideal — defaults to one automatically.</div></div>
+                <div><label>Model</label><div style="display:flex;gap:6px"><select id="model" disabled style="flex:1"><option value="">Enter a valid API key</option></select><button class="ghost" id="refreshmodels" title="Load your account's models" style="padding:9px 11px">⟳</button></div></div>
                 <div class="full" id="openaibox">
                   <label id="keylabel">OpenAI API key <span class="opt">(kept in this browser; sent only to your IRIS server)</span></label>
                   <div style="display:flex;gap:6px"><input id="apikey" type="password" placeholder="sk-..." autocomplete="off" style="flex:1"/>
@@ -736,9 +577,6 @@
                 <div class="setsec full">Run limits</div>
                 <div><label>Max attempts <span class="opt">(auto-repair budget)</span></label><input id="maxattempts" type="number" min="1" max="20" value="5"/></div>
                 <div><label>Cost cap (USD) <span class="opt">(0 = none)</span></label><input id="costcap" type="number" min="0" step="0.10" value="0"/></div>
-                <div class="setsec full">Advanced views</div>
-                <div class="full"><label style="display:flex;align-items:center;gap:8px;margin:0"><input type="checkbox" id="showmessages" style="width:auto"/> Show the <b>LLM messages</b> tab <span class="opt">(every prompt/response sent to the model)</span></label></div>
-                <div class="full"><label style="display:flex;align-items:center;gap:8px;margin:0"><input type="checkbox" id="showhistory" style="width:auto"/> Show the <b>History</b> tab <span class="opt">(past generation jobs)</span></label></div>
               </div>
             </div>
 
@@ -751,7 +589,7 @@
 <!-- spec reader modal -->
 <div class="overlay" id="specmodal">
   <div class="modal">
-    <div class="mhd"><h2 id="specmodaltitle">Specification</h2><span id="specmodalcopy"></span><button class="x" id="specmodalclose"><i data-lucide="x"></i></button></div>
+    <div class="mhd"><h2 id="specmodaltitle">Specification</h2><span id="specmodalcopy"></span><button class="x" id="specmodalclose">✕</button></div>
     <div class="mbd"><div class="mdtext" id="specmodaltext">Loading…</div></div>
   </div>
 </div>
@@ -766,76 +604,11 @@
      editing/approval controls. -->
 <div class="overlay" id="cmpmodal">
   <div class="modal wide">
-    <div class="mhd"><h2 id="cmptitle"><span class="iwrap"><i data-lucide="blocks"></i> Specification Builder</span></h2><span id="cmpapprovedbadge" class="vbadge ok hidden"><span class="iwrap"><i data-lucide="lock"></i> Approved (read-only)</span></span><button class="x" id="cmpclose"><i data-lucide="x"></i></button></div>
+    <div class="mhd"><h2 id="cmptitle">Specification Builder</h2><span id="cmpapprovedbadge" class="vbadge ok hidden">✓ Approved (read-only)</span><button class="x" id="cmpclose">✕</button></div>
     <div class="mbd">
       <div class="tabs" id="cmpTabs">
-        <button class="tab active" data-ctab="start">Start</button>
-        <button class="tab" data-ctab="parse">Review parsing</button>
-        <button class="tab" data-ctab="review">Review &amp; resolve</button>
-        <button class="tab" data-ctab="markdown">Specification markdown</button>
-      </div>
-
-      <!-- TAB: Start — choose how to author the new specification. -->
-      <div id="cmpTabStart">
-        <div class="cmptools"><span>How would you like to create this specification?</span></div>
-        <div class="startgrid">
-          <button class="startcard" id="startType">
-            <span class="st-i"><i data-lucide="pencil"></i></span>
-            <span class="st-h">Type it</span>
-            <span class="st-d">Write the transformation specification yourself in a text area.</span>
-          </button>
-          <button class="startcard" id="startUpload">
-            <span class="st-i"><i data-lucide="upload"></i></span>
-            <span class="st-h">Upload a document</span>
-            <span class="st-d">PDF, DOCX, TXT or MD — we extract it to markdown for you to review.</span>
-          </button>
-        </div>
-        <!-- typed-spec entry (shown after choosing "Type it") -->
-        <div id="cmpTypeWrap" class="hidden">
-          <label class="fldlbl">Describe the transformation the DTL should perform</label>
-          <textarea id="cmpTypeText" class="spec" style="min-height:46vh;width:100%" placeholder="e.g. Inbound ADT^A01 from EPICADT (HL7 v2.3). Rename the sending application to EPIC, normalize facility SITEA to 001 across MSH/PID/PV1, and upgrade the message to v2.5."></textarea>
-        </div>
-      </div>
-
-      <!-- TAB (transient): Building — shown while a TYPED spec is turned into the concise
-           spec. No PDF/markdown split: there is nothing to parse for hand-typed text. -->
-      <div id="cmpTabBuilding" class="hidden">
-        <div class="ploader" style="min-height:48vh">
-          <div class="pring" id="buildLoaderRing" style="--pct:0"><div class="inner"><span class="pnum" id="buildLoaderNum">0%</span><span class="pof">working</span></div></div>
-          <div class="plabel" id="buildLoaderLabel">Generating specification…</div>
-          <div class="psub" id="buildLoaderSub">Organising your text into reviewable rules.</div>
-        </div>
-      </div>
-
-      <!-- TAB: Review parsing (step 1) — original document vs the rendered markdown the
-           Python extractor produced, scroll-synced, so the human can catch any
-           extraction mistake BEFORE it is sent to the LLM to build the concise spec. -->
-      <div id="cmpTabParse">
-        <div class="cmpsteps">
-          <span class="cmpstep active" id="pstepParse"><span class="cs-n">1</span> Check the extracted markdown</span>
-          <span class="cmpsteparrow"><i data-lucide="arrow-right"></i></span>
-          <span class="cmpstep" id="pstepConcise"><span class="cs-n">2</span> Generate the concise specification</span>
-        </div>
-        <div class="cmptools">
-          <span>Compare the <b>original document</b> with the <b>markdown</b> the parser extracted. Confirm tables, headings and values survived before generating the specification.</span>
-          <span id="parseConf" style="margin-left:auto"></span>
-        </div>
-        <div id="parseBanner"></div>
-        <div class="parsesplit" id="parseSplit">
-          <div class="pane l">
-            <div class="phd"><i data-lucide="file-text"></i><span>Original document</span><span id="parseDocName" style="margin-left:auto;font-weight:500;color:var(--muted)"></span></div>
-            <div class="pbody" id="parseDocPane"><div class="docnote">Loading…</div></div>
-          </div>
-          <div class="pane">
-            <div class="phd"><i data-lucide="file-code-2"></i><span>Extracted markdown</span>
-              <span class="htoggle"><span class="miniseg" id="parseMdToggle"><button class="on" data-md="rendered">Rendered</button><button data-md="raw">Raw</button></span></span>
-            </div>
-            <div class="pbody">
-              <div class="plan" id="parseMdRendered"></div>
-              <div id="parseMdRaw"></div>
-            </div>
-          </div>
-        </div>
+        <button class="tab active" data-ctab="review">Review &amp; Resolve</button>
+        <button class="tab" data-ctab="markdown">View Specification Markdown</button>
       </div>
 
       <!-- TAB: Review & Resolve -->
@@ -856,10 +629,8 @@
             <div class="pbody"><div id="cmpItems"></div></div>
           </div>
           <div class="pane orig">
-            <div class="phd"><span>Extracted markdown</span>
-              <span class="miniseg" id="cmpOrigToggle" style="margin-left:auto"><button class="on" data-md="rendered">Rendered</button><button data-md="raw">Raw</button></span>
-              <span id="cmporigcopy" style="margin-left:8px"></span></div>
-            <div class="pbody" id="cmpOrigBody"><div id="cmpOrigRendered" class="plan"></div><div id="cmpOrig" style="display:none"></div></div>
+            <div class="phd"><span>Original specification</span><span id="cmporigcopy" style="margin-left:auto"></span></div>
+            <div class="pbody" id="cmpOrigBody"><div id="cmpOrig"></div></div>
           </div>
         </div>
       </div>
@@ -879,8 +650,8 @@
               <div class="pbody plan" id="cmpMdView"></div>
             </div>
             <div class="pane orig">
-              <div class="phd"><span>Extracted markdown</span><span id="cmpMdOrigcopy" style="margin-left:auto"></span></div>
-              <div class="pbody plan" id="cmpMdOrig"></div>
+              <div class="phd"><span>Original specification</span><span id="cmpMdOrigcopy" style="margin-left:auto"></span></div>
+              <div class="pbody" id="cmpMdOrig" style="white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;color:var(--ink)"></div>
             </div>
           </div>
         </div>
@@ -890,10 +661,8 @@
       <span id="cmpmsg" style="font-size:12px;color:var(--muted)"></span>
       <span id="cmpgatehint" style="font-size:12px;color:#c0353a;font-weight:600"></span>
       <span class="sp"></span>
-      <button class="primary hidden" id="cmptypecontinue"><span class="iwrap"><i data-lucide="arrow-right"></i> Continue — build specification</span></button>
-      <button class="ghost" id="cmpregen"><span class="iwrap"><i data-lucide="refresh-cw"></i> Regenerate</span></button>
-      <button class="primary" id="cmpgenconcise"><span class="iwrap"><i data-lucide="wand-sparkles"></i> Looks right — generate specification</span></button>
-      <button class="ok" id="cmpapprove"><span class="iwrap"><i data-lucide="check"></i> Approve specification</span></button>
+      <button class="ghost" id="cmpregen">↻ Regenerate</button>
+      <button class="ok" id="cmpapprove">✓ Approve specification</button>
       <button class="ghost hidden" id="cmpcloseft">Close</button>
     </div>
   </div>
@@ -909,32 +678,16 @@ async function jpost(p,b){const r=await fetch(api(p),{method:"POST",headers:{"Co
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const fmtScore=x=>(x==null||x==="")?"—":(Math.round(x*1000)/1000).toFixed(3);
 const norm=s=>(s||"").replace(/\r/g,"\n").replace(/\n+$/,"");
-// Re-render any <i data-lucide> added since the last call. Debounced into a single
-// rAF so a burst of DOM builds triggers just one (cheap) icon pass.
-let _iconRAF=null;
-function icons(){if(_iconRAF)return;_iconRAF=requestAnimationFrame(()=>{_iconRAF=null;if(window.lucide)try{lucide.createIcons()}catch(e){}});}
-// Build an icon element (used by JS-created buttons).
-function licon(name){const i=document.createElement("i");i.setAttribute("data-lucide",name);return i;}
-// Lazily load PDF.js only when the parse-review step needs it (keeps first paint fast).
-let _pdfjsPromise=null;
-function ensurePdfJs(){
-  if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
-  if(_pdfjsPromise)return _pdfjsPromise;
-  _pdfjsPromise=new Promise((res,rej)=>{const s=document.createElement("script");s.src=window.__PDFJS_SRC;
-    s.onload=()=>{try{window.pdfjsLib.GlobalWorkerOptions.workerSrc=window.__PDFJS_WORKER;}catch(e){}res(window.pdfjsLib);};
-    s.onerror=()=>rej(new Error("pdfjs load failed"));document.head.appendChild(s);});
-  return _pdfjsPromise;
-}
 
 // ---- copy button ----------------------------------------------------------
 function copyBtn(getText){
-  const b=el("button","copy");b.appendChild(licon("copy"));b.appendChild(document.createTextNode(" copy"));
+  const b=el("button","copy","⧉ copy");
   b.onclick=(e)=>{e.stopPropagation();const t=(typeof getText==="function")?getText():getText;
-    const done=()=>{b.innerHTML="";b.appendChild(licon("check"));b.appendChild(document.createTextNode(" copied"));b.classList.add("done");icons();setTimeout(()=>{b.innerHTML="";b.appendChild(licon("copy"));b.appendChild(document.createTextNode(" copy"));b.classList.remove("done");icons();},1200);};
+    const done=()=>{b.textContent="copied ✓";b.classList.add("done");setTimeout(()=>{b.textContent="⧉ copy";b.classList.remove("done");},1200);};
     if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t||"").then(done,done);}
     else{const ta=document.createElement("textarea");ta.value=t||"";document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(e){}ta.remove();done();}
   };
-  icons();return b;
+  return b;
 }
 
 // ---- lightweight Markdown renderer ----------------------------------------
@@ -955,45 +708,21 @@ function mdInlineApply(s){
 }
 function mdToHtml(src){
   const lines=String(src==null?"":src).replace(/\r\n?/g,"\n").split("\n");
-  let html="",i=0,para=[],listType=null,listItems=[],toc=[];
+  let html="",i=0,para=[],listType=null,listItems=[];
   const flushPara=()=>{if(para.length){html+="<p>"+mdInlineApply(mdEsc(para.join(" ")))+"</p>";para=[];}};
   const flushList=()=>{if(listType){html+="<"+listType+">"+listItems.map(it=>"<li>"+mdInlineApply(mdEsc(it))+"</li>").join("")+"</"+listType+">";listType=null;listItems=[];}};
-  // A run of "Title ……… 12" dot-leader lines is a table of contents — render it as a
-  // clean two-column list (title left, page right) instead of letting the leading
-  // "1." numbers turn every other line into a separate ordered list.
-  const flushToc=()=>{if(toc.length){html+="<div class=mdtoc>"+toc.map(e=>"<div class=mdtoc-e><span class=mdtoc-t>"+mdInlineApply(mdEsc(e.t))+"</span><span class=mdtoc-d></span><span class=mdtoc-p>"+mdEsc(e.p)+"</span></div>").join("")+"</div>";toc=[];}};
-  const flushAll=()=>{flushPara();flushList();flushToc();};
+  const flushAll=()=>{flushPara();flushList();};
   while(i<lines.length){
     const raw=lines[i];const t=raw.trim();
     if(/^```/.test(t)){flushAll();i++;const code=[];while(i<lines.length&&!/^```/.test(lines[i].trim())){code.push(lines[i]);i++;}i++;html+="<pre class=mdcode>"+mdEsc(code.join("\n"))+"</pre>";continue;}
     if(t===""){flushAll();i++;continue;}
-    // TOC dot-leader entry: "<title> ........ <page>" (3+ dots before the page number).
-    const tocm=t.match(/^(.+?)\s*\.{3,}\s*(\d+)\s*$/);
-    if(tocm){flushPara();flushList();toc.push({t:tocm[1],p:tocm[2]});i++;continue;}
     const h=t.match(/^(#{1,6})\s+(.*)$/);
-    if(h){flushAll();const lvl=Math.min(h[1].length+2,6);
-      // Tag "## Page N" headings with data-page so the parse-review can scroll-sync
-      // the rendered markdown to the matching PDF page.
-      const pm=h[2].match(/^Page\s+(\d+)\s*$/i);const attr=pm?(" data-page=\""+pm[1]+"\""):"";
-      html+="<h"+lvl+" class=mdh"+attr+">"+mdInlineApply(mdEsc(h[2]))+"</h"+lvl+">";i++;continue;}
+    if(h){flushAll();const lvl=Math.min(h[1].length+2,6);html+="<h"+lvl+" class=mdh>"+mdInlineApply(mdEsc(h[2]))+"</h"+lvl+">";i++;continue;}
     if(/^([-*_])\1{2,}$/.test(t)){flushAll();html+="<hr/>";i++;continue;}
     const ul=t.match(/^[-*+]\s+(.*)$/);
     if(ul){flushPara();if(listType&&listType!=="ul")flushList();listType="ul";listItems.push(ul[1]);i++;continue;}
     const ol=t.match(/^\d+[.)]\s+(.*)$/);
     if(ol){flushPara();if(listType&&listType!=="ol")flushList();listType="ol";listItems.push(ol[1]);i++;continue;}
-    // GFM pipe table: a header row, a |---|---| separator, then 0+ body rows.
-    if(t.indexOf("|")>=0 && i+1<lines.length && /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)+\|?\s*$/.test(lines[i+1].trim())){
-      flushAll();
-      const splitRow=(ln)=>{let s=ln.trim();if(s[0]==="|")s=s.slice(1);if(s[s.length-1]==="|")s=s.slice(0,-1);
-        // split on unescaped pipes, then unescape \|
-        return s.split(/(?<!\\)\|/).map(c=>c.replace(/\\\|/g,"|").trim());};
-      const head=splitRow(t);i+=2;const body=[];
-      while(i<lines.length&&lines[i].trim().indexOf("|")>=0&&lines[i].trim()!==""){body.push(splitRow(lines[i]));i++;}
-      let th="<table class=mdtable><thead><tr>"+head.map(c=>"<th>"+mdInlineApply(mdEsc(c))+"</th>").join("")+"</tr></thead>";
-      th+="<tbody>"+body.map(r=>{const cells=r.slice(0,head.length);while(cells.length<head.length)cells.push("");
-        return "<tr>"+cells.map(c=>"<td>"+mdInlineApply(mdEsc(c))+"</td>").join("")+"</tr>";}).join("")+"</tbody></table>";
-      html+=th;continue;
-    }
     const bq=t.match(/^>\s?(.*)$/);
     if(bq){flushAll();html+="<blockquote>"+mdInlineApply(mdEsc(bq[1]))+"</blockquote>";i++;continue;}
     flushList();para.push(t);i++;
@@ -1141,93 +870,46 @@ function elapsedTicker(elEl,label){
   if(!elEl)return ()=>{};
   const start=Date.now();
   const fmt=()=>{const s=Math.floor((Date.now()-start)/1000);return s<60?(s+"s"):(Math.floor(s/60)+"m "+(s%60)+"s");};
-  // Build the spinner + a text node ONCE, then only update the text on each tick.
-  // (Re-setting innerHTML every tick recreated the .spinner element and restarted its
-  // CSS animation, which is what made it stutter.)
-  elEl.innerHTML="";
-  const sp=el("span","spinner");const txt=document.createTextNode(" "+label+" "+fmt());
-  elEl.appendChild(sp);elEl.appendChild(txt);
-  const iv=setInterval(()=>{txt.nodeValue=" "+label+" "+fmt();},250);
+  const paint=()=>{elEl.innerHTML="<span class=spinner></span> "+label+" "+fmt();};
+  paint();
+  const iv=setInterval(paint,250);
   return ()=>{clearInterval(iv);};
 }
 
 // ---- spec mode -------------------------------------------------------------
 let specReady=null;
 let savedReady=null;
-// Spec source: "saved" (reuse an approved spec) or "new" (open the builder to type
-// or upload). Typed specs from the builder are held in builtSpec once approved.
-let builtSpec=null;   // {token?, text} — a spec authored/approved via the builder this session
-function specSrc(){const r=$("#specchoice").querySelector('input[name=specsrc]:checked');return r?r.value:"new";}
-function syncSpecSrc(){const m=specSrc();
-  $("#specSaved").classList.toggle("hidden",m!=="saved");
-  $("#specNew").classList.toggle("hidden",m!=="new");
-  if(m==="saved")loadSavedSpecs();}
-$("#specchoice").querySelectorAll('input[name=specsrc]').forEach(r=>r.onchange=syncSpecSrc);
-// "Create a new specification" → open the builder on its Start step.
-$("#openbuilder").onclick=()=>openBuilderNew();
+function specMode(){return $("#specmode").querySelector("button.on").dataset.m;}
+$("#specmode").querySelectorAll("button").forEach(b=>b.onclick=()=>{$("#specmode").querySelectorAll("button").forEach(x=>x.classList.remove("on"));b.classList.add("on");const m=b.dataset.m;
+  $("#specText").classList.toggle("hidden",m!=="text");$("#specFile").classList.toggle("hidden",m!=="file");$("#specSaved").classList.toggle("hidden",m!=="saved");
+  if(m==="saved")loadSavedSpecs();});
 // The token of the spec currently chosen for the build (upload or saved). When set,
 // generate sends specToken so the backend reuses its APPROVED concise spec.
 let currentSpecToken=null;
-// POST /upload via XHR so we can report a real, byte-based upload percentage.
-// Resolves [ok, json]. onPct(0..100) fires as the request body is sent.
-function uploadWithProgress(body,onPct){
-  return new Promise(res=>{
-    const xhr=new XMLHttpRequest();xhr.open("POST",api("/upload"));
-    xhr.setRequestHeader("Content-Type","application/json");
-    if(xhr.upload)xhr.upload.onprogress=e=>{if(e.lengthComputable&&onPct)onPct(Math.round(e.loaded/e.total*100));};
-    xhr.onload=()=>{let j={};try{j=JSON.parse(xhr.responseText)}catch(e){}if(onPct)onPct(100);res([xhr.status>=200&&xhr.status<300,j]);};
-    xhr.onerror=()=>res([false,{error:"network error"}]);
-    xhr.send(JSON.stringify(body));
-  });
-}
-// Drive the circular progress ring + phased label in the markdown pane.
-function setLoader(pct,label,sub){
-  const ring=$("#parseLoaderRing");if(ring)ring.style.setProperty("--pct",Math.round(pct));
-  const num=$("#parseLoaderNum");if(num)num.textContent=Math.round(pct)+"%";
-  const lbl=$("#parseLoaderLabel");if(lbl&&label!=null)lbl.textContent=label;
-  const s=$("#parseLoaderSub");if(s&&sub!=null)s.textContent=sub;
-}
-// Loader for the TYPED-spec "Building" tab (no parse split). Mirrors setLoader.
-function setBuildLoader(pct,label,sub){
-  const ring=$("#buildLoaderRing");if(ring&&pct!=null)ring.style.setProperty("--pct",Math.round(pct));
-  const num=$("#buildLoaderNum");if(num&&pct!=null)num.textContent=Math.round(pct)+"%";
-  const lbl=$("#buildLoaderLabel");if(lbl&&label!=null)lbl.textContent=label;
-  const s=$("#buildLoaderSub");if(s&&sub!=null)s.textContent=sub;
-}
-function showParseLoader(label){
-  $("#parseMdRendered").innerHTML='<div class="ploader">'
-    +'<div class="pring" id="parseLoaderRing" style="--pct:0"><div class="inner"><span class="pnum" id="parseLoaderNum">0%</span><span class="pof">working</span></div></div>'
-    +'<div class="plabel" id="parseLoaderLabel">'+(label||"Working…")+'</div>'
-    +'<div class="psub" id="parseLoaderSub">This can take up to a minute for a large document.</div></div>';
-  $("#parseMdRendered").style.display="block";$("#parseMdRaw").style.display="none";
-}
-$("#specfileinput").onchange=async e=>{const f=e.target.files[0];if(!f)return;currentSpecToken=null;
-  const ext=(f.name.split(".").pop()||"").toLowerCase();
-  const bytes=new Uint8Array(await f.arrayBuffer());
-  const b64=btoa(Array.from(bytes,b=>String.fromCharCode(b)).join(""));
-  // 1) Open the modal INSTANTLY in a loading state (no token yet). The progress lives
-  //    entirely in the builder's loader ring.
-  openSpecLoadingModal(f.name,ext,bytes);
-  setLoader(2,"Uploading…","Sending the document to the server.");
-  // 2) Upload with real byte progress mapped into 0–40% of the ring.
-  const [ok,d]=await uploadWithProgress({filename:f.name,dataBase64:b64},p=>setLoader(2+p*0.38,"Uploading…",Math.round(p)+"% sent"));
-  if(!ok){setLoader(0,"Upload failed",(d&&d.error)||"");return;}
-  currentSpecToken=d.token;cmpState.token=d.token;
-  // 3) Poll extraction; animate 40→95% on a gentle estimate while we wait.
-  setLoader(42,"Extracting text & tables…","Parsing the document — this is the slow step.");
-  let sp=null,est=42;const estTimer=setInterval(()=>{est=Math.min(94,est+1.3);setLoader(est);},900);
-  for(let i=0;i<75;i++){await sleep(2000);const [o2,r]=await jget("/specs/"+d.token);if(o2&&r.status!=="PENDING"){sp=r;break;}
-    if(i===6)setLoader(null,"Extracting text & tables…","Large documents (40+ pages) can take a minute.");}
-  clearInterval(estTimer);
-  if(!sp){setLoader(95,"Still processing…","Reopen from ‘Saved spec’ shortly.");return;}
-  if(sp.status!=="READY"){setLoader(0,"Extraction failed",sp.error||"");return;}
-  setLoader(97,"Rendering…","Formatting the extracted markdown.");
-  specReady=sp.text;
+$("#specfileinput").onchange=async e=>{const f=e.target.files[0];if(!f)return;$("#specfilestatus").innerHTML="";currentSpecToken=null;
+  const chip=el("div","filechip");chip.appendChild(el("span",null,"📄 "+f.name));const st=el("span",null," — uploading…");st.style.color="var(--muted)";chip.appendChild(st);$("#specfilestatus").appendChild(chip);
+  const b64=await fileToB64(f);const [ok,d]=await jpost("/upload",{filename:f.name,dataBase64:b64});
+  if(!ok){st.textContent=" — upload failed: "+(d.error||"");st.style.color="var(--bad)";return;}
+  specReady=null;
+  let sp=null;
+  for(let i=0;i<25;i++){await sleep(1200);const [o2,r]=await jget("/specs/"+d.token);if(o2&&r.status!=="PENDING"){sp=r;break;}}
+  if(!sp){st.textContent=" — Still processing…";return;}
+  if(sp.status!=="READY"){st.textContent=" — extraction error: "+(sp.error||"");st.style.color="var(--bad)";return;}
+  specReady=sp.text;currentSpecToken=d.token;
+  st.textContent=" — extracted "+sp.text.length+" chars ✓";st.style.color="var(--iris-green-700)";
+  showExtractWarn($("#specfilestatus"),sp);
+  // Generate the concise spec now (so it's ready when the saved spec is reused),
+  // then open the review modal for the human to verify/edit/approve.
+  const gst=el("div");gst.style.cssText="margin-top:8px;font-size:12px;color:var(--muted)";$("#specfilestatus").appendChild(gst);
+  const stopT=elapsedTicker(gst,"Generating a concise specification…");
+  const csp=await generateConcise(d.token);
+  stopT();
+  if(!csp.ok){gst.innerHTML="";conciseErrBox($("#specfilestatus"),csp.error,()=>$("#specfileinput").onchange({target:{files:[f]}}));return;}
+  gst.innerHTML="";const done=el("span",null,"✓ Concise specification ready. ");done.style.color="var(--iris-green-700)";gst.appendChild(done);
+  const rl=el("a",null,"review it");rl.href="#";rl.onclick=(ev)=>{ev.preventDefault();openCompareModal(d.token);};gst.appendChild(rl);
+  if(csp.conciseError){const w=el("div","specwarn");w.style.marginTop="6px";w.textContent="⚠ "+csp.conciseError;$("#specfilestatus").appendChild(w);}
   loadSavedSpecs();
-  // 4) Finalize: load full state into the (already-open) modal.
-  setLoader(100,"Finalizing…","");
-  await sleep(150);
-  finishSpecLoading(sp);
+  openCompareModal(d.token);
 };
 // Kick off concise-spec generation (async on the server) and POLL GET /specs/:token
 // until it settles. Generation can take a while (several large LLM calls), so the
@@ -1238,49 +920,15 @@ async function generateConcise(token){
   const [sok,start]=await jpost("/specs/"+token+"/concise",providerBody());
   // A synchronous validation failure (missing key/model) comes back non-2xx now.
   if(!sok)return{ok:false,error:(start&&start.error)||"Could not start concise-spec generation."};
-  // Poll until READY/ERROR. NO fixed client ceiling: as long as the server reports the
-  // job is still PENDING it IS working (a 46-page spec on a reasoning model legitimately
-  // takes many minutes, and the server keeps the background job running well past any
-  // old client timeout) — there's no reason for the UI to give up while it's progressing.
-  // The only backstop is a STALL guard: if the status stops being PENDING-with-progress
-  // for a very long stretch (e.g. the background process died on a container crash and
-  // can never write ERROR), we surface a soft "still processing" message rather than
-  // spinning forever — and even then we point the user at the saved spec, not "try a
-  // faster model" (the work may still complete server-side).
-  const STALL_MS=30*60*1000;   // 30 min with no observed PENDING heartbeat -> assume dead
-  let lastSeen=Date.now(),sawPending=false,i=0;
-  while(true){
-    await sleep(i<60?1000:2000);   // 1s for the first minute, then ease to 2s
-    i++;
+  // Poll until READY/ERROR. ~5 min ceiling (slow specs + reasoning models).
+  for(let i=0;i<300;i++){
+    await sleep(1000);
     const [gok,sp]=await jget("/specs/"+token);
-    if(!gok){ if(Date.now()-lastSeen>STALL_MS)break; continue; }
+    if(!gok)continue;
     if(sp.conciseStatus==="READY")return Object.assign({ok:true},sp);
     if(sp.conciseStatus==="ERROR")return{ok:false,error:sp.conciseError||"Concise-spec generation failed.",conciseStatus:"ERROR"};
-    // Still PENDING: this is normal progress — reset the stall clock and keep waiting.
-    if(sp.conciseStatus==="PENDING"){sawPending=true;lastSeen=Date.now();continue;}
-    // Any other/blank status: only bail if we've gone a long time with no PENDING heartbeat.
-    if(Date.now()-lastSeen>STALL_MS)break;
   }
-  return{ok:false,error:(sawPending
-    ?"The concise spec is still being generated on the server (this can take several minutes for a large document). It will keep running — reopen it shortly from ‘Use a saved specification’."
-    :"Could not start concise-spec generation on the server. Check the production is running and try again."),conciseStatus:"PENDING"};
-}
-// Poll an ALREADY-RUNNING concise job until it settles — does NOT POST /concise (so it
-// never restarts a job in flight). Returns the latest spec object (conciseStatus
-// READY/ERROR), or the last PENDING snapshot if it stalls. Used when a saved spec is
-// opened while still generating/verifying, to gate review behind verification.
-async function pollConciseReady(token){
-  const STALL_MS=30*60*1000;let lastSeen=Date.now(),i=0,last=null;
-  while(true){
-    await sleep(i<60?1000:2000);i++;
-    const [gok,sp]=await jget("/specs/"+token);
-    if(!gok){if(Date.now()-lastSeen>STALL_MS)break;continue;}
-    last=sp;
-    if(sp.conciseStatus==="READY"||sp.conciseStatus==="ERROR")return sp;
-    if(sp.conciseStatus==="PENDING"){lastSeen=Date.now();continue;}
-    if(Date.now()-lastSeen>STALL_MS)break;
-  }
-  return last;
+  return{ok:false,error:"Concise-spec generation timed out. Try again, or use a faster model."};
 }
 // A prominent, actionable error box for a failed concise-spec generation. Surfaces
 // the real provider message (bad key / rate limit / bad model) + a Settings link +
@@ -1289,25 +937,14 @@ function conciseErrBox(box,msg,retryFn){
   const e=el("div","err");e.style.marginTop="8px";
   e.appendChild(el("b",null,"Concise spec failed. "));
   e.appendChild(document.createTextNode(msg||"The LLM call did not return content."));
-  // This step uses the CONCISE-SPEC model (not the Build model). Make that explicit and
-  // call out the common legacy/unavailable-model 404 so the user fixes the right setting.
-  const cm=$("#concisemodel");const cmId=(cm&&cm.value)?cm.value:"(build model)";
-  const hint=el("div");hint.style.cssText="margin-top:8px;font-size:12px;color:var(--muted)";
-  hint.appendChild(document.createTextNode("This step uses the Concise-spec model: "));
-  hint.appendChild(el("b",null,cmId));hint.appendChild(document.createTextNode("."));
-  if(/legacy|not[- ]?found|404|access denied|do not have access|don't have access|not active/i.test(msg||"")){
-    hint.appendChild(el("br"));
-    hint.appendChild(document.createTextNode("That model looks unavailable/legacy on your account — pick a current Concise-spec model in Settings (e.g. an active Haiku) and retry."));
-  }
-  e.appendChild(hint);
   const row=el("div");row.style.cssText="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap";
-  const sa=el("a",null,"Open Settings");sa.href="#";sa.onclick=(ev)=>{ev.preventDefault();showView("settings");$("#concisemodel")&&$("#concisemodel").focus();};row.appendChild(sa);
+  const sa=el("a",null,"Open Settings");sa.href="#";sa.onclick=(ev)=>{ev.preventDefault();showView("settings");};row.appendChild(sa);
   if(retryFn){const ra=el("a",null,"Retry");ra.href="#";ra.onclick=(ev)=>{ev.preventDefault();retryFn();};row.appendChild(ra);}
   e.appendChild(row);box.appendChild(e);
 }
 function fileToB64(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.readAsDataURL(f);});}
 // Provider/model/key payload from Settings, for spec-side LLM calls.
-function providerBody(){const cm=$("#concisemodel");const b={provider:$("#provider").value,model:$("#model").value,conciseModel:(cm&&cm.value)?cm.value:$("#model").value,apiKey:needsKey()?$("#apikey").value.trim():""};if(isBedrock())b.region=$("#bedrockregion").value.trim()||"us-east-1";return b;}
+function providerBody(){const b={provider:$("#provider").value,model:$("#model").value,apiKey:needsKey()?$("#apikey").value.trim():""};if(isBedrock())b.region=$("#bedrockregion").value.trim()||"us-east-1";return b;}
 // Confidence badge text for an extracted spec (0..1).
 function confClass(c){return c>=0.8?"hi":(c>=0.5?"mid":"lo");}
 function confLabel(c){return c>=0.8?"high confidence":(c>=0.5?"review recommended":"LOW confidence — review carefully");}
@@ -1330,7 +967,7 @@ function showExtractWarn(box,sp){
 
 async function loadSavedSpecs(){const sel=$("#savedspec");const [ok,j]=await jget("/specs");
   const cur=sel.value;sel.innerHTML="<option value=''>— Select a saved specification —</option>";
-  if(ok&&j.specs){j.specs.filter(s=>s.status==="READY"&&s.size>0).forEach(s=>{const o=document.createElement("option");const cf=(s.confidence==null?1:+s.confidence);o.value=s.token;o.textContent=s.fileName+" · "+s.size+" chars"+(cf<0.8?(" · "+Math.round(cf*100)+"% — review"):"")+" · "+(s.createdAt||"");sel.appendChild(o);});}
+  if(ok&&j.specs){j.specs.filter(s=>s.status==="READY"&&s.size>0).forEach(s=>{const o=document.createElement("option");const cf=(s.confidence==null?1:+s.confidence);o.value=s.token;o.textContent=s.fileName+" · "+s.size+" chars"+(cf<0.8?(" · ⚠ "+Math.round(cf*100)+"%"):"")+" · "+(s.createdAt||"");sel.appendChild(o);});}
   if([...sel.options].some(o=>o.value===cur))sel.value=cur;}
 $("#refreshspecs").onclick=loadSavedSpecs;
 $("#savedspec").onchange=async()=>{const tok=$("#savedspec").value;savedReady=null;currentSpecToken=null;const info=$("#savedspecinfo");info.innerHTML="";$("#savedspecreview").classList.add("hidden");
@@ -1338,30 +975,25 @@ $("#savedspec").onchange=async()=>{const tok=$("#savedspec").value;savedReady=nu
   const [ok,sp]=await jget("/specs/"+tok);
   if(!ok||sp.status!=="READY"){info.textContent="Could not load this spec.";return;}
   savedReady=sp.text;currentSpecToken=tok;info.innerHTML="";
-  const span=el("span",null,sp.fileName+" — "+(sp.text||"").length+" chars. ");span.style.color="var(--iris-green-700)";span.style.fontWeight="600";info.appendChild(span);
+  const span=el("span",null,"✓ "+sp.fileName+" — "+(sp.text||"").length+" chars. ");span.style.color="var(--iris-green-700)";info.appendChild(span);
   const link=el("a",null,"Read original");link.href="#";link.onclick=(e)=>{e.preventDefault();openSpecModal(sp.fileName,sp.text);};info.appendChild(link);
   // Concise-spec status: approved (use it) / ready (review) / error / missing.
   const cs=el("div");cs.style.cssText="font-size:12px;margin-top:6px";
-  if(sp.conciseApproved){const a=el("span",null,"Specification approved. ");a.style.color="var(--iris-green-700)";cs.appendChild(a);}
-  else if(sp.conciseStatus==="ERROR"){const a=el("span",null,"Specification build failed. ");a.style.color="var(--bad)";cs.appendChild(a);}
-  else if(sp.conciseStatus==="READY"){const a=el("span",null,"Specification needs your review. ");a.style.color="#9a6a00";cs.appendChild(a);}
-  else{const a=el("span",null,"Not yet built — review the parsing to build it. ");a.style.color="var(--muted)";cs.appendChild(a);}
+  if(sp.conciseApproved){const a=el("span",null,"✓ Concise specification approved. ");a.style.color="var(--iris-green-700)";cs.appendChild(a);}
+  else if(sp.conciseStatus==="ERROR"){const a=el("span",null,"✗ Concise specification failed. ");a.style.color="var(--bad)";cs.appendChild(a);}
+  else if(sp.conciseStatus==="READY"){const a=el("span",null,"● Concise specification needs your review. ");a.style.color="#9a6a00";cs.appendChild(a);}
+  else{const a=el("span",null,"○ No concise specification yet. ");a.style.color="var(--muted)";cs.appendChild(a);}
   info.appendChild(cs);
   if(sp.conciseStatus==="ERROR"&&sp.conciseError){conciseErrBox(info,sp.conciseError,()=>$("#reviewconcise").onclick());}
-  else if(sp.conciseError){const w=el("div","specwarn");w.style.marginTop="6px";w.textContent=sp.conciseError;info.appendChild(w);}
+  else if(sp.conciseError){const w=el("div","specwarn");w.style.marginTop="6px";w.textContent="⚠ "+sp.conciseError;info.appendChild(w);}
   $("#savedspecreview").classList.remove("hidden");
-  const rcLbl=sp.conciseApproved?["file-text","View specification"]:((sp.conciseStatus==="READY")?["scan-search","Review specification"]:["scan-search","Review parsing & build"]);
-  $("#reviewconcise").innerHTML="";const rcw=el("span","iwrap");rcw.appendChild(licon(rcLbl[0]));rcw.appendChild(document.createTextNode(" "+rcLbl[1]));$("#reviewconcise").appendChild(rcw);icons();
+  $("#reviewconcise").textContent=sp.conciseApproved?"📄 View specification":((sp.conciseStatus==="READY")?"🔍 Review specification":((sp.conciseStatus==="ERROR")?"↻ Retry concise specification":"⚙ Generate concise specification"));
   showExtractWarn(info,sp);};
 $("#reviewconcise").onclick=async()=>{
-  // Always open the Builder; it starts at the parse-review step and generates the
-  // concise spec on demand from there. (No up-front LLM call.)
   if(!currentSpecToken)return;
-  openCompareModal(currentSpecToken);
-};
-async function _legacyReviewConcise(){
   const [ok,sp]=await jget("/specs/"+currentSpecToken);
   if(ok&&sp.conciseStatus==="READY"){openCompareModal(currentSpecToken);return;}
+  // Generate then open.
   const lbl=$("#reviewconcise").textContent;
   $("#reviewconcise").disabled=true;
   const stopT=elapsedTicker($("#reviewconcise"),"Generating a concise specification…");
@@ -1382,401 +1014,81 @@ let cmpState={token:null,orig:"",concise:"",prov:null};
 // markdown tab pre-approval, refresh the editable markdown from the current
 // resolutions unless the user has manually edited it.
 function cmpShowTab(t){
-  // An approved spec is locked to the markdown viewer — no start/parse/resolution tabs.
+  // An approved spec is locked to the markdown viewer — no resolution tab.
   if(cmpState.approved)t="markdown";
-  const haveConcise=!!(cmpState.concise&&cmpState.concise.trim());
-  // A typed spec has no source document to parse-review, so it never offers a parse step.
-  const haveDoc=(!cmpState.typed)&&(!!(cmpState.orig&&cmpState.orig.length)||cmpState.loading);
-  // start = the authoring chooser (only meaningful before a doc/concise exists).
-  // The Review/Markdown tabs require a generated concise spec.
-  if((t==="review"||t==="markdown")&&!haveConcise)t=haveDoc?"parse":"start";
-  if(t==="parse"&&!haveDoc&&!cmpState.approved)t="start";
-  document.querySelectorAll("#cmpTabs .tab").forEach(x=>{
-    const ct=x.dataset.ctab;
-    x.classList.toggle("active",ct===t);
-    // start tab only while authoring a brand-new spec (no concise yet, not approved)
-    if(ct==="start")x.classList.toggle("hidden",cmpState.approved||haveConcise);
-    if(ct==="parse")x.classList.toggle("hidden",cmpState.approved||!haveDoc);
-    if(ct==="review")x.classList.toggle("hidden",cmpState.approved||!haveConcise);
-    if(ct==="markdown")x.classList.toggle("hidden",!haveConcise&&!cmpState.approved);
-  });
-  $("#cmpTabStart").classList.toggle("hidden",t!=="start");
-  $("#cmpTabBuilding").classList.toggle("hidden",t!=="building");
-  $("#cmpTabParse").classList.toggle("hidden",t!=="parse");
+  document.querySelectorAll("#cmpTabs .tab").forEach(x=>{x.classList.toggle("active",x.dataset.ctab===t);
+    if(x.dataset.ctab==="review")x.classList.toggle("hidden",!!cmpState.approved);});
   $("#cmpTabReview").classList.toggle("hidden",t!=="review");
   $("#cmpTabMarkdown").classList.toggle("hidden",t!=="markdown");
-  // Footer buttons depend on the active tab.
-  const typing=(t==="start"&&!$("#cmpTypeWrap").classList.contains("hidden"));
-  $("#cmptypecontinue").classList.toggle("hidden",!typing);
-  $("#cmpgenconcise").classList.toggle("hidden",t!=="parse"||cmpState.approved);
-  $("#cmpregen").classList.toggle("hidden",!(t==="parse"&&!cmpState.approved));
-  $("#cmpapprove").classList.toggle("hidden",t==="start"||t==="parse"||cmpState.approved);
-  $("#cmpcloseft").classList.toggle("hidden",!cmpState.approved);
-  // Lazily render pane-3 extracted markdown the first time the review tab is shown.
-  if(t==="review"&&cmpState.orig!=null&&!cmpState._origRendDone&&!cmpState._origRawDone){setCmpOrigMode("rendered");}
-  if(t==="markdown"){
-    // The markdown tab has two sub-panes: an editable textarea (pre-approval) and a
-    // read-only rendered view (post-approval). Always pick the right one for the
-    // CURRENT spec so a prior approved-spec view can't leave stale markdown showing.
-    $("#cmpMdEditWrap").classList.toggle("hidden",cmpState.approved);
-    $("#cmpMdViewWrap").classList.toggle("hidden",!cmpState.approved);
-    if(!cmpState.approved&&!cmpState.mdDirty){$("#cmpEdit").value=cmpFinalMarkdown();}
-  }
-  icons();
+  if(t==="markdown"&&!cmpState.approved&&!cmpState.mdDirty){$("#cmpEdit").value=cmpFinalMarkdown();}
 }
 document.querySelectorAll("#cmpTabs .tab").forEach(b=>b.onclick=()=>cmpShowTab(b.dataset.ctab));
-// Open the builder fresh on its Start step to author a NEW specification.
-function openBuilderNew(){
-  cmpState={token:null,orig:"",concise:"",prov:null,segs:[],activeSeg:0,ambs:null,approved:false,mdDirty:false,sp:null,loading:false};
-  currentSpecToken=null;
-  $("#cmpmsg").textContent="";$("#cmpgatehint").textContent="";$("#cmpbanner").innerHTML="";$("#parseBanner").innerHTML="";$("#cmpverdict").innerHTML="";
-  $("#cmptitle").innerHTML="";const tw=el("span","iwrap");tw.appendChild(licon("blocks"));tw.appendChild(document.createTextNode(" Specification Builder"));$("#cmptitle").appendChild(tw);
-  $("#cmpapprovedbadge").classList.add("hidden");
-  // reset Start tab to the chooser
-  $("#cmpTypeWrap").classList.add("hidden");$("#cmpTypeText").value="";
-  document.querySelectorAll("#cmpTabStart .startcard").forEach(c=>c.classList.remove("on"));
-  $("#cmpmodal").classList.add("show");
-  cmpShowTab("start");
-}
-// Start tab: "Type it" reveals the textarea; "Upload a document" triggers the file picker.
-$("#startType").onclick=()=>{
-  document.querySelectorAll("#cmpTabStart .startcard").forEach(c=>c.classList.toggle("on",c.id==="startType"));
-  $("#cmpTypeWrap").classList.remove("hidden");$("#cmpTypeText").focus();cmpShowTab("start");
-};
-$("#startUpload").onclick=()=>{
-  document.querySelectorAll("#cmpTabStart .startcard").forEach(c=>c.classList.toggle("on",c.id==="startUpload"));
-  $("#cmpTypeWrap").classList.add("hidden");cmpShowTab("start");
-  // hand off to the existing upload flow (opens the loading modal + parse-review).
-  $("#specfileinput").value="";$("#specfileinput").click();
-};
-// Typed spec → treat the text as the "extracted markdown" and go straight to
-// generating the concise spec (no parse-review step: there's nothing to parse).
-$("#cmptypecontinue").onclick=async()=>{
-  const txt=$("#cmpTypeText").value.trim();
-  if(!txt){$("#cmpmsg").textContent="Type a specification first.";return;}
-  $("#cmpmsg").textContent="";
-  $("#cmpTypeWrap").querySelectorAll(".err").forEach(e=>e.remove());
-  // A typed spec has no source document — flag it so no parse-review step is offered,
-  // and show a dedicated building loader (not the PDF/markdown split).
-  cmpState.typed=true;
-  $("#cmptypecontinue").disabled=true;
-  setBuildLoader(8,"Saving…","Storing your specification.");
-  cmpShowTab("building");
-  // Persist the typed text as a spec doc (so it has a token + can be reused/approved).
-  const b64=btoa(unescape(encodeURIComponent(txt)));
-  const [uok,d]=await jpost("/upload",{filename:"typed-spec.md",dataBase64:b64});
-  if(!uok){$("#cmptypecontinue").disabled=false;$("#cmpmsg").textContent="Could not save: "+((d&&d.error)||"");cmpShowTab("start");return;}
-  // wait for extraction (trivial for text) then generate the concise spec.
-  let sp=null;for(let i=0;i<20;i++){await sleep(800);const [o,r]=await jget("/specs/"+d.token);if(o&&r.status!=="PENDING"){sp=r;break;}}
-  $("#cmptypecontinue").disabled=false;
-  if(!sp||sp.status!=="READY"){$("#cmpmsg").textContent="Could not save the typed specification.";cmpShowTab("start");return;}
-  currentSpecToken=d.token;cmpState.token=d.token;cmpState.orig=sp.text||txt;cmpState.sp=sp;
-  // generate concise straight away, then land on Review & resolve.
-  setBuildLoader(20,"Generating specification…","Organising your text into reviewable rules.");
-  const est=setInterval(()=>{const n=Math.min(92,(cmpState._tp=(cmpState._tp||20)+2));setBuildLoader(n);},700);
-  const csp=await generateConcise(d.token);clearInterval(est);cmpState._tp=20;
-  if(!csp.ok){cmpShowTab("start");$("#cmpmsg").textContent="";conciseErrBox($("#cmpTypeWrap"),csp.error,()=>$("#cmptypecontinue").onclick());return;}
-  setBuildLoader(100,"Finalizing…","");
-  const [ok,sp2]=await jget("/specs/"+d.token);
-  if(ok){cmpState.sp=sp2;cmpState.concise=sp2.conciseSpec||"";cmpState.prov=sp2.conciseProvenance||null;cmpState.ambs=null;cmpState.orig=sp2.text||txt;}
-  cmpState._origRendDone=false;cmpState._origRawDone=false;
-  $("#cmpEdit").value=cmpFinalMarkdown();
-  renderConciseItems();
-  loadSavedSpecs();
-  cmpShowTab("review");
-};
 // The exact markdown that will be sent to the model: the concise spec with the
 // "Ambiguities" section rewritten into the human's resolved decisions.
 function cmpFinalMarkdown(){return foldAmbiguities(cmpState.concise,cmpState.ambs);}
 async function openCompareModal(token){
-  cmpState={token:token,orig:"",concise:"",prov:null,segs:[],activeSeg:0,ambs:null,approved:false,mdDirty:false,sp:null};
-  $("#cmpmsg").textContent="";$("#cmpItems").innerHTML="<div class=empty><span class=spinner></span> Loading…</div>";$("#cmpSegs").innerHTML="";$("#cmpbanner").innerHTML="";
-  $("#parseBanner").innerHTML="";$("#parseMdRendered").innerHTML="<div class=empty><span class=spinner></span> Loading…</div>";$("#parseMdRaw").innerHTML="";
+  cmpState={token:token,orig:"",concise:"",prov:null,segs:[],activeSeg:0,ambs:null,approved:false,mdDirty:false};
+  $("#cmpmsg").textContent="";
+  cmpShowTab("review");
+  $("#cmpItems").innerHTML="<div class=empty><span class=spinner></span> Loading…</div>";$("#cmpSegs").innerHTML="";$("#cmpbanner").innerHTML="";
   $("#cmpmodal").classList.add("show");
   const [ok,sp]=await jget("/specs/"+token);
   if(!ok){$("#cmpItems").innerHTML="<div class=empty>Could not load the spec.</div>";return;}
-  cmpState.sp=sp;
   cmpState.orig=sp.text||"";cmpState.concise=sp.conciseSpec||"";cmpState.prov=sp.conciseProvenance||null;
   cmpState.approved=!!sp.conciseApproved;
-  cmpState._origRawDone=false;cmpState._origRendDone=false;
-  // Extracted-markdown panes are rendered LAZILY (a large spec is expensive to
-  // render into multiple panes; only do it for the pane actually shown). See
-  // ensureCmpOrig() / setCmpOrigMode().
+  $("#cmpOrig").textContent=cmpState.orig;
   $("#cmporigcopy").innerHTML="";$("#cmporigcopy").appendChild(copyBtn(()=>cmpState.orig));
   // APPROVED → read-only viewer: rendered markdown + original, no editing/approval.
   if(cmpState.approved){ openApprovedSpecView(sp); return; }
-  $("#cmptitle").innerHTML="";const tw=el("span","iwrap");tw.appendChild(licon("blocks"));tw.appendChild(document.createTextNode(" Specification Builder — "+(sp.fileName||"")));$("#cmptitle").appendChild(tw);
+  $("#cmptitle").textContent="Specification Builder — "+(sp.fileName||"");
   $("#cmpapprovedbadge").classList.add("hidden");
   $("#cmpMdEditWrap").classList.remove("hidden");$("#cmpMdViewWrap").classList.add("hidden");
+  $("#cmpregen").classList.remove("hidden");$("#cmpapprove").classList.remove("hidden");$("#cmpcloseft").classList.add("hidden");
   $("#cmpEdit").value=cmpFinalMarkdown();
   $("#cmpMdEditcopy").innerHTML="";$("#cmpMdEditcopy").appendChild(copyBtn(()=>$("#cmpEdit").value));
-  // STEP 1: render the parse-review (original doc vs extracted markdown).
-  renderParseReview(sp);
   // verdict badge (LLM completeness/hallucination audit)
   const vb=$("#cmpverdict");vb.innerHTML="";
   const v=sp.conciseVerdict;
   if(v&&typeof v==="object"){
-    const ok2=(v.complete&&v.faithful);const b=el("span","vbadge "+(ok2?"ok":"warn"));const bw=el("span","iwrap");bw.appendChild(licon(ok2?"shield-check":"triangle-alert"));bw.appendChild(document.createTextNode(ok2?("Verified complete & faithful"+(v.score!=null?(" ("+Math.round(v.score*100)+"%)"):"")):"Issues flagged — review"));b.appendChild(bw);vb.appendChild(b);
-    if(!ok2){const issues=[].concat((v.missing||[]).map(m=>"Missing: "+m)).concat((v.hallucinated||[]).map(h=>"Hallucinated: "+h));
-      if(issues.length){const w=el("div","specwarn");w.style.marginTop="8px";const ul=el("ul");ul.style.cssText="margin:4px 0 0 18px;padding:0";issues.forEach(t=>{const li=el("li");li.textContent=t;ul.appendChild(li);});w.appendChild(ul);$("#cmpbanner").appendChild(w);}}
-  }
-  // GATE: the review/resolve step is only available once the concise spec is fully
-  // generated AND verified (ConciseStatus=READY — the verify pass runs inline before
-  // the server marks it READY). If a saved spec is opened while still PENDING (e.g.
-  // generation/verification is running in another tab), don't show a half-finished
-  // concise spec for review — show a waiting state on the parse tab and poll until
-  // it's READY, then render the review. This prevents reviewing before verification.
-  const haveConcise=!!(cmpState.concise&&cmpState.concise.trim());
-  const verified=(sp.conciseStatus==="READY");
-  if(sp.conciseError){const isErr=(sp.conciseStatus==="ERROR")||!cmpState.concise;
-    if(isErr){$("#cmpbanner").innerHTML="";conciseErrBox($("#cmpbanner"),sp.conciseError,()=>$("#cmpgenconcise").onclick());}
-    else{const w=el("div","specwarn");w.style.marginBottom="10px";w.textContent=sp.conciseError;$("#cmpbanner").insertBefore(w,$("#cmpbanner").firstChild);}}
-  const cf=$("#cmpconf");cf.innerHTML="";const c=(sp.confidence==null?1:+sp.confidence);cf.appendChild(el("span","confbadge "+confClass(c),"extraction "+Math.round(c*100)+"%"));
-  if(haveConcise&&verified){renderConciseItems();markParseStep(true);cmpShowTab("review");}
-  else if(sp.conciseStatus==="PENDING"){
-    // Still generating/verifying — POLL (do NOT re-POST /concise and restart a running
-    // job). Wait until READY/ERROR, then render review. Don't expose review yet.
-    markParseStep(true);showParseLoader("Verifying the specification…");setLoader(60,"Verifying the specification…","Checking the concise spec is complete and faithful before review.");cmpShowTab("parse");
-    const sp3=await pollConciseReady(token);
-    if(sp3&&sp3.conciseStatus==="READY"){cmpState.sp=sp3;cmpState.concise=sp3.conciseSpec||"";cmpState.prov=sp3.conciseProvenance||null;cmpState.orig=sp3.text||cmpState.orig;
-      renderConciseItems();markParseStep(true);cmpShowTab("review");}
-    else{$("#cmpbanner").innerHTML="";const w=el("div",(sp3&&sp3.conciseStatus==="ERROR")?"err":"specwarn");w.textContent=(sp3&&sp3.conciseError)||"The specification is still being prepared on the server. Reopen it shortly.";$("#cmpbanner").appendChild(w);cmpShowTab("parse");}
-  }
-  else{cmpShowTab("parse");}
-  icons();
-}
-// Open the Specification Builder INSTANTLY on the parse step in a loading state:
-// render the PDF immediately from the just-uploaded bytes (we have them client-side,
-// no server round-trip) and show a progress ring in the markdown pane while the
-// server extracts text. finishSpecLoading() swaps in the real markdown when ready.
-function openSpecLoadingModal(fileName,ext,bytes){
-  cmpState={token:null,orig:"",concise:"",prov:null,segs:[],activeSeg:0,ambs:null,approved:false,mdDirty:false,sp:null,loading:true};
-  $("#cmpmsg").textContent="";$("#cmpgatehint").textContent="";$("#cmpbanner").innerHTML="";$("#parseBanner").innerHTML="";$("#cmpverdict").innerHTML="";
-  $("#cmptitle").innerHTML="";const tw=el("span","iwrap");tw.appendChild(licon("blocks"));tw.appendChild(document.createTextNode(" Specification Builder — "+(fileName||"")));$("#cmptitle").appendChild(tw);
-  $("#cmpapprovedbadge").classList.add("hidden");
-  $("#parseDocName").textContent=fileName||"";
-  $("#parseConf").innerHTML="";$("#parseMdRaw").innerHTML="";cmpState._parseRawDone=false;
-  showParseLoader("Preparing…");
-  $("#cmpmodal").classList.add("show");
-  cmpShowTab("parse");
-  // render the original document straight from the in-memory bytes (instant).
-  renderOriginalDocFromBytes(fileName,ext,bytes);
-  icons();
-}
-// Once extraction is READY, fill the real state + markdown into the open modal.
-function finishSpecLoading(sp){
-  cmpState.loading=false;cmpState.sp=sp;
-  cmpState.token=sp.token;cmpState.orig=sp.text||"";cmpState.concise=sp.conciseSpec||"";cmpState.prov=sp.conciseProvenance||null;cmpState.approved=!!sp.conciseApproved;
-  cmpState._origRendDone=false;cmpState._origRawDone=false;cmpState._parseRawDone=false;
-  $("#cmporigcopy").innerHTML="";$("#cmporigcopy").appendChild(copyBtn(()=>cmpState.orig));
-  $("#cmpEdit").value=cmpFinalMarkdown();
-  $("#cmpMdEditcopy").innerHTML="";$("#cmpMdEditcopy").appendChild(copyBtn(()=>$("#cmpEdit").value));
-  // confidence + warnings
-  const c=(sp.confidence==null?1:+sp.confidence);
-  $("#parseConf").innerHTML="";$("#parseConf").appendChild(el("span","confbadge "+confClass(c),"extraction "+confLabel(c)+" ("+Math.round(c*100)+"%)"));
-  const warns=(sp.meta&&sp.meta.warnings)||[];$("#parseBanner").innerHTML="";
-  if(c<0.8||warns.length){const w=el("div","specwarn");const t=el("div");t.style.fontWeight="700";t.textContent="Check these before generating the specification:";w.appendChild(t);
-    const ul=el("ul");ul.style.cssText="margin:6px 0 0 18px;padding:0";(warns.length?warns:["Lower-confidence extraction — compare against the original carefully."]).forEach(x=>{const li=el("li");li.textContent=x;ul.appendChild(li);});w.appendChild(ul);$("#parseBanner").appendChild(w);}
-  // swap loader → rendered markdown (+ re-bind scroll sync now both panes have anchors)
-  $("#parseMdRendered").innerHTML=mdToHtml(cmpState.orig);
-  setParseMdMode("rendered");
-  bindParseScrollSync();
-  markParseStep(false);
-}
-// ---- STEP 1: parse-review (original document vs extracted markdown) ----------
-function markParseStep(done){
-  $("#pstepParse").classList.toggle("done",!!done);$("#pstepParse").classList.toggle("active",!done);
-  $("#pstepConcise").classList.toggle("active",!!done);
-}
-function renderParseReview(sp){
-  markParseStep(false);
-  // extraction confidence badge + warnings
-  const c=(sp.confidence==null?1:+sp.confidence);
-  $("#parseConf").innerHTML="";$("#parseConf").appendChild(el("span","confbadge "+confClass(c),"extraction "+confLabel(c)+" ("+Math.round(c*100)+"%)"));
-  const warns=(sp.meta&&sp.meta.warnings)||[];
-  $("#parseBanner").innerHTML="";
-  if(c<0.8||warns.length){const w=el("div","specwarn");const t=el("div");t.style.fontWeight="700";t.textContent="Check these before generating the specification:";w.appendChild(t);
-    const ul=el("ul");ul.style.cssText="margin:6px 0 0 18px;padding:0";(warns.length?warns:["Lower-confidence extraction — compare against the original carefully."]).forEach(x=>{const li=el("li");li.textContent=x;ul.appendChild(li);});w.appendChild(ul);$("#parseBanner").appendChild(w);}
-  // extracted markdown — rendered (default) + raw (raw built lazily on first toggle)
-  $("#parseDocName").textContent=sp.fileName||"";
-  $("#parseMdRendered").innerHTML=mdToHtml(cmpState.orig);
-  $("#parseMdRaw").innerHTML="";cmpState._parseRawDone=false;
-  setParseMdMode("rendered");
-  // original document pane (PDF.js → canvases; native embed fallback; text otherwise)
-  renderOriginalDoc(sp);
-}
-function setParseMdMode(mode){
-  if(mode==="raw"&&!cmpState._parseRawDone){$("#parseMdRaw").appendChild(linedBlock(cmpState.orig));cmpState._parseRawDone=true;}
-  // NB: use an explicit "block" (not "") — #parseMdRaw has a CSS `display:none` rule
-  // that an empty inline value would fall back to, hiding the raw view.
-  $("#parseMdRendered").style.display=mode==="rendered"?"block":"none";
-  $("#parseMdRaw").style.display=mode==="raw"?"block":"none";
-  [...$("#parseMdToggle").children].forEach(b=>b.classList.toggle("on",b.dataset.md===mode));
-}
-$("#parseMdToggle").querySelectorAll("button").forEach(b=>b.onclick=()=>setParseMdMode(b.dataset.md));
-// concise-review pane-3 rendered/raw toggle (extracted markdown) — rendered lazily.
-function setCmpOrigMode(mode){
-  if(mode==="rendered"&&!cmpState._origRendDone){$("#cmpOrigRendered").innerHTML=mdToHtml(cmpState.orig);cmpState._origRendDone=true;}
-  if(mode==="raw"&&!cmpState._origRawDone){$("#cmpOrig").textContent=cmpState.orig;cmpState._origRawDone=true;}
-  $("#cmpOrigRendered").style.display=mode==="rendered"?"block":"none";
-  $("#cmpOrig").style.display=mode==="raw"?"block":"none";
-  [...$("#cmpOrigToggle").children].forEach(b=>b.classList.toggle("on",b.dataset.md===mode));
-}
-$("#cmpOrigToggle").querySelectorAll("button").forEach(b=>b.onclick=()=>setCmpOrigMode(b.dataset.md));
-// Render the ORIGINAL uploaded document in the left parse pane. PDF → PDF.js page
-// canvases (so we can scroll-sync proportionally); if PDF.js is unavailable, native
-// <embed>; images → <img>; anything else → the extracted text as a fallback.
-// Decode base64 → Uint8Array (binary-safe; used for PDF.js + image/data-URL blobs).
-function b64ToBytes(b64){const bin=atob(b64||"");const n=bin.length;const u=new Uint8Array(n);for(let i=0;i<n;i++)u[i]=bin.charCodeAt(i);return u;}
-async function renderOriginalDoc(sp){
-  const pane=$("#parseDocPane");pane.innerHTML="<div class=docnote><span class=spinner></span> Loading original…</div>";
-  const ext=(sp.fileName||"").split(".").pop().toLowerCase();
-  const isImg=["png","jpg","jpeg","gif","webp"].includes(ext);
-  // The original is served as base64 JSON (survives the CSP charset layer intact).
-  let doc=null;try{const [ok,j]=await jget("/specs/"+sp.token+"/original");if(ok)doc=j;}catch(e){doc=null;}
-  if(!doc||!doc.dataBase64){
-    pane.innerHTML="";const n=el("div","docnote");n.textContent="The original document isn't stored for this specification (it was uploaded before original-document capture was enabled). Review the extracted markdown on the right against your source file directly.";pane.appendChild(n);
-    return;
-  }
-  const bytes=b64ToBytes(doc.dataBase64);
-  await renderOriginalDocFromBytes(sp.fileName,ext,bytes,doc.mime);
-}
-// Shared renderer: draw the original document into the parse pane from raw bytes.
-// Used both by the instant upload path (bytes in hand) and the re-open path (fetched).
-async function renderOriginalDocFromBytes(fileName,ext,bytes,mime){
-  const pane=$("#parseDocPane");
-  ext=(ext||(fileName||"").split(".").pop()||"").toLowerCase();
-  const isImg=["png","jpg","jpeg","gif","webp"].includes(ext);
-  if(isImg){pane.innerHTML="";const blob=new Blob([bytes],{type:mime||"image/png"});const img=el("img");img.src=URL.createObjectURL(blob);pane.appendChild(img);return;}
-  if(ext==="pdf"){
-    try{
-      const lib=await ensurePdfJs();
-      const pdf=await lib.getDocument({data:bytes}).promise;
-      pane.innerHTML="";
-      for(let p=1;p<=pdf.numPages;p++){
-        // Each page lives in a data-page wrapper so the markdown's "## Page N" anchors
-        // can be aligned to it for accurate, non-jumpy scroll sync.
-        const pg=el("div","pdfpage");pg.dataset.page=String(p);
-        const lbl=el("div","pageno","Page "+p);pg.appendChild(lbl);
-        const cv=el("canvas");pg.appendChild(cv);pane.appendChild(pg);
-        const page=await pdf.getPage(p);
-        const vp=page.getViewport({scale:1.3});
-        cv.width=vp.width;cv.height=vp.height;
-        await page.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
-      }
-      bindParseScrollSync();
-      return;
-    }catch(e){
-      pane.innerHTML="";const blob=new Blob([bytes],{type:"application/pdf"});const emb=el("embed");emb.type="application/pdf";emb.src=URL.createObjectURL(blob);pane.appendChild(emb);
-      const note=el("div","docnote");note.textContent="Showing the PDF in the browser viewer (synced scrolling unavailable).";pane.appendChild(note);
-      return;
+    const ok2=(v.complete&&v.faithful);
+    const b=el("span","vbadge "+(ok2?"ok":"warn"),ok2?("✓ LLM-verified complete & faithful"+(v.score!=null?(" ("+Math.round(v.score*100)+"%)"):"")):"⚠ LLM flagged issues — review");
+    vb.appendChild(b);
+    if(!ok2){
+      const issues=[].concat((v.missing||[]).map(m=>"Missing: "+m)).concat((v.hallucinated||[]).map(h=>"Hallucinated: "+h));
+      if(issues.length){const w=el("div","specwarn");w.style.marginTop="8px";const ul=el("ul");ul.style.cssText="margin:4px 0 0 18px;padding:0";issues.forEach(t=>{const li=el("li");li.textContent=t;ul.appendChild(li);});w.appendChild(ul);$("#cmpbanner").appendChild(w);}
     }
   }
-  // docx / other: no inline render — show the extracted text as the comparison.
-  pane.innerHTML="";const wrap=el("div");wrap.style.cssText="background:#fff;border-radius:6px;width:100%;height:100%;overflow:auto";
-  wrap.appendChild(linedBlock(cmpState.orig));pane.appendChild(wrap);
-  const note=el("div","docnote");note.textContent="This format ("+ext+") can't be previewed inline; showing the extracted text for comparison.";pane.appendChild(note);
+  renderConciseItems();
+  // Surface a concise-generation error/warning in the persistent banner (not the
+  // rule pane, which is rebuilt on every segment switch).
+  if(sp.conciseError){
+    const isErr=(sp.conciseStatus==="ERROR")||!cmpState.concise;
+    const w=el("div",isErr?"err":"specwarn");w.style.marginBottom="10px";
+    w.textContent=(isErr?"✗ ":"⚠ ")+sp.conciseError;
+    $("#cmpbanner").insertBefore(w,$("#cmpbanner").firstChild);
+  }
+  // confidence on the concise pane header
+  const cf=$("#cmpconf");cf.innerHTML="";const c=(sp.confidence==null?1:+sp.confidence);
+  cf.appendChild(el("span","confbadge "+confClass(c),"extraction "+Math.round(c*100)+"%"));
 }
-// PAGE-ANCHORED scroll-sync between the PDF pane and the rendered-markdown pane.
-// Both sides expose per-page anchors (the PDF: .pdfpage[data-page]; the markdown:
-// h*[data-page] from the "## Page N" headings). On scroll we find which page the
-// source is currently showing and the fraction through it, then place the other
-// pane at the same fraction of the same page. This is accurate (pages line up) and
-// smooth: updates are throttled to one per animation frame and a short lock prevents
-// the programmatic scroll from echoing back. Falls back to proportional if a side
-// has no page anchors.
-function bindParseScrollSync(){
-  const docPane=$("#parseDocPane");
-  const mdPane=$("#parseMdRendered").parentElement; // the scrollable .pbody
-  if(!docPane||!mdPane)return;
-  // Build sorted [page -> {top, h}] maps for each pane, where `top` is the anchor's
-  // offset within the SCROLL CONTAINER's content. NB: node.offsetTop is relative to
-  // the offsetParent (e.g. the inner .plan/markdown wrapper), NOT the scroll
-  // container — using it put the markdown anchors at the wrong origin (page 3 at the
-  // top of the PDF lined up with page 3 at the bottom of the markdown). Use rect math
-  // (node top − container top + current scrollTop) so both sides share one origin.
-  function anchorMap(container,nodes){
-    const cTop=container.getBoundingClientRect().top;const cScroll=container.scrollTop;
-    const map=[];nodes.forEach(n=>{const pg=+n.dataset.page;if(!pg)return;
-      const top=n.getBoundingClientRect().top-cTop+cScroll;
-      map.push({page:pg,top:top});});
-    map.sort((x,y)=>x.top-y.top);
-    // attach height = next.top - top (last = remaining scrollable)
-    for(let i=0;i<map.length;i++){const next=map[i+1];map[i].h=(next?next.top:container.scrollHeight)-map[i].top;}
-    return map;
-  }
-  function maps(){
-    return {doc:anchorMap(docPane,docPane.querySelectorAll(".pdfpage[data-page]")),
-            md:anchorMap(mdPane,mdPane.querySelectorAll("[data-page]"))};
-  }
-  let m=maps();
-  // Recompute on resize (canvas layout / pane width changes).
-  if(docPane._ro)docPane._ro.disconnect();
-  try{docPane._ro=new ResizeObserver(()=>{m=maps();});docPane._ro.observe(docPane);docPane._ro.observe(mdPane);}catch(e){}
-  // The anchor at/above the current scroll position = the page whose TOP the viewer
-  // is currently showing.
-  const findPage=(map,scrollTop)=>{if(!map.length)return null;let cur=map[0];
-    for(const e of map){if(e.top<=scrollTop+4)cur=e;else break;}return cur;};
-  // Suppress ONLY the echo: when we programmatically set dst.scrollTop it fires a
-  // scroll event on dst — we tag dst as the echo target and ignore that one event,
-  // so the pane the user is actively scrolling is NEVER blocked (the old global time
-  // lock blocked the driver too, which is why the destination lagged/landed off).
-  let echoEl=null,raf=null;
-  function sync(src,srcMap,dst,dstMap){
-    if(src===echoEl){echoEl=null;return;}
-    if(raf)cancelAnimationFrame(raf);
-    raf=requestAnimationFrame(()=>{raf=null;
-      let target;
-      if(!srcMap.length||!dstMap.length){const sr=src.scrollHeight-src.clientHeight,dr=dst.scrollHeight-dst.clientHeight;target=sr>0?(src.scrollTop/sr)*dr:0;}
-      else{
-        const sp=findPage(srcMap,src.scrollTop);
-        const frac=sp.h>0?Math.min(1,Math.max(0,(src.scrollTop-sp.top)/sp.h)):0;
-        const dp=dstMap.find(e=>e.page===sp.page)||dstMap[dstMap.length-1];
-        target=dp.top+frac*dp.h;
-      }
-      if(Math.abs(dst.scrollTop-target)<1)return;   // nothing to do (avoids a stale echo flag)
-      echoEl=dst;dst.scrollTop=target;
-    });
-  }
-  if(docPane._ps)docPane.removeEventListener("scroll",docPane._ps);
-  if(mdPane._ps)mdPane.removeEventListener("scroll",mdPane._ps);
-  docPane._ps=()=>sync(docPane,m.doc,mdPane,m.md);
-  mdPane._ps=()=>sync(mdPane,m.md,docPane,m.doc);
-  docPane.addEventListener("scroll",docPane._ps,{passive:true});
-  mdPane.addEventListener("scroll",mdPane._ps,{passive:true});
-}
-// Generate the concise specification from the (reviewed) extracted markdown, then
-// move to step 2 (Review & resolve).
-$("#cmpgenconcise").onclick=async()=>{
-  if(!cmpState.token)return;
-  $("#cmpgenconcise").disabled=true;const stopT=elapsedTicker($("#cmpgenconcise"),"Generating specification…");
-  const csp=await generateConcise(cmpState.token);
-  stopT();$("#cmpgenconcise").disabled=false;$("#cmpgenconcise").innerHTML="";const gw=el("span","iwrap");gw.appendChild(licon("wand-sparkles"));gw.appendChild(document.createTextNode(" Looks right — generate specification"));$("#cmpgenconcise").appendChild(gw);icons();
-  if(!csp.ok){$("#parseBanner").innerHTML="";conciseErrBox($("#parseBanner"),csp.error,()=>$("#cmpgenconcise").onclick());return;}
-  // reload state + render the resolve view
-  const [ok,sp]=await jget("/specs/"+cmpState.token);
-  if(ok){cmpState.sp=sp;cmpState.concise=sp.conciseSpec||"";cmpState.prov=sp.conciseProvenance||null;cmpState.ambs=null;}
-  $("#cmpEdit").value=cmpFinalMarkdown();
-  renderConciseItems();markParseStep(true);
-  if(csp.conciseError){const w=el("div","specwarn");w.style.marginBottom="10px";w.textContent=csp.conciseError;$("#cmpbanner").innerHTML="";$("#cmpbanner").appendChild(w);}
-  cmpShowTab("review");
-};
 // Read-only view for an ALREADY-APPROVED specification: the final markdown
 // (rendered) beside the original. No resolution, edit, regenerate or approve —
 // an approved spec is locked. Opens straight on the markdown tab.
 function openApprovedSpecView(sp){
-  $("#cmptitle").innerHTML="";const tw=el("span","iwrap");tw.appendChild(licon("blocks"));tw.appendChild(document.createTextNode(" Specification — "+(sp.fileName||"")));$("#cmptitle").appendChild(tw);
+  $("#cmptitle").textContent="Specification — "+(sp.fileName||"");
   $("#cmpapprovedbadge").classList.remove("hidden");
   $("#cmpverdict").innerHTML="";$("#cmpbanner").innerHTML="";
+  // hide all editing/approval controls
+  $("#cmpregen").classList.add("hidden");$("#cmpapprove").classList.add("hidden");$("#cmpcloseft").classList.remove("hidden");
   $("#cmpgatehint").textContent="";$("#cmpmsg").textContent="";
-  // force the markdown view; cmpShowTab handles hiding the parse/review tabs + footer.
+  // disable the Review tab (no resolution on a locked spec) and force markdown tab
   $("#cmpMdEditWrap").classList.add("hidden");$("#cmpMdViewWrap").classList.remove("hidden");
   const md=cmpState.concise||"(no specification)";
   $("#cmpMdView").innerHTML=mdToHtml(md);
   $("#cmpMdcopy").innerHTML="";$("#cmpMdcopy").appendChild(copyBtn(()=>md));
-  $("#cmpMdOrig").innerHTML=mdToHtml(cmpState.orig);
+  $("#cmpMdOrig").textContent=cmpState.orig;
   $("#cmpMdOrigcopy").innerHTML="";$("#cmpMdOrigcopy").appendChild(copyBtn(()=>cmpState.orig));
-  cmpShowTab("markdown");icons();
+  cmpShowTab("markdown");
 }
 // Render arbitrary text as a numbered, line-by-line monospace listing (each source
 // line gets its own row with a line number), so a raw / partial LLM reply can be
@@ -1820,12 +1132,12 @@ function renderConciseItems(){
   // Initialise resolution state once per open (keep prior answers on re-render).
   const ambs=(prov.ambiguities||[]).map(a=>{
     if(a&&typeof a==="object"){
-      return {q:String(a.question||a.q||""),options:(a.options||[]).map(o=>String(o)).filter(Boolean),segment:String(a.segment||a.group||"")};
+      return {q:String(a.question||a.q||""),options:(a.options||[]).map(o=>String(o)).filter(Boolean)};
     }
-    return {q:String(a),options:[],segment:""};
+    return {q:String(a),options:[]};
   }).filter(a=>a.q.trim()!=="");
   if(!cmpState.ambs||cmpState.ambs.length!==ambs.length){
-    cmpState.ambs=ambs.map(a=>({q:a.q,options:a.options,segment:a.segment,status:"open",answer:"",choice:null}));
+    cmpState.ambs=ambs.map(a=>({q:a.q,options:a.options,status:"open",answer:"",choice:null}));
   }
   // Build the segment menu — one entry per group, with a rule count.
   segBox.innerHTML="";
@@ -1839,7 +1151,7 @@ function renderConciseItems(){
   // Ambiguities pseudo-segment at the bottom of the menu (only if any exist).
   if(cmpState.ambs.length){
     const a=el("div","segitem amb");a.id="ambMenuItem";
-    const aw=el("span","iwrap");aw.appendChild(licon("triangle-alert"));aw.appendChild(document.createTextNode(" Ambiguities"));a.appendChild(aw);
+    a.appendChild(el("span",null,"⚠ Ambiguities"));
     a.appendChild(el("span","segcount","0"));
     a.onclick=()=>selectAmbiguities();
     segBox.appendChild(a);
@@ -1847,11 +1159,11 @@ function renderConciseItems(){
   refreshAmbMenu();
   // Open the first segment by default (or ambiguities if that's all there is).
   if(prov.groups.length)selectSegment(0); else if(cmpState.ambs.length)selectAmbiguities();
-  updateApproveGate();icons();
+  updateApproveGate();
 }
 // Count of still-open ambiguities (must be 0 to approve).
 function ambOpenCount(){return (cmpState.ambs||[]).filter(a=>a.status==="open").length;}
-// Update the Ambiguities menu badge + done state.
+// Update the ⚠ Ambiguities menu badge + done state.
 function refreshAmbMenu(){
   const m=$("#ambMenuItem");if(!m)return;
   const open=ambOpenCount();
@@ -1864,7 +1176,7 @@ function updateApproveGate(){
   btn.disabled=(open>0);
   btn.title=open>0?("Resolve "+open+" ambiguit"+(open===1?"y":"ies")+" before approving"):"";
   const hint=$("#cmpgatehint");
-  if(hint)hint.textContent=open>0?(open+" ambiguit"+(open===1?"y":"ies")+" must be resolved before approval"):"";
+  if(hint)hint.textContent=open>0?("⚠ "+open+" ambiguit"+(open===1?"y":"ies")+" must be resolved before approval"):"";
 }
 // Render the ambiguity-resolution list in the middle pane. Each open ambiguity
 // offers the LLM's concrete resolution OPTIONS as radio choices, plus a "Custom"
@@ -1884,19 +1196,6 @@ function selectAmbiguities(){
     q.appendChild(tag);q.appendChild(document.createTextNode(a.q));row.appendChild(q);
     if(a.status==="open"){
       const grp="amb"+i;
-      // Which segment this decision gets filed under (defaults to the LLM-tagged one).
-      const groupTitles=(cmpState.segs||[]).map(g=>g.type||"General");
-      const segRow=el("div");segRow.style.cssText="display:flex;align-items:center;gap:8px;margin:0 0 9px;font-size:11.5px;color:var(--muted)";
-      segRow.appendChild(el("span",null,"File this decision under:"));
-      const segSel=el("select");segSel.style.cssText="width:auto;max-width:260px;padding:5px 8px;font-size:12px";
-      groupTitles.forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t;segSel.appendChild(o);});
-      if(!groupTitles.length){const o=document.createElement("option");o.value="";o.textContent="(no segments)";segSel.appendChild(o);}
-      // preselect: the LLM segment if it matches a group, else first group
-      const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
-      const match=groupTitles.find(t=>norm(t)===norm(a.segment))||groupTitles.find(t=>norm(t).includes(norm(a.segment))&&a.segment)||groupTitles[0]||"";
-      segSel.value=match;a.segment=match;
-      segSel.onchange=()=>{a.segment=segSel.value;};
-      segRow.appendChild(segSel);row.appendChild(segRow);
       const opts=el("div","ambopts");
       const customTa=el("textarea");customTa.placeholder="Describe how this should be handled — added to the specification.";customTa.value=(a.choice==="__custom__")?(a.answer||""):"";
       // One radio per LLM-suggested option.
@@ -1922,7 +1221,7 @@ function selectAmbiguities(){
       opts.appendChild(clab);
       row.appendChild(opts);
       const acts=el("div","ambacts");
-      const res=el("button","ok");res.appendChild(licon("check"));res.appendChild(document.createTextNode(" Resolve"));
+      const res=el("button","ok","✓ Resolve");
       res.onclick=()=>{
         if(a.choice==null){$("#cmpmsg").textContent="Pick an option (or choose Custom and type an answer) before resolving.";return;}
         if(a.choice==="__custom__"&&!customTa.value.trim()){$("#cmpmsg").textContent="Type your custom answer before resolving.";return;}
@@ -1932,14 +1231,13 @@ function selectAmbiguities(){
       const dis=el("button","ghost","Dismiss (not applicable)");dis.onclick=()=>{a.status="dismissed";selectAmbiguities();refreshAmbMenu();updateApproveGate();};
       acts.appendChild(res);acts.appendChild(dis);row.appendChild(acts);
     } else {
-      const st=el("div","ambstate",a.status==="resolved"?("Decision: "+a.answer+(a.segment?(" — filed under "+a.segment):"")):"Dismissed as not applicable.");row.appendChild(st);
+      const st=el("div","ambstate",a.status==="resolved"?("Decision: "+a.answer):"Dismissed as not applicable.");row.appendChild(st);
       const acts=el("div","ambacts");
       const edit=el("button","ghost","Reopen");edit.onclick=()=>{a.status="open";selectAmbiguities();refreshAmbMenu();updateApproveGate();};
       acts.appendChild(edit);row.appendChild(acts);
     }
     box.appendChild(row);
   });
-  icons();
 }
 // Show the rules for segment index i in the middle pane.
 function selectSegment(i){
@@ -1957,7 +1255,7 @@ function selectSegment(i){
     else if(!hasSrc)rule.appendChild(el("span","ci-tag no","no source"));
     r.appendChild(rule);
     if(hasSrc){
-      const q=el("div","ci-src");q.appendChild(el("span","ci-srclbl","source: "));q.appendChild(el("span",null,"“"+item.sourceQuote+"”"));r.appendChild(q);
+      const q=el("div","ci-src");q.appendChild(el("span","ci-srclbl","source ⮕ "));q.appendChild(el("span",null,"“"+item.sourceQuote+"”"));r.appendChild(q);
     }
     // Click a rule to scroll+highlight its source on the right. (Click-only — the
     // old hover handler rebuilt the whole original-spec DOM on every mousemove,
@@ -1966,57 +1264,27 @@ function selectSegment(i){
     box.appendChild(r);
   });
 }
-// Which extracted-markdown view is currently shown in pane 3.
-function cmpOrigMode(){const b=$("#cmpOrigToggle").querySelector("button.on");return b?b.dataset.md:"rendered";}
-// Highlight + scroll to the source snippet of a concise item in pane 3, in WHICHEVER
-// view the user is currently looking at (rendered markdown or raw text).
+// Highlight + scroll to the source snippet of a concise item in the ORIGINAL pane.
 function locateSource(quote){
-  const cont=$("#cmpOrigBody");const orig=cmpState.orig;
-  if(!quote||String(quote).trim()===""){$("#cmpmsg").textContent="This item was inferred — no direct source in the original.";return;}
+  const pane=$("#cmpOrig");const cont=$("#cmpOrigBody");const orig=cmpState.orig;
+  if(!quote||String(quote).trim()===""){pane.textContent=orig;$("#cmpmsg").textContent="This item was inferred — no direct source in the original.";return;}
   $("#cmpmsg").textContent="";
+  // Match on the first line of the quote (quotes can span lines / be truncated).
   const firstLine=String(quote).split(/\r?\n/)[0].trim();
   let needle=firstLine.slice(0,50).toLowerCase();
-  if(cmpOrigMode()==="raw"){
-    const pane=$("#cmpOrig");let idx=needle?orig.toLowerCase().indexOf(needle):-1;
-    if(idx<0){needle=String(quote).slice(0,40).toLowerCase();idx=orig.toLowerCase().indexOf(needle);}
-    pane.innerHTML="";
-    if(idx<0){pane.textContent=orig;$("#cmpmsg").textContent="Source not found verbatim (it may be paraphrased or split across pages).";return;}
-    const end=idx+needle.length;
-    pane.appendChild(document.createTextNode(orig.slice(0,idx)));
-    const hi=el("span","cmphi",orig.slice(idx,end));pane.appendChild(hi);
-    pane.appendChild(document.createTextNode(orig.slice(end)));
-    const hiRect=hi.getBoundingClientRect();const contRect=cont.getBoundingClientRect();
-    cont.scrollTop=cont.scrollTop+(hiRect.top-contRect.top)-16;
-  }else{
-    // Rendered view: find the descendant element whose text contains the snippet,
-    // scroll it into view and flash a highlight on it.
-    scrollRenderedToText($("#cmpOrigRendered"),cont,needle,quote);
-  }
-}
-// Find the deepest element under root whose textContent contains the needle, scroll
-// it to the top of cont, and briefly highlight it. Used for rendered-markdown panes.
-function scrollRenderedToText(root,cont,needle,quote){
-  if(!root||!cont)return;
-  root.querySelectorAll(".cmphi-flash").forEach(e=>e.classList.remove("cmphi-flash"));
-  let n2=needle;let target=findTextEl(root,n2);
-  if(!target){n2=String(quote).slice(0,30).toLowerCase();target=findTextEl(root,n2);}
-  if(!target){$("#cmpmsg").textContent="Source not found verbatim (it may be paraphrased or split across pages).";return;}
-  const tr=target.getBoundingClientRect();const cr=cont.getBoundingClientRect();
-  cont.scrollTop=cont.scrollTop+(tr.top-cr.top)-16;
-  target.classList.add("cmphi-flash");
-}
-function findTextEl(root,needle){
-  if(!needle)return null;
-  const walker=document.createTreeWalker(root,NodeFilter.SHOW_ELEMENT,null);
-  let best=null;let node=walker.currentNode;
-  while(node){
-    // a leaf-ish element (no child elements, or a list item / cell / heading / para)
-    if((node.textContent||"").toLowerCase().includes(needle)){
-      if(!node.children.length||/^(LI|TD|TH|P|H1|H2|H3|H4|H5|H6|CODE|STRONG|EM)$/.test(node.tagName))best=node;
-    }
-    node=walker.nextNode();
-  }
-  return best;
+  let idx=needle?orig.toLowerCase().indexOf(needle):-1;
+  if(idx<0){needle=String(quote).slice(0,40).toLowerCase();idx=orig.toLowerCase().indexOf(needle);}
+  pane.innerHTML="";
+  if(idx<0){pane.textContent=orig;$("#cmpmsg").textContent="Source not found verbatim (it may be paraphrased or split across pages).";return;}
+  const end=idx+needle.length;
+  pane.appendChild(document.createTextNode(orig.slice(0,idx)));
+  const hi=el("span","cmphi",orig.slice(idx,end));pane.appendChild(hi);
+  pane.appendChild(document.createTextNode(orig.slice(end)));
+  // Scroll the ORIGINAL pane so the highlight sits ~16px below the top. Use rect
+  // math (highlight top relative to the scroll container) so it lands accurately
+  // regardless of the highlight's offsetParent — offsetTop was the misalignment.
+  const hiRect=hi.getBoundingClientRect();const contRect=cont.getBoundingClientRect();
+  cont.scrollTop=cont.scrollTop+(hiRect.top-contRect.top)-16;
 }
 // Once the user manually edits the markdown, stop auto-regenerating it from the
 // resolutions (their edits become the authority).
@@ -2027,45 +1295,22 @@ $("#cmpmodal").onclick=(e)=>{if(e.target===$("#cmpmodal"))$("#cmpmodal").classLi
 $("#cmpregen").onclick=async()=>{if(!cmpState.token)return;$("#cmpregen").disabled=true;
   const stopT=elapsedTicker($("#cmpregen"),"Regenerating…");
   const csp=await generateConcise(cmpState.token);
-  stopT();$("#cmpregen").disabled=false;$("#cmpregen").innerHTML="";{const w=el("span","iwrap");w.appendChild(licon("refresh-cw"));w.appendChild(document.createTextNode(" Regenerate"));$("#cmpregen").appendChild(w);icons();}
+  stopT();$("#cmpregen").disabled=false;$("#cmpregen").textContent="↻ Regenerate";
   if(!csp.ok){$("#cmpmsg").textContent="Regenerate failed: "+(csp.error||"");return;}
   openCompareModal(cmpState.token);};
-// Fold the human's resolved ambiguity decisions BACK INTO the concise markdown,
-// each under its CORRESPONDING segment (## group header) rather than a separate
-// section. The "## Ambiguities…" section (open questions) is removed so the spec the
-// LLM plans from carries answers in place. A decision's target segment comes from the
-// ambiguity's `segment` field (set by the LLM); if absent/unmatched we try to infer
-// it from a group title appearing in the question, else drop it under "## Other
-// decisions" at the end.
+// Rewrite the concise markdown's "## Ambiguities…" section into the human's
+// resolved decisions (Q → decision) and drop dismissed/open questions, so the
+// stored spec the LLM plans from contains answers, never open questions.
 function foldAmbiguities(md,ambs){
   let body=String(md||"");
-  body=body.replace(/\n*##\s*(ambiguit|resolved decision|other decision)[^\n]*\n[\s\S]*?(?=\n##\s|$)/i,"").replace(/\s+$/,"");
+  // Strip any existing "## Ambiguit…" / "## Resolved decisions" section (to end or
+  // next H2). Heading match is case-insensitive and tolerant of trailing text.
+  body=body.replace(/\n*##\s*(ambiguit|resolved decision)[^\n]*\n[\s\S]*?(?=\n##\s|$)/i,"").replace(/\s+$/,"");
   const resolved=(ambs||[]).filter(a=>a.status==="resolved");
-  if(!resolved.length)return body+"\n";
-  const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
-  // Split the body into H2 sections (preserving any preamble before the first header).
-  const lines=body.split("\n");
-  const sections=[];let cur={head:null,title:"",lines:[]};
-  for(const ln of lines){const h=ln.match(/^##\s+(.*)$/);
-    if(h){sections.push(cur);cur={head:ln,title:h[1],lines:[]};}else cur.lines.push(ln);}
-  sections.push(cur);
-  const headed=sections.filter(s=>s.head);
-  const bullet=a=>"- **Decision:** "+a.q.replace(/\s+$/,"")+" → **"+a.answer.replace(/\s+/g," ").trim()+"**";
-  const leftover=[];
-  resolved.forEach(a=>{
-    const seg=norm(a.segment);let sec=null;
-    if(seg){
-      sec=headed.find(s=>norm(s.title)===seg)
-        ||headed.find(s=>norm(s.title).includes(seg)||seg.includes(norm(s.title)));
-    }
-    // fallback: a group title that appears in the question text
-    if(!sec){const q=norm(a.q);sec=headed.find(s=>{const t=norm(s.title);return t.length>=3&&q.includes(t);});}
-    if(sec){while(sec.lines.length&&sec.lines[sec.lines.length-1].trim()==="")sec.lines.pop();sec.lines.push(bullet(a));}
-    else leftover.push(a);
-  });
-  let out=sections.map(s=>(s.head?s.head+"\n":"")+s.lines.join("\n")).join("\n").replace(/\s+$/,"");
-  if(leftover.length){out+="\n\n## Other decisions\n"+leftover.map(bullet).join("\n");}
-  return out+"\n";
+  if(resolved.length){
+    body+="\n\n## Resolved decisions\n"+resolved.map(a=>"- "+a.q.replace(/\s+$/,"")+" → **"+a.answer.replace(/\s+/g," ").trim()+"**").join("\n");
+  }
+  return body+"\n";
 }
 $("#cmpapprove").onclick=async()=>{if(!cmpState.token)return;
   // GATE: every ambiguity must be resolved or dismissed first — an open question
@@ -2082,44 +1327,24 @@ $("#cmpapprove").onclick=async()=>{if(!cmpState.token)return;
   const edited=cmpState.mdDirty?$("#cmpEdit").value:foldAmbiguities(cmpState.concise,cmpState.ambs);
   $("#cmpapprove").innerHTML='<span class=spinner></span> Approving…';$("#cmpapprove").disabled=true;
   const [ok,sp]=await jpost("/specs/"+cmpState.token+"/approve-concise",{conciseSpec:edited});
-  $("#cmpapprove").disabled=false;$("#cmpapprove").innerHTML="";{const w=el("span","iwrap");w.appendChild(licon("check"));w.appendChild(document.createTextNode(" Approve specification"));$("#cmpapprove").appendChild(w);icons();}
+  $("#cmpapprove").disabled=false;$("#cmpapprove").textContent="✓ Approve specification";
   if(!ok){$("#cmpmsg").textContent="Approve failed: "+(sp.error||"");return;}
   $("#cmpmodal").classList.remove("show");
-  // The approved spec is now the active one for the build. Point the form at it and
-  // reflect "ready" in the left panel (whichever source the user is on).
-  currentSpecToken=cmpState.token;savedReady=cmpState.orig||edited;
+  if($("#savedspec").value===cmpState.token||currentSpecToken===cmpState.token){$("#savedspec").value=cmpState.token;}
   loadSavedSpecs();
-  const tok=cmpState.token;
-  if(specSrc()==="saved"){$("#savedspec").value=tok;const ev=new Event("change");$("#savedspec").dispatchEvent(ev);}
-  else{
-    const s=$("#specNewStatus");s.innerHTML="";
-    const ok2=el("span","iwrap");ok2.style.color="var(--iris-green-700)";ok2.style.fontWeight="600";
-    ok2.appendChild(licon("check-circle-2"));ok2.appendChild(document.createTextNode(" Specification approved and ready to generate."));
-    const link=el("a",null,"View / edit");link.href="#";link.style.marginLeft="8px";link.style.fontWeight="600";link.onclick=(e)=>{e.preventDefault();openCompareModal(tok);};
-    ok2.appendChild(link);s.appendChild(ok2);icons();
-  }
+  // refresh the saved-spec info line if that spec is selected
+  if(currentSpecToken===cmpState.token){const ev=new Event("change");$("#savedspec").dispatchEvent(ev);}
 };
 
 // ---- input list ------------------------------------------------------------
-function addInput(val=""){const box=$("#inputs");const wrap=el("div","ex");const ph=el("div","ph");ph.appendChild(el("b",null,"Input message"));const ptag=el("span","tagp","primary");ph.appendChild(ptag);const rm=el("button","rm");rm.appendChild(licon("x"));rm.title="Remove";rm.onclick=()=>{wrap.remove();renumber()};ph.appendChild(rm);wrap.appendChild(ph);const ta=el("textarea");ta.placeholder="Example input HL7 v2 message…";ta.value=val;wrap.appendChild(ta);box.appendChild(wrap);renumber();icons();}
+function addInput(val=""){const box=$("#inputs");const wrap=el("div","ex");const ph=el("div","ph");ph.appendChild(el("b",null,"Input message"));const ptag=el("span","tagp","primary");ph.appendChild(ptag);const rm=el("button","rm","✕");rm.onclick=()=>{wrap.remove();renumber()};ph.appendChild(rm);wrap.appendChild(ph);const ta=el("textarea");ta.placeholder="Example input HL7 v2 message…";ta.value=val;wrap.appendChild(ta);box.appendChild(wrap);renumber();}
 function renumber(){[...document.querySelectorAll("#inputs .ex")].forEach((p,i)=>{p.querySelector("b").textContent="Input "+(i+1);p.querySelector(".tagp").style.display=i===0?"":"none";});}
 function collectInputs(){return [...document.querySelectorAll("#inputs .ex textarea")].map(t=>t.value).filter(v=>v.trim());}
 $("#addinput").onclick=()=>addInput();
 
 // ---- provider / model / key ------------------------------------------------
 const LS_KEY="iscdtl.apikey",LS_REM="iscdtl.remember",LS_MODEL="iscdtl.model",LS_REGION="iscdtl.bedrockregion",
-      LS_PROVIDER="iscdtl.provider",LS_MAXATT="iscdtl.maxattempts",LS_COSTCAP="iscdtl.costcap",
-      LS_SHOWMSG="iscdtl.showmessages",LS_SHOWHIST="iscdtl.showhistory",LS_CONCISEMODEL="iscdtl.concisemodel";
-// Show/hide the advanced (LLM messages, History) tabs based on the Settings toggles.
-// Hidden by default; persisted in localStorage. If the active tab gets hidden, fall
-// back to Progress so the user is never left on a now-hidden view.
-function applyAdvancedTabs(){
-  const showMsg=$("#showmessages").checked,showHist=$("#showhistory").checked;
-  $("#rtab-messages").classList.toggle("hidden",!showMsg);
-  $("#rtab-history").classList.toggle("hidden",!showHist);
-  const active=document.querySelector(".rtab.active");
-  if(active&&((active.dataset.view==="messages"&&!showMsg)||(active.dataset.view==="history"&&!showHist)))showView("progress");
-}
+      LS_PROVIDER="iscdtl.provider",LS_MAXATT="iscdtl.maxattempts",LS_COSTCAP="iscdtl.costcap";
 // Preferred default model per provider when the user hasn't picked one yet.
 const BEDROCK_DEFAULT_MODEL="global.anthropic.claude-opus-4-8";
 const provider=()=>$("#provider").value;
@@ -2151,29 +1376,9 @@ function syncQuickModel(){
   qm.value=src.value;
 }
 let modelsLoaded=false;
-function setModelEnabled(on,placeholder){const m=$("#model");m.disabled=!on;const cm=$("#concisemodel");if(cm)cm.disabled=!on;
-  if(!on){m.innerHTML="<option value=\"\">"+(placeholder||"Enter a valid API key")+"</option>";if(cm)cm.innerHTML="<option value=\"\">"+(placeholder||"Enter a valid API key")+"</option>";modelsLoaded=false;}
+function setModelEnabled(on,placeholder){const m=$("#model");m.disabled=!on;
+  if(!on){m.innerHTML="<option value=\"\">"+(placeholder||"Enter a valid API key")+"</option>";modelsLoaded=false;}
   $("#refreshmodels").disabled=!needsKey();}
-// Heuristic: pick a cheaper/faster model for summarisation by name (haiku/mini/flash/lite/small/nano).
-// Pick a cheap/fast model for summarisation, preferring the NEWEST match so we don't
-// land on a legacy id the provider now 404s (e.g. claude-3-haiku vs claude-3-5-haiku).
-// Score = cheap-tier name match, then recency from any embedded date (YYYYMMDD) and
-// version number (3-5 > 3, 4 > 3-5). Returns "" if nothing looks cheap.
-function pickConciseDefault(ids){
-  const re=/haiku|mini|flash|lite|small|nano|nova-(?:micro|lite)|\b8b\b|\b7b\b/i;
-  const cands=(ids||[]).filter(id=>re.test(id));
-  if(!cands.length)return "";
-  const score=id=>{
-    let s=0;
-    const dm=id.match(/(20\d{6})/);            // embedded release date e.g. 20241022
-    if(dm)s+=parseInt(dm[1],10);
-    const vm=id.match(/(\d+)[.\-](\d+)/);        // version e.g. 3-5 / 3.5
-    if(vm)s+=(parseInt(vm[1],10)*10+parseInt(vm[2],10))*100000000;
-    else{const v1=id.match(/claude-(\d+)|gpt-(\d+)|llama-?(\d+)/i);if(v1)s+=(parseInt(v1[1]||v1[2]||v1[3],10)*10)*100000000;}
-    return s;
-  };
-  return cands.slice().sort((a,b)=>score(b)-score(a))[0];
-}
 function syncProvider(){
   $("#openaibox").style.display=needsKey()?"":"none";
   $("#bedrockregionbox").classList.toggle("hidden",!isBedrock());
@@ -2203,21 +1408,10 @@ function setModels(ids){const m=$("#model");m.innerHTML="";(ids||[]).forEach(id=
   if(want&&(ids||[]).indexOf(want)>=0)m.value=want;
   else if(isBedrock()&&(ids||[]).indexOf(BEDROCK_DEFAULT_MODEL)>=0)m.value=BEDROCK_DEFAULT_MODEL;
   else if((ids||[]).length)m.value=ids[0];
-  syncQuickModel();
-  // Concise-spec model: remembered choice if still available; else auto-pick a
-  // cheaper/faster model by name; else fall back to the chosen build model.
-  const cm=$("#concisemodel");
-  if(cm){cm.innerHTML="";(ids||[]).forEach(id=>{const o=document.createElement("option");o.value=id;o.textContent=id;cm.appendChild(o)});
-    const cwant=localStorage.getItem(LS_CONCISEMODEL);
-    if(cwant&&(ids||[]).indexOf(cwant)>=0)cm.value=cwant;
-    else{const auto=pickConciseDefault(ids);cm.value=auto||m.value;}
-  }}
+  syncQuickModel();}
 $("#model").addEventListener("change",()=>{localStorage.setItem(LS_MODEL,$("#model").value);syncQuickModel();});
-$("#concisemodel").addEventListener("change",()=>{localStorage.setItem(LS_CONCISEMODEL,$("#concisemodel").value);flashSaved();});
 $("#maxattempts").addEventListener("change",saveSettings);
 $("#costcap").addEventListener("change",saveSettings);
-$("#showmessages").addEventListener("change",()=>{localStorage.setItem(LS_SHOWMSG,$("#showmessages").checked?"1":"0");applyAdvancedTabs();flashSaved();});
-$("#showhistory").addEventListener("change",()=>{localStorage.setItem(LS_SHOWHIST,$("#showhistory").checked?"1":"0");applyAdvancedTabs();flashSaved();});
 // Settings cog (spec-pane header) opens the Settings tab.
 $("#opensettings").onclick=()=>showView("settings");
 // Quick model dropdown in the spec pane mirrors the Settings model select.
@@ -2241,66 +1435,48 @@ async function refreshModels(){
 }
 $("#refreshmodels").onclick=refreshModels;
 
-async function checkHealth(){$("#htxt").textContent="checking…";$("#hdot").className="dot";try{const [ok,j]=await jget("/health");$("#hdot").className="dot "+(j.ok?"ok":"bad");$("#htxt").textContent=(j.ok?"healthy":"degraded")+" · "+j.passed+"/"+j.total;$("#health").title=(j.checks||[]).map(c=>(c.ok?"[ok] ":"[fail] ")+c.name+(c.detail?" — "+c.detail:"")).join("\n");}catch(e){$("#hdot").className="dot bad";$("#htxt").textContent="API unreachable";}}
+async function checkHealth(){$("#htxt").textContent="checking…";$("#hdot").className="dot";try{const [ok,j]=await jget("/health");$("#hdot").className="dot "+(j.ok?"ok":"bad");$("#htxt").textContent=(j.ok?"healthy":"degraded")+" · "+j.passed+"/"+j.total;$("#health").title=(j.checks||[]).map(c=>(c.ok?"✓ ":"✗ ")+c.name+(c.detail?" — "+c.detail:"")).join("\n");}catch(e){$("#hdot").className="dot bad";$("#htxt").textContent="API unreachable";}}
 $("#health").onclick=checkHealth;
 
 let currentJob=null,pollTimer=null;
-let goTicker=null,goBusy=false;
 $("#go").onclick=async()=>{
-  // Guard against double-clicks; the finally{} below guarantees we never get stuck
-  // in a busy/disabled state even if something throws mid-flight.
-  if(goBusy)return;
-  let launched=false;   // set once the job is dispatched, so finally{} leaves the button disabled
   $("#formerr").className="err hidden";
   const inputs=collectInputs();
-  // The spec always comes from an APPROVED spec doc now — either a saved one or one
-  // just authored in the builder (both leave currentSpecToken pointing at it).
-  let spec="",specToken=null;
-  try{
-    if(!currentSpecToken){
-      return showErr(specSrc()==="saved"?"Select a saved specification.":"Create a specification first — open the Specification Builder.");
+  let spec=$("#spec").value;
+  const m=specMode();
+  let specToken=null,approved=false;
+  if(m==="file"||m==="saved"){
+    const ready=(m==="file"?specReady:savedReady);
+    if(!ready)return showErr(m==="file"?"Upload a spec document and wait for extraction.":"Select a saved specification.");
+    if(!currentSpecToken)return showErr("Spec not ready — re-select it.");
+    specToken=currentSpecToken;spec=ready;
+    // Require an APPROVED concise spec for uploaded/saved docs (review-first flow).
+    const [sok,sp]=await jget("/specs/"+specToken);
+    approved=sok&&sp.conciseApproved;
+    if(!approved){
+      // Open the review modal instead of generating against an unreviewed spec.
+      if(sok&&sp.conciseStatus==="READY"){openCompareModal(specToken);return showErr("Review & approve the concise specification first (opened for you).");}
+      return showErr("Generate & approve the concise specification first — use ‘Review concise specification’.");
     }
-    const [sok,sp]=await jget("/specs/"+currentSpecToken);
-    if(!sok)return showErr("Specification not found — re-select or rebuild it.");
-    if(!sp.conciseApproved){
-      if(sp.conciseStatus==="READY"){openCompareModal(currentSpecToken);return showErr("Review & approve the specification first (opened for you).");}
-      openCompareModal(currentSpecToken);return showErr("Finish & approve the specification first (opened for you).");
-    }
-    specToken=currentSpecToken;spec=sp.text||sp.conciseSpec||" ";
-    if(!inputs.length)return showErr("Add at least one example input message.");
-    if(needsKey()&&!$("#apikey").value.trim())return showErr("Enter your "+(isBedrock()?"AWS Bedrock":"OpenAI")+" API key in Settings (or switch Provider to Mock).");
-    if(needsKey()&&!$("#model").value.trim())return showErr("Select a model in Settings — enter a valid API key, then pick one.");
-    persistKey();
-    const body={inputSpec:spec,inputName:$("#jobname").value.trim(),provider:$("#provider").value,model:$("#model").value,apiKey:needsKey()?$("#apikey").value.trim():"",autoApprove:false,inputs};
-    if(specToken)body.specToken=specToken;
-    body.maxAttempts=+($("#maxattempts").value||5);
-    body.costCap=+($("#costcap").value||0);
-    if(isBedrock())body.bedrockRegion=$("#bedrockregion").value.trim()||"us-east-1";
-    // With an approved concise spec the backend goes straight to planning; a typed
-    // spec is structured in-job first. Show a live elapsed timer so it's clear work
-    // is running (e.g. "Generating plan.. 0s").
-    goBusy=true;$("#go").disabled=true;goTicker=elapsedTicker($("#go"),"Generating plan..");
-    const [ok,j]=await jpost("/generate",body);
-    if(!ok){showErr((j&&j.error)||"Could not start generation. Check the production is running and try again.");return;}
-    // /generate returns immediately (planning runs in the BACKGROUND). Keep the button
-    // DISABLED with a live "Drafting plan…" timer so the user can't re-submit while the
-    // plan is still being drafted. render() re-enables it (resetGo) the moment the job
-    // reaches a gate (AWAITING_SPEC/PLAN/ATTEMPT) or a terminal state.
-    launched=true;
-    if(goTicker)goTicker();goTicker=elapsedTicker($("#go"),"Drafting plan…");
-    currentJob=j.jobId;$("#jobid").textContent="Job "+j.jobId;$("#jobid").classList.remove("hidden");loadLinks(currentJob);showView("progress");buildClockReset();
-    paintProgressKickoff();   // immediate spinner/label/bar so the Progress tab isn't blank until the first poll
-    startPolling();
-  }catch(e){
-    showErr("Something went wrong starting the build: "+(e&&e.message?e.message:e)+". Check your network and that the production is running.");
-  }finally{
-    goBusy=false;
-    // Only re-enable here if the job never launched (validation/early-return/error). On a
-    // successful launch the button stays disabled until render() hits a gate/terminal.
-    if(!launched)resetGo();
   }
+  if(!spec.trim())return showErr("Provide a specification (text, document, or saved spec).");
+  if(!inputs.length)return showErr("Add at least one example input message.");
+  if(needsKey()&&!$("#apikey").value.trim())return showErr("Enter your "+(isBedrock()?"AWS Bedrock":"OpenAI")+" API key in Settings (or switch Provider to Mock).");
+  if(needsKey()&&!$("#model").value.trim())return showErr("Select a model in Settings — enter a valid API key, then pick one.");
+  persistKey();
+  const body={inputSpec:spec,inputName:$("#jobname").value.trim(),provider:$("#provider").value,model:$("#model").value,apiKey:needsKey()?$("#apikey").value.trim():"",autoApprove:false,inputs};
+  if(specToken)body.specToken=specToken;
+  body.maxAttempts=+($("#maxattempts").value||5);
+  body.costCap=+($("#costcap").value||0);
+  if(isBedrock())body.bedrockRegion=$("#bedrockregion").value.trim()||"us-east-1";
+  // With an approved concise spec the backend goes straight to planning; a typed
+  // spec is structured in-job first.
+  $("#go").disabled=true;$("#go").innerHTML='<span class=spinner></span> '+(approved?"Planning…":"Structuring spec…");
+  const [ok,j]=await jpost("/generate",body);
+  if(!ok){showErr(j.error||"generate failed");resetGo();return;}
+  currentJob=j.jobId;$("#jobid").textContent="Job "+j.jobId;$("#jobid").classList.remove("hidden");loadLinks(currentJob);showView("progress");buildClockReset();startPolling();
 };
-function resetGo(){if(goTicker){goTicker();goTicker=null;}goBusy=false;$("#go").disabled=false;$("#go").innerHTML='<span class=iwrap><i data-lucide="arrow-right"></i> Plan &amp; Generate</span>';icons();}
+function resetGo(){$("#go").disabled=false;$("#go").innerHTML="Plan &amp; Generate ▶";}
 // Show a spinner + label inside a button while an async action runs.
 async function busyBtn(btn,label,fn,siblings){
   if(!btn)return fn&&fn();
@@ -2319,66 +1495,10 @@ function jobSig(j){
   const atts=(j.attempts||[]).map(a=>a.number+":"+a.phase+":"+(a.message||"")).join("|");
   return [j.status,j.verdict,j.attemptsUsed,j.maxAttempts,j.sourceDocType,j.model,j.generatedClassName,j.lastError||"",j.plan||"",atts,norm(j.sourceHL7||j.expectedHL7),norm(j.actualHL7),j.finalDTL||"",j.structuredSpec||"",JSON.stringify(j.gateReport||"")].join("");
 }
-let pollTick=null;
-function startPolling(){if(pollTimer)clearInterval(pollTimer);lastRenderSig=null;
-  pollTick=async()=>{if(document.hidden)return;const [ok,j]=await jget("/jobs/"+currentJob);if(ok)render(j);};
-  pollTick();pollTimer=setInterval(pollTick,1200);}
-function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}pollTick=null;}
-// Pause background work when the tab is hidden (no wasted polling/render while away);
-// fetch once immediately on return so the user sees current state without waiting.
-document.addEventListener("visibilitychange",()=>{if(!document.hidden&&pollTick)pollTick();});
-// Map a job status to which guided step is active/done, and paint the stepper.
-function setStepper(status){
-  // step order: spec(1) -> review(2) -> build(3) -> done(4)
-  const idx={QUEUED:1,STRUCTURING:1,AWAITING_SPEC:1,PLANNING:1,AWAITING_PLAN:1,
-             GENERATING:2,JUDGING:2,RUNNING:2,AWAITING_ATTEMPT:2,
-             SUCCESS:3,FAILED:2,REJECTED:2}[status];
-  // active step index into ["spec","review","build","done"]
-  const active=(status==="SUCCESS")?3:(status==null?0:(idx==null?0:idx));
-  const steps=["spec","review","build","done"];
-  steps.forEach((nm,i)=>{const e=document.querySelector('.stp[data-step="'+nm+'"]');if(!e)return;
-    e.classList.toggle("active",i===active);e.classList.toggle("done",i<active);
-    const st=e.querySelector(".sstate");if(st)st.textContent=i<active?"Done":(i===active?(i===3?"Complete":"Active"):"Next");
-    const dot=e.querySelector(".sdot");if(dot){if(i<active){dot.innerHTML="";dot.appendChild(licon("check"));}else{dot.textContent=String(i+1);}}});
-  icons();
-}
-// Render the proposed plan, splitting the numbered rule lines into ACTIVE transforms
-// (shown prominently) and PASS-THROUGH rules (rules the model confirmed need no
-// transform — in-scope but already satisfied by create='copy'). The pass-through set
-// is COLLAPSED under a count so the plan reads at the old ~15-item size, but the user
-// can expand to review every rule and confirm nothing in-scope was silently dropped.
-function renderPlan(plan){
-  const box=$("#plantext");box.innerHTML="";
-  // Split into numbered items; keep any leading prose (pre-amble before item 1) as-is.
-  const lines=plan.split("\n");
-  const items=[];let pre="";
-  for(const ln of lines){
-    if(/^\s*\d+[.)]\s/.test(ln))items.push(ln.trim());
-    else if(!items.length)pre+=ln+"\n";
-    // a wrapped continuation of the previous item
-    else if(ln.trim()&&items.length)items[items.length-1]+=" "+ln.trim();
-  }
-  // If the plan isn't a numbered list (older/free-form), fall back to plain markdown.
-  if(!items.length){box.innerHTML=mdToHtml(plan);return;}
-  const isPass=s=>/passed through unchanged|no transform needed|—\s*passed through|not applicable/i.test(s);
-  const active=items.filter(s=>!isPass(s));
-  const pass=items.filter(isPass);
-  if(pre.trim()){const p=el("div","planpre");p.innerHTML=mdToHtml(pre.trim());box.appendChild(p);}
-  // Active transforms (the meaningful changes).
-  const head=el("div","planhd");head.textContent=active.length+" transformation"+(active.length===1?"":"s")+" the DTL will apply";box.appendChild(head);
-  const ol=el("ol","planlist");active.forEach(s=>{const li=el("li");li.textContent=s.replace(/^\s*\d+[.)]\s*/,"");ol.appendChild(li);});box.appendChild(ol);
-  // Pass-through rules, collapsed.
-  if(pass.length){
-    const det=el("details","plancollapse");
-    const sm=el("summary");sm.textContent=pass.length+" rule"+(pass.length===1?"":"s")+" verified as pass-through (no transform needed) — click to review";det.appendChild(sm);
-    const ol2=el("ol","planlist muted");pass.forEach(s=>{const li=el("li");li.textContent=s.replace(/^\s*\d+[.)]\s*/,"");ol2.appendChild(li);});det.appendChild(ol2);
-    box.appendChild(det);
-  }
-  icons();
-}
+function startPolling(){if(pollTimer)clearInterval(pollTimer);lastRenderSig=null;const tick=async()=>{const [ok,j]=await jget("/jobs/"+currentJob);if(ok)render(j);};tick();pollTimer=setInterval(tick,1200);}
+function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
 function render(j){
   updateKPIs(j);
-  setStepper(j&&j.status);
   const sig=jobSig(j);
   if(sig===lastRenderSig){
     if(REST_STATES[j.status]){stopPolling();buildClockStop();}
@@ -2390,27 +1510,10 @@ function render(j){
   const ss=j.status==="AWAITING_SPEC";$("#specgate").classList.toggle("hidden",!ss);
   if(ss){resetGo();renderSpecGate(j);}
   $("#plangate").classList.toggle("hidden",j.status!=="AWAITING_PLAN");
-  if(j.status==="AWAITING_PLAN"){renderPlan(j.plan||"");resetGo();}
+  if(j.status==="AWAITING_PLAN"){$("#plantext").innerHTML=mdToHtml(j.plan||"");resetGo();}
   const sa=j.status==="AWAITING_ATTEMPT";$("#attemptgate").classList.toggle("hidden",!sa);
   if(sa){resetGo();renderAttempt(j);}
   if(REST_STATES[j.status]){stopPolling();resetGo();buildClockStop();loadLinks(currentJob);}
-}
-// Paint an immediate "work has started" state into the Progress tab the instant the
-// user lands there — before the first poll returns — so it's obvious where to look
-// and that something is running. Replaced by renderStatus() on the first poll.
-function paintProgressKickoff(){
-  const s=$("#status");if(!s)return;s.innerHTML="";
-  const head=el("div");head.style.cssText="display:flex;align-items:center;gap:10px";
-  head.appendChild(el("span","badge b-QUEUED","STARTING"));
-  s.appendChild(head);
-  const card=el("div","buildcard");
-  const top=el("div","buildtop");
-  const lab=el("span","blabel");lab.appendChild(el("span","spinner"));lab.appendChild(el("span",null," Generating plan…"));top.appendChild(lab);
-  const tm=el("span","btimer");tm.id="buildtimer";tm.textContent=buildClock!=null?fmtElapsed(Date.now()-buildClock):"0:00";top.appendChild(tm);
-  card.appendChild(top);
-  const bar=el("div","pbar indet");bar.appendChild(el("div","pfill"));card.appendChild(bar);
-  card.appendChild(el("div","buildhint","Submitting your specification and example inputs to the model. The structured spec, plan and built DTL will appear here as each step completes."));
-  s.appendChild(card);
 }
 function renderStatus(j){const s=$("#status");s.innerHTML="";
   const head=el("div");head.style.cssText="display:flex;align-items:center;gap:10px";head.appendChild(el("span","badge b-"+j.status,j.status));if(j.verdict)head.appendChild(el("span","pill",j.verdict));const c=el("span",null,"attempt "+(j.attemptsUsed||0)+" / "+j.maxAttempts);c.style.cssText="color:var(--muted);font-size:12px";head.appendChild(c);s.appendChild(head);
@@ -2439,7 +1542,7 @@ function renderStatus(j){const s=$("#status");s.innerHTML="";
   s.appendChild(list);
   if(j.lastError){const e=el("div","err");e.appendChild(el("b",null,"Error: "));e.appendChild(document.createTextNode(j.lastError));s.appendChild(e);}
 }
-function phaseLabel(p){return{GENERATING:"Asked the model",COMPILE_FAIL:"Did not compile",RUNTIME_FAIL:"Compiled, failed at runtime",MISMATCH:"Compiled & ran, but does NOT meet the spec",SUCCESS:"Compiled, ran & conforms to the spec",LLM_ERROR:"LLM call problem"}[p]||p;}
+function phaseLabel(p){return{GENERATING:"Asked the model",COMPILE_FAIL:"Did not compile",RUNTIME_FAIL:"Compiled, failed at runtime",MISMATCH:"Compiled & ran, but does NOT meet the spec",SUCCESS:"Compiled, ran & conforms to the spec ✓",LLM_ERROR:"LLM call problem"}[p]||p;}
 function renderAttempt(j){$("#atnum").textContent=j.attemptsUsed;$("#atmeta").innerHTML="<span>Verdict: <b>"+(j.verdict||"")+"</b></span><span>Class: <b>"+(j.generatedClassName||"—")+"</b></span>";
   // Colour the attempt card by whether the candidate actually passed the spec gate.
   const passed=(j.verdict==="SUCCESS");
@@ -2463,10 +1566,10 @@ function renderGateReport(gr,passed){
   const box=$("#gatereport");box.innerHTML="";
   if(!gr||typeof gr!=="object"){return;}
   const card=el("div","gate "+(passed?"pass":"fail"));
-  const h=el("div","gh");const hw=el("span","iwrap");hw.appendChild(licon(passed?"shield-check":"triangle-alert"));hw.appendChild(document.createTextNode(passed?"Verified against the specification":"Does not yet meet the specification"));h.appendChild(hw);card.appendChild(h);
+  const h=el("div","gh");h.appendChild(el("span",null,passed?"✓ Verified against the specification":"⚠ Does not yet meet the specification"));card.appendChild(h);
   const ra=gr.runAll||{};
   const chk=el("div","gchk");
-  const mk=(ok,t)=>{const s=el("span","iwrap");s.appendChild(licon(ok?"check":"x"));s.appendChild(document.createTextNode(t));s.style.color=ok?"var(--iris-green-700)":"#c0353a";return s;};
+  const mk=(ok,t)=>{const s=el("span",null,(ok?"✓ ":"✗ ")+t);s.style.color=ok?"var(--iris-green-700)":"#c0353a";return s;};
   chk.appendChild(mk(!!ra.ran,"runs on all inputs"));
   chk.appendChild(mk(!!ra.anyChange,"actually transforms fields"));
   const jdg=gr.judge||{};
@@ -2484,7 +1587,7 @@ function renderGateReport(gr,passed){
     jdg.violations.forEach(x=>{const row=el("div","vrow");const sev=el("span","sev "+(x.severity||"HIGH"),x.severity||"HIGH");row.appendChild(sev);row.appendChild(document.createTextNode((x.rule||"")+(x.detail?(" — "+x.detail):"")));v.appendChild(row);});
     card.appendChild(v);
   }
-  box.appendChild(card);icons();
+  box.appendChild(card);
 }
 
 // SPEC REVIEW GATE — render the original spec (left) and the structured rule list
@@ -2516,9 +1619,9 @@ function renderSpecGate(j){
   // coverage summary
   const cov=$("#speccov");cov.innerHTML="";
   const add=(t,c)=>{const s=el("span","cv",t);s.style.color=c;cov.appendChild(s);};
-  add(grounded+" grounded in source","var(--iris-green-700)");
-  if(inferred)add(inferred+" inferred (verify)","#9a6a00");
-  if(nosrc)add(nosrc+" no source (possible hallucination)","#c0353a");
+  add("✓ "+grounded+" grounded in source","var(--iris-green-700)");
+  if(inferred)add("● "+inferred+" inferred (verify)","#9a6a00");
+  if(nosrc)add("⚠ "+nosrc+" no source (possible hallucination)","#c0353a");
 }
 // Highlight the matching source snippet inside the original-spec pane.
 function highlightSource(quote){
@@ -2536,8 +1639,8 @@ document.querySelectorAll("#attemptgate .tab").forEach(t=>t.onclick=()=>{documen
 // plan additions
 function addPlanItem(val=""){const box=$("#planadds");const wrap=el("div","ex");wrap.style.cssText="display:flex;gap:8px;align-items:center;padding:8px";
   const ta=el("input");ta.placeholder="e.g. Also blank out PID-19 (SSN) for privacy";ta.value=val;ta.style.flex="1";
-  const rm=el("button","rm");rm.appendChild(licon("x"));rm.style.cssText="color:var(--bad);background:none;border:none;cursor:pointer";rm.onclick=()=>wrap.remove();
-  wrap.appendChild(ta);wrap.appendChild(rm);box.appendChild(wrap);ta.focus();icons();}
+  const rm=el("button","rm","✕");rm.style.cssText="color:var(--bad);background:none;border:none;cursor:pointer;font-size:16px";rm.onclick=()=>wrap.remove();
+  wrap.appendChild(ta);wrap.appendChild(rm);box.appendChild(wrap);ta.focus();}
 function collectPlanAdditions(){return [...document.querySelectorAll("#planadds input")].map(t=>t.value.trim()).filter(Boolean);}
 $("#addplanitem").onclick=()=>addPlanItem();
 // SPEC gate: approve (with any edits) -> plan; reject -> re-structure.
@@ -2548,14 +1651,14 @@ $("#rejectplan").onclick=()=>{const fb=prompt("How should the plan change?");if(
 $("#acceptattempt").onclick=()=>busyBtn($("#acceptattempt"),"Transforming all…",async()=>{await jpost("/jobs/"+currentJob+"/continue",{action:"accept"});startPolling();showView("outputs");},[$("#rejectattempt")]);
 $("#rejectattempt").onclick=()=>{const fb=$("#attfeedback").value.trim();busyBtn($("#rejectattempt"),"Regenerating…",async()=>{const [ok]=await jpost("/jobs/"+currentJob+"/continue",{action:"reject",feedback:fb||"Please improve the transformation."});$("#attfeedback").value="";if(ok)buildClockReset();startPolling();},[$("#acceptattempt")]);};
 
-async function loadLinks(jobId){try{const [ok,j]=await jget("/links"+(jobId?("/"+jobId):""));const box=$("#links");box.innerHTML="";const mk=(h,l,ic,t)=>{const a=el("a",null);const w=el("span","iwrap");w.appendChild(licon(ic));w.appendChild(document.createTextNode(" "+l));a.appendChild(w);a.href=h;a.target="_blank";a.title=t||l;box.appendChild(a)};if(j.production)mk(j.production,"Production","sliders-horizontal");if(j.visualTrace)mk(j.visualTrace,"Visual Trace","search");else if(j.messages)mk(j.messages,"Messages","search");icons();}catch(e){}}
+async function loadLinks(jobId){try{const [ok,j]=await jget("/links"+(jobId?("/"+jobId):""));const box=$("#links");box.innerHTML="";const mk=(h,l,t)=>{const a=el("a",null,l);a.href=h;a.target="_blank";a.title=t||l;box.appendChild(a)};if(j.production)mk(j.production,"⚙ Production");if(j.visualTrace)mk(j.visualTrace,"🔍 Visual Trace");else if(j.messages)mk(j.messages,"🔍 Messages");}catch(e){}}
 
 // OUTPUTS view
 async function loadOutputs(){$("#outjob").textContent=currentJob?("Job "+currentJob):"";const box=$("#outlist");box.innerHTML="";if(!currentJob){box.appendChild(el("div","empty","Build a DTL first."));return;}
   const [ok,j]=await jget("/jobs/"+currentJob+"/outputs");if(!ok||!j.outputs.length){box.appendChild(el("div","empty","No outputs yet — accept a build on the Progress tab."));return;}
   j.outputs.forEach(r=>{const c=el("div","card");c.style.borderLeftColor=r.error?"var(--bad)":"var(--iris-green)";
     c.appendChild(el("div",null,"Input "+r.index)).style.fontWeight="700";
-    const inT=norm(r.input),outT=r.error?("[runtime error] "+r.error):norm(r.output);
+    const inT=norm(r.input),outT=r.error?("⚠ "+r.error):norm(r.output);
     const d=r.error?{aCls:null,bCls:null,aSeg:null,bSeg:null}:lineDiff(inT,outT);
     const io=el("div","io");
     const sIn=el("div","side");const hIn=el("div","head");hIn.appendChild(el("span",null,"Input"));hIn.appendChild(copyBtn(()=>inT));sIn.appendChild(hIn);sIn.appendChild(linedBlock(inT,d.aCls,d.aSeg));
@@ -2564,30 +1667,29 @@ async function loadOutputs(){$("#outjob").textContent=currentJob?("Job "+current
     const lbl=el("label",null,"Correct this output / give feedback");c.appendChild(lbl);
     const ta=el("textarea");ta.value=norm(r.output);ta.style.minHeight="70px";c.appendChild(ta);lineNumberTextarea(ta);
     const fb=el("textarea");fb.placeholder="Feedback (optional)…";fb.style.minHeight="40px";c.appendChild(fb);
-    const btn=el("button","ok");btn.appendChild(licon("wand-sparkles"));btn.appendChild(document.createTextNode(" Apply correction + feedback"));btn.style.marginTop="8px";
+    const btn=el("button","ok","✓ Apply correction + feedback");btn.style.marginTop="8px";
     const cmsg=el("div");cmsg.style.cssText="font-size:12px;margin-top:6px";
     btn.onclick=async()=>{btn.disabled=true;btn.innerHTML='<span class=spinner></span> Rebuilding…';cmsg.innerHTML="";
       const [ok,j]=await jpost("/jobs/"+currentJob+"/correct",{input:r.input,produced:r.output,corrected:ta.value,feedback:fb.value});
-      btn.disabled=false;btn.innerHTML="";btn.appendChild(licon("wand-sparkles"));btn.appendChild(document.createTextNode(" Apply correction + feedback"));icons();
+      btn.disabled=false;btn.textContent="✓ Apply correction + feedback";
       if(!ok||(j&&j.lastError)){cmsg.className="err";cmsg.textContent="Correction failed: "+((j&&(j.error||j.lastError))||"unknown error");return;}
       await loadOutputs();};
     c.appendChild(btn);c.appendChild(cmsg);box.appendChild(c);});
-  icons();
 }
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 $("#refreshout").onclick=loadOutputs;
 
 // LIVE view
 $("#runlive").onclick=async()=>{if(!currentJob){$("#livemsg").textContent="Build a DTL first.";return;}const inp=$("#liveinput").value;if(!inp.trim())return;
-  $("#runlive").innerHTML='<span class=spinner></span> Transforming…';const [ok,j]=await jpost("/jobs/"+currentJob+"/transform",{input:inp});$("#runlive").innerHTML='<span class=iwrap><i data-lucide="play"></i> Transform</span>';icons();
-  const inN=norm(inp),outN=j.error?("[runtime error] "+j.error):norm(j.output);
+  $("#runlive").innerHTML='<span class=spinner></span> Transforming…';const [ok,j]=await jpost("/jobs/"+currentJob+"/transform",{input:inp});$("#runlive").textContent="⚡ Transform";
+  const inN=norm(inp),outN=j.error?("⚠ "+j.error):norm(j.output);
   const d=j.error?{aCls:null,aSeg:null}:lineDiff(inN,outN);
   $("#liveresult").classList.remove("hidden");setLined($("#liveIn"),inN,d.aCls,d.aSeg);$("#liveOut").value=outN;lineNumberTextarea($("#liveOut"));$("#livemsg").textContent="";
   $("#liveincopy").innerHTML="";$("#liveincopy").appendChild(copyBtn(()=>inN));
   $("#liveoutcopy").innerHTML="";$("#liveoutcopy").appendChild(copyBtn(()=>$("#liveOut").value));};
 $("#livecorrect").onclick=async()=>{const inp=$("#liveinput").value;$("#livecorrect").innerHTML='<span class=spinner></span> Rebuilding…';
   const [ok,j]=await jpost("/jobs/"+currentJob+"/correct",{input:inp,produced:"",corrected:$("#liveOut").value,feedback:$("#livefb").value});
-  $("#livecorrect").innerHTML='<span class=iwrap><i data-lucide="wand-sparkles"></i> Apply correction + feedback to the DTL</span>';icons();$("#livemsg").textContent=ok?("DTL rebuilt — class "+(j.generatedClassName||"")+". Re-run to see the new output."):("Failed: "+(j.error||""));};
+  $("#livecorrect").textContent="✓ Apply correction + feedback to the DTL";$("#livemsg").textContent=ok?("DTL rebuilt — class "+(j.generatedClassName||"")+". Re-run to see the new output."):("Failed: "+(j.error||""));};
 
 // LLM MESSAGES view
 function roleWho(r){return {system:"instructions to the model",user:"sent to the model →",assistant:"← reply from the model"}[r]||r;}
@@ -2625,7 +1727,7 @@ async function loadMessages(){$("#msgjob").textContent=currentJob?("Job "+curren
       h.appendChild(el("span","cost",money(m.cost)));
     }
     const copy=el("button","ghost copy","copy");copy.style.cssText="padding:3px 9px;font-size:11px";
-    copy.onclick=(e)=>{e.stopPropagation();navigator.clipboard&&navigator.clipboard.writeText(m.content||"");copy.textContent="copied";setTimeout(()=>copy.textContent="copy",1200);};
+    copy.onclick=(e)=>{e.stopPropagation();navigator.clipboard&&navigator.clipboard.writeText(m.content||"");copy.textContent="copied ✓";setTimeout(()=>copy.textContent="copy",1200);};
     const c=el("div","mc");c.appendChild(copy);c.appendChild(linedBlock(m.content||""));
     h.onclick=()=>wrap.classList.toggle("collapsed");
     if(m.role==="system")wrap.classList.add("collapsed");
@@ -2649,20 +1751,15 @@ $("#refreshcls").onclick=loadClasses;
 async function loadHistory(){const [ok,j]=await jget("/history");const box=$("#histlist");box.innerHTML="";if(!ok||!j.history||!j.history.length){box.appendChild(el("div","empty","No transformations yet."));return;}
   j.history.forEach(h=>{const row=el("div","listcard");row.style.cssText+=";display:flex;align-items:center;gap:12px";if(h.parentJobId)row.style.marginLeft="26px";
     row.appendChild(el("span","badge b-"+h.status,h.status));const info=el("div");info.style.flex="1";info.appendChild(el("div",null,h.inputName||h.jobId)).style.fontWeight="700";
-    const sub=el("div",null,(h.attemptsUsed||0)+" attempts · "+(h.model||"")+(h.parentJobId?(" · refines "+h.parentJobId):"")+" · "+(h.updatedAt||""));sub.style.cssText="color:var(--muted);font-size:12px";info.appendChild(sub);row.appendChild(info);
+    const sub=el("div",null,(h.attemptsUsed||0)+" attempts · "+(h.model||"")+(h.parentJobId?(" · ↳ refines "+h.parentJobId):"")+" · "+(h.updatedAt||""));sub.style.cssText="color:var(--muted);font-size:12px";info.appendChild(sub);row.appendChild(info);
     row.onclick=()=>{currentJob=h.jobId;showView("outputs");};box.appendChild(row);});}
 $("#refreshhist").onclick=loadHistory;
 
 $("#sample").onclick=()=>{
-  // Load the example input messages, then open the builder pre-filled on "Type it"
-  // so the user can review/approve the sample specification.
+  $("#spec").value="Inbound ADT^A01 admit from EPICADT (HL7 v2.3). Rename the sending application to EPIC, normalize the facility code SITEA to 001 across MSH/PID/PV1, and upgrade the message to v2.5.";
   $("#jobname").value="ADT_A01_Admit";
   document.querySelectorAll("#inputs .ex").forEach(p=>p.remove());
   addInput("MSH|^~\\&|EPICADT|SITEA|CANONICAL|ENTERPRISE|20260608120000||ADT^A01|MSG00001|P|2.3\nEVN|A01|20260608115500\nPID|1||12345^^^SITEA^MR||DOE^JOHN^Q||19800101|M|||123 MAIN ST^^METROPOLIS^NY^10001||(555)555-1234|||M|CAT|987654321\nPV1|1|I|WEST^389^1^SITEA||||1234^SMITH^JANE^A^^^MD|||SUR||||ADM|A0");
-  // select "Create new", open builder, choose Type, prefill the text.
-  const r=$("#specchoice").querySelector('input[value=new]');if(r){r.checked=true;syncSpecSrc();}
-  openBuilderNew();$("#startType").onclick();
-  $("#cmpTypeText").value="Inbound ADT^A01 admit from EPICADT (HL7 v2.3). Rename the sending application to EPIC, normalize the facility code SITEA to 001 across MSH/PID/PV1, and upgrade the message to v2.5.";
 };
 
 (function init(){
@@ -2673,16 +1770,9 @@ $("#sample").onclick=()=>{
   const rg=localStorage.getItem(LS_REGION);if(rg)$("#bedrockregion").value=rg;
   const ma=localStorage.getItem(LS_MAXATT);if(ma)$("#maxattempts").value=ma;
   const cc=localStorage.getItem(LS_COSTCAP);if(cc)$("#costcap").value=cc;
-  // Advanced view tabs — hidden by default; only shown if previously enabled.
-  $("#showmessages").checked=localStorage.getItem(LS_SHOWMSG)==="1";
-  $("#showhistory").checked=localStorage.getItem(LS_SHOWHIST)==="1";
-  applyAdvancedTabs();
   syncProvider();
   syncQuickModel();
-  syncSpecSrc();
-  addInput();checkHealth();loadLinks();updateKPIs(null);setStepper(null);
-  // Lucide is deferred; render icons once it's available (and once now in case it's cached).
-  icons();window.addEventListener("load",icons);
+  addInput();checkHealth();loadLinks();updateKPIs(null);
 })();
 </script>
 </body>

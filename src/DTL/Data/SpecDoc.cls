@@ -66,6 +66,16 @@ Property ConciseError As %String(MAXLEN = 2000);
 
 Property CreatedAt As %String(MAXLEN = 32);
 
+/// Raw bytes of the originally-uploaded specification document, captured at upload
+/// time so the UI can display the original PDF/image alongside the extracted markdown.
+Property OrigBytes As %Stream.GlobalBinary;
+
+/// Content-type for serving the original document back (e.g. "application/pdf").
+Property OrigMime As %String(MAXLEN = 128);
+
+/// Lowercase extension of the original document (e.g. "pdf").
+Property OrigExt As %String(MAXLEN = 32);
+
 /// Read the concise-spec stream into a string (for the REST/JSON layer).
 Method ConciseStr() As %String
 {
@@ -108,6 +118,9 @@ Storage Default
 <Value name="13"><Value>ConciseApproved</Value></Value>
 <Value name="14"><Value>ConciseVerdict</Value></Value>
 <Value name="15"><Value>ConciseError</Value></Value>
+<Value name="16"><Value>OrigBytes</Value></Value>
+<Value name="17"><Value>OrigMime</Value></Value>
+<Value name="18"><Value>OrigExt</Value></Value>
 </Data>
 <DataLocation>^DTL.Data.SpecDocD</DataLocation>
 <DefaultData>SpecDocDefaultData</DefaultData>
