@@ -64,6 +64,12 @@ Property ConciseVerdict As %String(MAXLEN = 8000);
 /// pass surfaces the right message to the user.
 Property ConciseError As %String(MAXLEN = 2000);
 
+/// Status of the SECONDARY completeness/faithfulness audit (the "judge"), which runs
+/// AFTER the concise spec is already READY and usable — so the audit can never block
+/// or hang the spec itself. NONE (not started) | PENDING (judging) | READY (verdict
+/// in ConciseVerdict) | ERROR | SKIPPED (user chose to proceed without it).
+Property ConciseVerifyStatus As %String(VALUELIST = ",NONE,PENDING,READY,ERROR,SKIPPED") [ InitialExpression = "NONE" ];
+
 Property CreatedAt As %String(MAXLEN = 32);
 
 /// Raw bytes of the originally-uploaded specification document, captured at upload
@@ -121,6 +127,7 @@ Storage Default
 <Value name="16"><Value>OrigBytes</Value></Value>
 <Value name="17"><Value>OrigMime</Value></Value>
 <Value name="18"><Value>OrigExt</Value></Value>
+<Value name="19"><Value>ConciseVerifyStatus</Value></Value>
 </Data>
 <DataLocation>^DTL.Data.SpecDocD</DataLocation>
 <DefaultData>SpecDocDefaultData</DefaultData>

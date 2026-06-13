@@ -1482,6 +1482,7 @@ $("#cmptypecontinue").onclick=async()=>{
   cmpState._origRendDone=false;cmpState._origRawDone=false;
   $("#cmpEdit").value=cmpFinalMarkdown();
   renderConciseItems();
+  if(ok)renderJudge(sp2);   // surface the (background) audit state + verdict when ready
   loadSavedSpecs();
   cmpShowTab("review");
 };
@@ -1512,38 +1513,85 @@ async function openCompareModal(token){
   $("#cmpMdEditcopy").innerHTML="";$("#cmpMdEditcopy").appendChild(copyBtn(()=>$("#cmpEdit").value));
   // STEP 1: render the parse-review (original doc vs extracted markdown).
   renderParseReview(sp);
-  // verdict badge (LLM completeness/hallucination audit)
-  const vb=$("#cmpverdict");vb.innerHTML="";
-  const v=sp.conciseVerdict;
-  if(v&&typeof v==="object"){
-    const ok2=(v.complete&&v.faithful);const b=el("span","vbadge "+(ok2?"ok":"warn"));const bw=el("span","iwrap");bw.appendChild(licon(ok2?"shield-check":"triangle-alert"));bw.appendChild(document.createTextNode(ok2?("Verified complete & faithful"+(v.score!=null?(" ("+Math.round(v.score*100)+"%)"):"")):"Issues flagged — review"));b.appendChild(bw);vb.appendChild(b);
-    if(!ok2){const issues=[].concat((v.missing||[]).map(m=>"Missing: "+m)).concat((v.hallucinated||[]).map(h=>"Hallucinated: "+h));
-      if(issues.length){const w=el("div","specwarn");w.style.marginTop="8px";const ul=el("ul");ul.style.cssText="margin:4px 0 0 18px;padding:0";issues.forEach(t=>{const li=el("li");li.textContent=t;ul.appendChild(li);});w.appendChild(ul);$("#cmpbanner").appendChild(w);}}
-  }
-  // GATE: the review/resolve step is only available once the concise spec is fully
-  // generated AND verified (ConciseStatus=READY — the verify pass runs inline before
-  // the server marks it READY). If a saved spec is opened while still PENDING (e.g.
-  // generation/verification is running in another tab), don't show a half-finished
-  // concise spec for review — show a waiting state on the parse tab and poll until
-  // it's READY, then render the review. This prevents reviewing before verification.
-  const haveConcise=!!(cmpState.concise&&cmpState.concise.trim());
-  const verified=(sp.conciseStatus==="READY");
-  if(sp.conciseError){const isErr=(sp.conciseStatus==="ERROR")||!cmpState.concise;
-    if(isErr){$("#cmpbanner").innerHTML="";conciseErrBox($("#cmpbanner"),sp.conciseError,()=>$("#cmpgenconcise").onclick());}
-    else{const w=el("div","specwarn");w.style.marginBottom="10px";w.textContent=sp.conciseError;$("#cmpbanner").insertBefore(w,$("#cmpbanner").firstChild);}}
+  // Live audit ("judge") badge — reflects conciseVerifyStatus, polls while PENDING.
+  renderJudge(sp);
   const cf=$("#cmpconf");cf.innerHTML="";const c=(sp.confidence==null?1:+sp.confidence);cf.appendChild(el("span","confbadge "+confClass(c),"extraction "+Math.round(c*100)+"%"));
-  if(haveConcise&&verified){renderConciseItems();markParseStep(true);cmpShowTab("review");}
+  const haveConcise=!!(cmpState.concise&&cmpState.concise.trim());
+  // The concise spec is usable the moment generation is READY — the audit no longer
+  // gates review (it runs alongside and shows its verdict when done). Only a still-
+  // generating (no concise yet) spec waits.
+  if(haveConcise&&(sp.conciseStatus==="READY")){
+    if(sp.conciseError){const w=el("div","specwarn");w.style.marginBottom="10px";w.textContent=sp.conciseError;$("#cmpbanner").appendChild(w);}
+    renderConciseItems();markParseStep(true);cmpShowTab("review");
+  }
+  else if(sp.conciseStatus==="ERROR"){$("#cmpbanner").innerHTML="";conciseErrBox($("#cmpbanner"),sp.conciseError,()=>$("#cmpgenconcise").onclick());cmpShowTab("parse");}
   else if(sp.conciseStatus==="PENDING"){
-    // Still generating/verifying — POLL (do NOT re-POST /concise and restart a running
-    // job). Wait until READY/ERROR, then render review. Don't expose review yet.
-    markParseStep(true);showParseLoader("Verifying the specification…");setLoader(60,"Verifying the specification…","Checking the concise spec is complete and faithful before review.");cmpShowTab("parse");
+    // Generation itself still running (no concise yet). Poll until READY/ERROR.
+    markParseStep(true);showParseLoader("Generating specification…");setLoader(60,"Generating specification…","Organising the document into reviewable rules.");cmpShowTab("parse");
     const sp3=await pollConciseReady(token);
     if(sp3&&sp3.conciseStatus==="READY"){cmpState.sp=sp3;cmpState.concise=sp3.conciseSpec||"";cmpState.prov=sp3.conciseProvenance||null;cmpState.orig=sp3.text||cmpState.orig;
-      renderConciseItems();markParseStep(true);cmpShowTab("review");}
+      renderJudge(sp3);renderConciseItems();markParseStep(true);cmpShowTab("review");}
     else{$("#cmpbanner").innerHTML="";const w=el("div",(sp3&&sp3.conciseStatus==="ERROR")?"err":"specwarn");w.textContent=(sp3&&sp3.conciseError)||"The specification is still being prepared on the server. Reopen it shortly.";$("#cmpbanner").appendChild(w);cmpShowTab("parse");}
   }
   else{cmpShowTab("parse");}
   icons();
+}
+// Render the secondary AUDIT ("judge") state into #cmpverdict + #cmpbanner. The audit
+// runs ALONGSIDE review (never blocks it): this shows "Judging…" while PENDING and
+// auto-polls, shows the completeness/faithfulness verdict (missing/hallucinated) when
+// READY, and offers Re-run / Dismiss. The user can review & approve at any time
+// regardless of the audit — it is advisory.
+let judgePollTimer=null;
+function renderJudge(sp){
+  if(judgePollTimer){clearTimeout(judgePollTimer);judgePollTimer=null;}
+  const vb=$("#cmpverdict");if(!vb)return;vb.innerHTML="";
+  const vs=sp.conciseVerifyStatus||"NONE";
+  const tok=sp.token;
+  if(vs==="PENDING"){
+    const b=el("span","vbadge");const bw=el("span","iwrap");bw.appendChild(el("span","spinner"));bw.appendChild(document.createTextNode(" Judging generated spec…"));b.appendChild(bw);vb.appendChild(b);
+    // a "proceed without waiting" affordance — review is already available
+    const skip=el("a",null,"review now");skip.href="#";skip.style.marginLeft="8px";skip.onclick=(e)=>{e.preventDefault();jpost("/specs/"+tok+"/skip-verify",{});if(judgePollTimer)clearTimeout(judgePollTimer);sp.conciseVerifyStatus="SKIPPED";renderJudge(sp);};vb.appendChild(skip);
+    // poll for the verdict and re-render when it lands (doesn't block the UI)
+    judgePollTimer=setTimeout(async()=>{const [ok,sp2]=await jget("/specs/"+tok);if(ok&&$("#cmpmodal").classList.contains("show")){cmpState.sp=sp2;renderJudge(sp2);}},2500);
+    return;
+  }
+  if(vs==="SKIPPED"){
+    const b=el("span","vbadge");const bw=el("span","iwrap");bw.appendChild(licon("circle-slash"));bw.appendChild(document.createTextNode(" Audit skipped"));b.appendChild(bw);vb.appendChild(b);
+    const run=el("a",null,"run audit");run.href="#";run.style.marginLeft="8px";run.onclick=(e)=>{e.preventDefault();startJudge(tok);};vb.appendChild(run);
+    return;
+  }
+  if(vs==="ERROR"){
+    const b=el("span","vbadge warn");const bw=el("span","iwrap");bw.appendChild(licon("triangle-alert"));bw.appendChild(document.createTextNode(" Audit could not complete"));b.appendChild(bw);vb.appendChild(b);
+    const run=el("a",null,"retry");run.href="#";run.style.marginLeft="8px";run.onclick=(e)=>{e.preventDefault();startJudge(tok);};vb.appendChild(run);
+    return;
+  }
+  const v=sp.conciseVerdict;
+  if(vs==="READY"&&v&&typeof v==="object"){
+    const ok2=(v.complete&&v.faithful);
+    const b=el("span","vbadge "+(ok2?"ok":"warn"));const bw=el("span","iwrap");bw.appendChild(licon(ok2?"shield-check":"triangle-alert"));bw.appendChild(document.createTextNode(ok2?("Verified complete & faithful"+(v.score!=null?(" ("+Math.round(v.score*100)+"%)"):"")):("Audit flagged issues"+(v.score!=null?(" ("+Math.round(v.score*100)+"%)"):""))));b.appendChild(bw);vb.appendChild(b);
+    const run=el("a",null,"re-run");run.href="#";run.style.marginLeft="8px";run.onclick=(e)=>{e.preventDefault();startJudge(tok);};vb.appendChild(run);
+    if(!ok2){
+      const miss=(v.missing||[]),hall=(v.hallucinated||[]);
+      const det=el("details","plancollapse");det.style.marginTop="8px";
+      const sm=el("summary");sm.textContent="Audit details — "+miss.length+" possibly missing, "+hall.length+" possibly hallucinated (advisory; review before approving)";det.appendChild(sm);
+      const wrap=el("div");wrap.style.padding="8px 12px";
+      if(miss.length){wrap.appendChild(el("div","planhd","Possibly missing from the concise spec"));const ul=el("ul","planlist muted");miss.forEach(t=>{const li=el("li");li.textContent=t;ul.appendChild(li);});wrap.appendChild(ul);}
+      if(hall.length){wrap.appendChild(el("div","planhd","Possibly not supported by the original"));const ul2=el("ul","planlist muted");hall.forEach(t=>{const li=el("li");li.textContent=t;ul2.appendChild(li);});wrap.appendChild(ul2);}
+      if(v.notes){const n=el("div");n.style.cssText="margin-top:6px;font-size:12px;color:var(--muted)";n.textContent=v.notes;wrap.appendChild(n);}
+      det.appendChild(wrap);$("#cmpbanner").appendChild(det);
+    }
+    return;
+  }
+  // NONE (not started) — offer to run it; review is available regardless.
+  const run=el("a",null,"Run completeness audit");run.href="#";run.onclick=(e)=>{e.preventDefault();startJudge(tok);};
+  const w=el("span","iwrap");w.appendChild(licon("scan-search"));w.appendChild(run);vb.appendChild(w);
+}
+// Kick off (or re-run) the audit on the server, then reflect PENDING + start polling.
+async function startJudge(tok){
+  const [ok]=await jpost("/specs/"+tok+"/verify-concise",providerBody());
+  if(!ok)return;
+  cmpState.sp=cmpState.sp||{};cmpState.sp.conciseVerifyStatus="PENDING";cmpState.sp.token=tok;
+  renderJudge(cmpState.sp);
 }
 // Open the Specification Builder INSTANTLY on the parse step in a loading state:
 // render the PDF immediately from the just-uploaded bytes (we have them client-side,
@@ -1759,6 +1807,7 @@ $("#cmpgenconcise").onclick=async()=>{
   $("#cmpEdit").value=cmpFinalMarkdown();
   renderConciseItems();markParseStep(true);
   if(csp.conciseError){const w=el("div","specwarn");w.style.marginBottom="10px";w.textContent=csp.conciseError;$("#cmpbanner").innerHTML="";$("#cmpbanner").appendChild(w);}
+  if(ok)renderJudge(sp);   // surface the (background) audit state + verdict
   cmpShowTab("review");
 };
 // Read-only view for an ALREADY-APPROVED specification: the final markdown
@@ -2021,9 +2070,10 @@ function findTextEl(root,needle){
 // Once the user manually edits the markdown, stop auto-regenerating it from the
 // resolutions (their edits become the authority).
 $("#cmpEdit").addEventListener("input",()=>{cmpState.mdDirty=true;});
-$("#cmpcloseft").onclick=()=>$("#cmpmodal").classList.remove("show");
-$("#cmpclose").onclick=()=>$("#cmpmodal").classList.remove("show");
-$("#cmpmodal").onclick=(e)=>{if(e.target===$("#cmpmodal"))$("#cmpmodal").classList.remove("show");};
+function closeCmpModal(){if(judgePollTimer){clearTimeout(judgePollTimer);judgePollTimer=null;}$("#cmpmodal").classList.remove("show");}
+$("#cmpcloseft").onclick=closeCmpModal;
+$("#cmpclose").onclick=closeCmpModal;
+$("#cmpmodal").onclick=(e)=>{if(e.target===$("#cmpmodal"))closeCmpModal();};
 $("#cmpregen").onclick=async()=>{if(!cmpState.token)return;$("#cmpregen").disabled=true;
   const stopT=elapsedTicker($("#cmpregen"),"Regenerating…");
   const csp=await generateConcise(cmpState.token);

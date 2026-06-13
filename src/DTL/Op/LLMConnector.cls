@@ -362,8 +362,23 @@ ClassMethod ClampMaxTokens(pRequested As %Integer, pProvider As %String, pModel 
 	set tLower = $zconvert(pModel, "L")
 	if pProvider = "mock" quit pRequested        // mock honours whatever we ask
 	if pProvider = "bedrock" {
-		// Anthropic Claude on Bedrock: Opus/Sonnet 4.x support 64K output tokens.
-		set tCap = 65536
+		// Anthropic Claude on Bedrock — the max OUTPUT tokens differ sharply by model,
+		// and requesting MORE than a model supports is rejected by Bedrock (a 4xx that
+		// then burns the transient-retry budget) and, when accepted, invites the model
+		// to generate a needlessly huge reply (output tokens are serial -> slow). So cap
+		// PER MODEL, not with a blanket 64K:
+		//   - Haiku (3 / 3.5): 8192 max output.
+		//   - Sonnet/Opus 3.x: 8192 (4096 for legacy 3.0); 4.x: 64K.
+		if tLower [ "haiku" {
+			set tCap = 8192
+		} elseif (tLower [ "claude-3-5") || (tLower [ "claude-3.5") {
+			set tCap = 8192
+		} elseif (tLower [ "sonnet-4") || (tLower [ "opus-4") || (tLower [ "sonnet4") || (tLower [ "opus4") {
+			set tCap = 65536
+		} else {
+			// Unknown/other Claude: a safe, widely-supported ceiling.
+			set tCap = 8192
+		}
 	} elseif (tLower [ "gpt-5") || (tLower [ "gpt-6") || (tLower ? 1"o1".e) || (tLower ? 1"o3".e) || (tLower ? 1"o4".e) {
 		// OpenAI reasoning family: large completion budgets (100K+); cap generously.
 		set tCap = 100000

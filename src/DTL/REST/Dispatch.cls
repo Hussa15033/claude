@@ -32,6 +32,8 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
   <Route Url="/specs/:token"    Method="GET"  Call="GetSpec"  Cors="true"/>
   <Route Url="/specs/:token/original" Method="GET" Call="OrigDoc" Cors="true"/>
   <Route Url="/specs/:token/concise"         Method="POST" Call="ConciseSpec"        Cors="true"/>
+  <Route Url="/specs/:token/verify-concise"  Method="POST" Call="VerifyConcise"      Cors="true"/>
+  <Route Url="/specs/:token/skip-verify"     Method="POST" Call="SkipVerifyConcise"  Cors="true"/>
   <Route Url="/specs/:token/approve-concise" Method="POST" Call="ApproveConcise"     Cors="true"/>
   <Route Url="/generate"        Method="POST" Call="Generate" Cors="true"/>
   <Route Url="/jobs"            Method="GET"  Call="ListJobs" Cors="true"/>
@@ -356,7 +358,7 @@ ClassMethod GetSpec(pToken As %String) As %Status
 	if tProv '= "" { try { set tProvObj = ##class(%DynamicAbstractObject).%FromJSON(tProv) } catch {} }
 	set tVerObj = ""
 	if tDoc.ConciseVerdict '= "" { try { set tVerObj = ##class(%DynamicAbstractObject).%FromJSON(tDoc.ConciseVerdict) } catch {} }
-	do ..Json({"token": (tDoc.Token), "fileName": (tDoc.FileName), "status": (tDoc.Status), "text": (tDoc.TextStr()), "error": (tDoc.Error), "confidence": (tDoc.Confidence), "meta": (tMetaObj), "conciseStatus": (tDoc.ConciseStatus), "conciseApproved": (tDoc.ConciseApproved), "conciseSpec": (tDoc.ConciseStr()), "conciseProvenance": (tProvObj), "conciseVerdict": (tVerObj), "conciseError": (tDoc.ConciseError)})
+	do ..Json({"token": (tDoc.Token), "fileName": (tDoc.FileName), "status": (tDoc.Status), "text": (tDoc.TextStr()), "error": (tDoc.Error), "confidence": (tDoc.Confidence), "meta": (tMetaObj), "conciseStatus": (tDoc.ConciseStatus), "conciseVerifyStatus": (tDoc.ConciseVerifyStatus), "conciseApproved": (tDoc.ConciseApproved), "conciseSpec": (tDoc.ConciseStr()), "conciseProvenance": (tProvObj), "conciseVerdict": (tVerObj), "conciseError": (tDoc.ConciseError)})
 	quit $$$OK
 }
 
@@ -404,6 +406,37 @@ ClassMethod ConciseSpec(pToken As %String) As %Status
 	if $$$ISERR(sc) quit ..ErrJson(400, $system.Status.GetErrorText(sc))
 	set %response.Status = "202 Accepted"
 	do ..Json({"token": (pToken), "conciseStatus": "PENDING"})
+	quit $$$OK
+}
+
+/// POST /specs/:token/verify-concise — run (or re-run) the completeness/faithfulness
+/// AUDIT of the concise spec in the background. Returns 202; the UI polls
+/// conciseVerifyStatus -> READY (verdict in conciseVerdict) / ERROR.
+ClassMethod VerifyConcise(pToken As %String) As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
+	set tProvider = tPayload.provider, tModel = tPayload.model, tKey = tPayload.apiKey, tRegion = tPayload.region
+	set tConciseModel = tPayload.conciseModel
+	if $zstrip(tConciseModel, "<>W") = "" set tConciseModel = tModel
+	if (tProvider = "openai") || (tProvider = "bedrock") {
+		if $zstrip(tKey, "<>W") = "" quit ..ErrJson(400, "No API key configured.")
+		if $zstrip(tConciseModel, "<>W") = "" quit ..ErrJson(400, "No model selected.")
+	}
+	set sc = ##class(DTL.Service.SpecConcise).StartVerify(pToken, tProvider, tConciseModel, tKey, tRegion)
+	if $$$ISERR(sc) quit ..ErrJson(400, $system.Status.GetErrorText(sc))
+	set %response.Status = "202 Accepted"
+	do ..Json({"token": (pToken), "conciseVerifyStatus": "PENDING"})
+	quit $$$OK
+}
+
+/// POST /specs/:token/skip-verify — mark the audit as deliberately skipped so the UI
+/// stops offering/awaiting it and the user proceeds straight to review.
+ClassMethod SkipVerifyConcise(pToken As %String) As %Status
+{
+	set sc = ##class(DTL.Service.SpecConcise).SkipVerify(pToken)
+	if $$$ISERR(sc) quit ..ErrJson(400, $system.Status.GetErrorText(sc))
+	do ..Json({"token": (pToken), "conciseVerifyStatus": "SKIPPED"})
 	quit $$$OK
 }
 

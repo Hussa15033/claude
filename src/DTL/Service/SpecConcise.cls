@@ -54,11 +54,24 @@ ClassMethod RunJob(pToken As %String)
 	set tProvider = $listget(tArgs, 1), tModel = $listget(tArgs, 2)
 	set tKey = $listget(tArgs, 3), tRegion = $listget(tArgs, 4)
 	try {
-		do ..Generate(pToken, tProvider, tModel, tKey, tRegion)
+		set tGenSC = ..Generate(pToken, tProvider, tModel, tKey, tRegion)
+		// If generation succeeded, run the audit too — but ONLY after the concise spec is
+		// already committed READY (Generate did that), so this can't strand the spec. Run
+		// it in-line here (we're already a background job); a death now leaves the spec
+		// READY with ConciseVerifyStatus still PENDING, which the UI handles gracefully.
+		if $$$ISOK(tGenSC) {
+			set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
+			if $isobject(tDoc), tDoc.ConciseStatus = "READY" {
+				set tDoc.ConciseVerifyStatus = "PENDING"  do tDoc.%Save()
+				do ..Verify(pToken, tProvider, tModel, tKey, tRegion)
+			}
+		}
 	} catch ex {
 		set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
 		if $isobject(tDoc) {
-			set tDoc.ConciseStatus = "ERROR", tDoc.ConciseError = ex.DisplayString()
+			// Only mark the SPEC errored if generation itself never produced one.
+			if tDoc.ConciseStatus '= "READY" { set tDoc.ConciseStatus = "ERROR", tDoc.ConciseError = ex.DisplayString() }
+			else { set tDoc.ConciseVerifyStatus = "ERROR" }
 			do tDoc.%Save()
 		}
 	}
@@ -128,17 +141,14 @@ ClassMethod Generate(pToken As %String, pProvider As %String, pModel As %String,
 			set tScopeWarn = ..ScopeWarnings(tJson)
 			if tScopeWarn '= "" set tDoc.ConciseError = $select(tDoc.ConciseError'="":tDoc.ConciseError _ $char(10,10), 1:"") _ tScopeWarn
 		}
-		// 2) Verify the concise spec against the original (LLM half of verification).
-		// A failure here is non-fatal: we still have a concise spec to review; record a
-		// soft note rather than failing the whole generation.
-		set tVer = ##class(DTL.Util.LLM).Chat(pProvider, pModel, pApiKey, "You are a strict, fair specification auditor. You output only the requested JSON.", ##class(DTL.Util.PromptBuilder).ConciseVerifyPrompt(tRaw, tDoc.ConciseStr()), .tVErr, pRegion, , , , ..#SPECMAXTOKENS)
-		if tVer '= "" {
-			set tVObj = ##class(DTL.Util.LLM).ParseJSON(tVer)
-			if $isobject(tVObj) set tDoc.ConciseVerdict = $extract(tVObj.%ToJSON(), 1, 8000)
-		} elseif (tDoc.ConciseError = "") {
-			set tDoc.ConciseError = "Concise spec generated, but the automated completeness/hallucination check could not run (" _ $select(tVErr'="":tVErr, 1:"no response") _ "). Please review carefully."
-		}
+		// Generation done -> the concise spec is READY and USABLE NOW. The completeness/
+		// faithfulness AUDIT ("judge") is a SEPARATE, OPTIONAL phase (see Verify) that runs
+		// after this and updates ConciseVerifyStatus/ConciseVerdict independently. It must
+		// NEVER gate or block the spec: previously verify ran inline before READY, so if the
+		// background job died during the (large, slow) verify call the UI polled PENDING
+		// forever. Now READY is committed the moment generation succeeds.
 		set tDoc.ConciseStatus = "READY"
+		set tDoc.ConciseVerifyStatus = "NONE"
 		do tDoc.%Save()
 	} catch ex {
 		set tSC = ex.AsStatus()
@@ -146,6 +156,82 @@ ClassMethod Generate(pToken As %String, pProvider As %String, pModel As %String,
 		do tDoc.%Save()
 	}
 	quit tSC
+}
+
+/// SECONDARY AUDIT ("judge") — completeness + faithfulness of the concise spec vs the
+/// original. Runs AFTER Generate, never blocks it. Sets ConciseVerifyStatus PENDING
+/// while running, then READY (verdict in ConciseVerdict) or ERROR. Safe to call only
+/// when a concise spec already exists; returns immediately otherwise. A failure here
+/// is non-fatal — the concise spec stays usable.
+ClassMethod Verify(pToken As %String, pProvider As %String, pModel As %String, pApiKey As %String, pRegion As %String = "") As %Status
+{
+	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
+	if '$isobject(tDoc) quit $$$ERROR($$$GeneralError, "No spec '" _ pToken _ "'")
+	if $zstrip(tDoc.ConciseStr(), "<>W") = "" quit $$$ERROR($$$GeneralError, "No concise spec to verify yet.")
+	set tDoc.ConciseVerifyStatus = "PENDING"
+	do tDoc.%Save()
+	set tSC = $$$OK
+	try {
+		set tRaw = tDoc.TextStr()
+		set tVer = ##class(DTL.Util.LLM).Chat(pProvider, pModel, pApiKey, "You are a strict, fair specification auditor. You output only the requested JSON.", ##class(DTL.Util.PromptBuilder).ConciseVerifyPrompt(tRaw, tDoc.ConciseStr()), .tVErr, pRegion, , , , ..#SPECMAXTOKENS)
+		if tVer '= "" {
+			set tVObj = ##class(DTL.Util.LLM).ParseJSON(tVer)
+			if $isobject(tVObj) {
+				set tDoc.ConciseVerdict = $extract(tVObj.%ToJSON(), 1, 8000)
+				set tDoc.ConciseVerifyStatus = "READY"
+			} else {
+				set tDoc.ConciseVerifyStatus = "ERROR"
+				set tDoc.ConciseError = $select(tDoc.ConciseError'="":tDoc.ConciseError _ $char(10,10), 1:"") _ "The audit reply was not valid JSON — review the concise spec manually."
+			}
+		} else {
+			set tDoc.ConciseVerifyStatus = "ERROR"
+			set tDoc.ConciseError = $select(tDoc.ConciseError'="":tDoc.ConciseError _ $char(10,10), 1:"") _ "The completeness/faithfulness check could not run (" _ $select(tVErr'="":tVErr, 1:"no response") _ "). Review the concise spec manually."
+		}
+		do tDoc.%Save()
+	} catch ex {
+		set tSC = ex.AsStatus()
+		set tDoc.ConciseVerifyStatus = "ERROR", tDoc.ConciseError = ex.DisplayString()
+		do tDoc.%Save()
+	}
+	quit tSC
+}
+
+/// Background entry point for the audit (JOB'd by the /verify REST call). Reads the
+/// stashed key, runs Verify, clears the key.
+ClassMethod VerifyJob(pToken As %String)
+{
+	set tArgs = $get(^DTL.ConciseVerifyKey(pToken))
+	try {
+		do ..Verify(pToken, $listget(tArgs, 1), $listget(tArgs, 2), $listget(tArgs, 3), $listget(tArgs, 4))
+	} catch ex {
+		set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
+		if $isobject(tDoc) { set tDoc.ConciseVerifyStatus = "ERROR", tDoc.ConciseError = ex.DisplayString()  do tDoc.%Save() }
+	}
+	kill ^DTL.ConciseVerifyKey(pToken)
+	quit
+}
+
+/// Start the audit in the BACKGROUND (so the /verify HTTP request returns at once).
+ClassMethod StartVerify(pToken As %String, pProvider As %String, pModel As %String, pApiKey As %String, pRegion As %String = "") As %Status
+{
+	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
+	if '$isobject(tDoc) quit $$$ERROR($$$GeneralError, "No spec '" _ pToken _ "'")
+	if $zstrip(tDoc.ConciseStr(), "<>W") = "" quit $$$ERROR($$$GeneralError, "No concise spec to verify yet.")
+	set tDoc.ConciseVerifyStatus = "PENDING"
+	do tDoc.%Save()
+	set ^DTL.ConciseVerifyKey(pToken) = $listbuild(pProvider, pModel, pApiKey, pRegion)
+	job ##class(DTL.Service.SpecConcise).VerifyJob(pToken)
+	quit $$$OK
+}
+
+/// Mark the audit as deliberately SKIPPED by the user (proceed without judging).
+ClassMethod SkipVerify(pToken As %String) As %Status
+{
+	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
+	if '$isobject(tDoc) quit $$$ERROR($$$GeneralError, "No spec '" _ pToken _ "'")
+	set tDoc.ConciseVerifyStatus = "SKIPPED"
+	do tDoc.%Save()
+	quit $$$OK
 }
 
 /// Render the concise JSON into reviewer-facing markdown (grouped by type) + store
