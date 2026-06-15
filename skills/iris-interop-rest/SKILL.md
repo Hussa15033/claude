@@ -118,10 +118,10 @@ under `FailureTimeout`.
 ### Concurrency — PoolSize=1 serializes every job behind one worker
 An operation/BP left at `PoolSize="1"` (the default) processes one message at a
 time, so a slow LLM call on one job blocks ALL other jobs for minutes. Raise
-`PoolSize` (e.g. 4) on the LLM operation, the orchestrating BP, AND the
-`EnsLib.Testing.Service` you dispatch through, plus the production `<ActorPoolSize>`,
-so several jobs' calls run concurrently. `ActorPoolSize` alone does NOT parallelize a
-PoolSize=1 item — raise both. A PoolSize change needs a production stop/start.
+`PoolSize` (e.g. 4) on the LLM operation and the orchestrating BP, plus the
+production `<ActorPoolSize>`, so several jobs' calls run concurrently. `ActorPoolSize`
+alone does NOT parallelize a PoolSize=1 item — raise both. A PoolSize change needs a
+production stop/start.
 
 ### Surface HTTP errors descriptively (a 400 is not a transport failure)
 
@@ -193,15 +193,23 @@ ignores `AutheEnabled` — follow with a `Modify` to enforce it.
 
 ## Async dispatch into a running production (UI → BP)
 
-To kick a business process from REST and return immediately, use the built-in
-testing service (add `EnsLib.Testing.Service` as a production item):
+To get a message INTO the production from outside (REST, installer, tests), add
+your OWN adapterless **Business Service** as a production item and dispatch through
+it. A Business Service is the supported entry point; that is its entire purpose.
 
 ```objectscript
-set sc=##class(Ens.Director).CreateBusinessService("EnsLib.Testing.Service",.svc)
-set sc=svc.SendRequestAsync("X.Proc.MyBP",req)     // or SendRequestSync(...,.resp,timeout)
+set sc=##class(Ens.Director).CreateBusinessService("X.Svc.ApiService",.svc)
+set sc=svc.SubmitWork(req)     // your method wraps SendRequestAsync/Sync to the host
 ```
 `svc.%SessionId` after a send gives the interop session id for a Visual Trace link.
 Outside a STARTED production this fails with `ErrBusinessDispatchNameNotRegistered`.
+
+**DO NOT use `EnsLib.Testing.Service` for this.** It is a test harness, not an
+application entry point. Using it as the real inbound boundary (a) misuses the class
+and (b) hides the call graph — every call originates from a generic "Testing.Service"
+node instead of your named service, so the Visual Trace can't tell the flows apart.
+See the dedicated **iris-production-architecture** skill for the full rule
+(entry = Business Service; component→component = direct host send).
 
 ## FileInboundAdapter — the boot-with-path rule
 

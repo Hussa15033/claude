@@ -371,16 +371,17 @@ ClassMethod ForgeExample(pName As %String, pSrcDir As %String = "", pMaxAttempts
 	quit ..Dispatch(tReq)
 }
 
-/// Inject a ForgeRequest into the orchestrator BP through the testing service and
-/// print the ForgeResponse. Requires the production to be running.
+/// Inject a ForgeRequest into the orchestrator BP through the inbound business
+/// service DTL.Svc.ApiService and print the ForgeResponse. Requires the production
+/// to be running.
 ClassMethod Dispatch(pReq As DTL.Msg.ForgeRequest, pTarget As %String = "DTL.Proc.Orchestrator") As %Status
 {
-	set tSC = ##class(Ens.Director).CreateBusinessService("EnsLib.Testing.Service", .tSvc)
+	set tSC = ##class(Ens.Director).CreateBusinessService("DTL.Svc.ApiService", .tSvc)
 	if $$$ISERR(tSC) {
-		write "Could not create testing service (is the production running?): ", $system.Status.GetErrorText(tSC), !
+		write "Could not create the inbound service (is the production running?): ", $system.Status.GetErrorText(tSC), !
 		quit tSC
 	}
-	set tSC = tSvc.SendRequestSync(pTarget, pReq, .tResp, 300)
+	set tSC = tSvc.Forge(pReq, .tResp)
 	if $$$ISERR(tSC) {
 		write "Dispatch failed: ", $system.Status.GetErrorText(tSC), !
 		quit tSC

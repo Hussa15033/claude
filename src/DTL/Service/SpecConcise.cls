@@ -23,11 +23,23 @@ Parameter SPECMAXTOKENS = 65536;
 /// the length limit at SPECMAXTOKENS.
 Parameter SPECMAXTOKENSHI = 131072;
 
-/// Kick off concise-spec generation in the BACKGROUND and return immediately, so
-/// the synchronous /concise HTTP request can't time out (504) on a large spec that
-/// needs several big, slow LLM calls. Marks the doc PENDING, stashes the per-user
-/// API key in a transient global (never persisted on the record), and JOBs RunJob.
-/// The UI then polls GET /specs/:token until ConciseStatus becomes READY or ERROR.
+/// Config item (Business Process) that owns concise-spec generation off the queue.
+Parameter FORGETARGET = "DTL.Proc.SpecForge";
+
+/// Config name of the LLM operation the SpecForge host sends to directly.
+Parameter LLMTARGET = "DTL.Op.LLMConnector";
+
+/// Timeout (seconds) for a synchronous LLM call from the host.
+Parameter LLMTIMEOUT = 600;
+
+/// Kick off concise-spec generation and return immediately, so the synchronous
+/// /concise HTTP request can't time out (504) on a large spec that needs big, slow
+/// LLM calls. Marks the doc PENDING, then dispatches a DURABLE DTL.Msg.ConciseRequest
+/// onto the production's queue. A supervised DTL.Proc.SpecForge worker processes it
+/// and ALWAYS writes a terminal ConciseStatus (READY/ERROR); if the worker dies
+/// mid-call, Ensemble REDELIVERS the message on recovery — so the record can never
+/// hang in PENDING (the failure mode of the old detached `job` background worker).
+/// The UI polls GET /specs/:token until ConciseStatus becomes READY or ERROR.
 ClassMethod Start(pToken As %String, pProvider As %String, pModel As %String, pApiKey As %String, pRegion As %String = "") As %Status
 {
 	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
@@ -37,55 +49,70 @@ ClassMethod Start(pToken As %String, pProvider As %String, pModel As %String, pA
 	// prior state. Clear any previous error.
 	set tDoc.ConciseStatus = "PENDING", tDoc.ConciseError = ""
 	do tDoc.%Save()
-	// Stash the transient key/region for the spawned process (the JOB'd job has its
-	// own context and can't see local vars). Keyed by token; cleared by RunJob.
-	set ^DTL.ConciseKey(pToken) = $listbuild(pProvider, pModel, pApiKey, pRegion)
-	// Spawn a detached background job in this namespace to do the slow work.
-	job ##class(DTL.Service.SpecConcise).RunJob(pToken)
-	quit $$$OK
+	quit ..DispatchAsync(pToken, pProvider, pModel, pApiKey, pRegion, "generate")
 }
 
-/// Background entry point (JOB'd by Start). Reads the stashed provider/key, runs the
-/// synchronous Generate, then clears the transient key. Errors land on the SpecDoc
-/// (ConciseStatus=ERROR + ConciseError), so the polling UI always sees an outcome.
-ClassMethod RunJob(pToken As %String)
+/// Build a ConciseRequest and submit it ASYNCHRONOUSLY into the production through
+/// the inbound business service DTL.Svc.ApiService (the supported entry point), so
+/// the HTTP request returns at once and the durable DTL.Proc.SpecForge worker does
+/// the slow work — visible end-to-end in the Visual Trace
+/// (ApiService -> SpecForge -> LLMConnector). If the production isn't running we
+/// FALL BACK to a synchronous in-process run so the feature still works in a bare
+/// test namespace rather than stranding.
+ClassMethod DispatchAsync(pToken As %String, pProvider As %String, pModel As %String, pApiKey As %String, pRegion As %String, pMode As %String) As %Status
 {
-	set tArgs = $get(^DTL.ConciseKey(pToken))
-	set tProvider = $listget(tArgs, 1), tModel = $listget(tArgs, 2)
-	set tKey = $listget(tArgs, 3), tRegion = $listget(tArgs, 4)
-	try {
-		set tGenSC = ..Generate(pToken, tProvider, tModel, tKey, tRegion)
-		// If generation succeeded, run the audit too — but ONLY after the concise spec is
-		// already committed READY (Generate did that), so this can't strand the spec. Run
-		// it in-line here (we're already a background job); a death now leaves the spec
-		// READY with ConciseVerifyStatus still PENDING, which the UI handles gracefully.
-		if $$$ISOK(tGenSC) {
+	if '##class(Ens.Director).IsProductionRunning() {
+		// No production: run inline (synchronous) so the work still completes. Generate/
+		// Verify each commit a terminal status, so this path also can't strand PENDING.
+		// With no host, the LLM call falls back to DTL.Util.LLM.Chat internally.
+		if pMode = "verify" quit ..Verify("", pToken, pProvider, pModel, pApiKey, pRegion)
+		set tSC = ..Generate("", pToken, pProvider, pModel, pApiKey, pRegion)
+		if $$$ISOK(tSC) {
 			set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
 			if $isobject(tDoc), tDoc.ConciseStatus = "READY" {
 				set tDoc.ConciseVerifyStatus = "PENDING"  do tDoc.%Save()
-				do ..Verify(pToken, tProvider, tModel, tKey, tRegion)
+				do ..Verify("", pToken, pProvider, pModel, pApiKey, pRegion)
 			}
 		}
-	} catch ex {
-		set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
-		if $isobject(tDoc) {
-			// Only mark the SPEC errored if generation itself never produced one.
-			if tDoc.ConciseStatus '= "READY" { set tDoc.ConciseStatus = "ERROR", tDoc.ConciseError = ex.DisplayString() }
-			else { set tDoc.ConciseVerifyStatus = "ERROR" }
-			do tDoc.%Save()
-		}
+		quit tSC
 	}
-	// Drop the transient key as soon as the work is done (don't leave secrets around).
-	kill ^DTL.ConciseKey(pToken)
-	quit
+	set tSC = ##class(Ens.Director).CreateBusinessService("DTL.Svc.ApiService", .tSvc)
+	quit:$$$ISERR(tSC) tSC
+	set tReq = ##class(DTL.Msg.ConciseRequest).%New()
+	set tReq.Token = pToken, tReq.Provider = pProvider, tReq.Model = pModel
+	set tReq.ApiKey = pApiKey, tReq.Region = pRegion, tReq.Mode = pMode
+	quit tSvc.SubmitConcise(tReq)
+}
+
+/// Issue one LLM call. When pHost is a running interoperability host (the SpecForge
+/// BP), send the request DIRECTLY from it (..SendRequestSync) so the call is a child
+/// message of that host in the Visual Trace. With no host (the no-production inline
+/// fallback / tests), use the one-shot DTL.Util.LLM.Chat. Returns the raw reply ("" on
+/// failure, pErr set) plus finish reason byref. Centralised so Generate and Verify
+/// share the exact same routing.
+ClassMethod CallLLM(pHost As Ens.Host, pProvider As %String, pModel As %String, pApiKey As %String, pSystem As %String, pUser As %String, pRegion As %String, pMaxTokens As %Integer, Output pErr As %String, Output pFinish As %String) As %String
+{
+	set pErr = "", pFinish = ""
+	if '$isobject(pHost) {
+		quit ##class(DTL.Util.LLM).Chat(pProvider, pModel, pApiKey, pSystem, pUser, .pErr, pRegion, , , , pMaxTokens, .pFinish)
+	}
+	set tReq = ##class(DTL.Util.LLM).BuildRequest(pProvider, pModel, pApiKey, pSystem, pUser, pRegion, pMaxTokens)
+	set tSC = pHost.SendRequestSync(..#LLMTARGET, tReq, .tResp, ..#LLMTIMEOUT)
+	if $$$ISERR(tSC) { set pErr = $system.Status.GetErrorText(tSC) quit "" }
+	if '$isobject(tResp) { set pErr = "no response" quit "" }
+	set pFinish = tResp.FinishReason
+	set tRaw = ##class(DTL.Data.Job).StreamStr(tResp.RawContent)
+	if tRaw = "" { set pErr = $select(tResp.ErrorText'="":tResp.ErrorText, 1:"empty response") }
+	quit tRaw
 }
 
 /// Generate (and verify) the concise spec for a token. Idempotent-ish: regenerates
 /// on each call (the UI only calls it when ConciseStatus is not READY, or on an
 /// explicit "regenerate"). Returns %Status; details land on the SpecDoc record.
-/// Runs SYNCHRONOUSLY — called in-process by RunJob (background) and directly by
-/// tests. The REST endpoint uses Start (async) so the HTTP request can't 504.
-ClassMethod Generate(pToken As %String, pProvider As %String, pModel As %String, pApiKey As %String, pRegion As %String = "") As %Status
+/// Runs SYNCHRONOUSLY — called in-process by the DTL.Proc.SpecForge queue worker and
+/// directly by tests. The REST endpoint uses Start (async dispatch onto that durable
+/// BP) so the HTTP request can't 504 and the work can never strand at PENDING.
+ClassMethod Generate(pHost As Ens.Host, pToken As %String, pProvider As %String, pModel As %String, pApiKey As %String, pRegion As %String = "") As %Status
 {
 	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
 	if '$isobject(tDoc) quit $$$ERROR($$$GeneralError, "No spec '" _ pToken _ "'")
@@ -105,9 +132,9 @@ ClassMethod Generate(pToken As %String, pProvider As %String, pModel As %String,
 		// optimise tokens here; completeness matters more than cost. Start high and, if
 		// the model still reports it hit the length limit, escalate further before
 		// giving up. ..#SPECMAXTOKENS is the cap that almost never truncates real specs.
-		set tReply = ##class(DTL.Util.LLM).Chat(pProvider, pModel, pApiKey, tSys, tUser, .tErr, pRegion, , , , ..#SPECMAXTOKENS, .tFinish)
+		set tReply = ..CallLLM(pHost, pProvider, pModel, pApiKey, tSys, tUser, pRegion, ..#SPECMAXTOKENS, .tErr, .tFinish)
 		if (tReply '= ""), (tFinish = "length") {
-			set tReply = ##class(DTL.Util.LLM).Chat(pProvider, pModel, pApiKey, tSys, tUser, .tErr, pRegion, , , , ..#SPECMAXTOKENSHI, .tFinish)
+			set tReply = ..CallLLM(pHost, pProvider, pModel, pApiKey, tSys, tUser, pRegion, ..#SPECMAXTOKENSHI, .tErr, .tFinish)
 		}
 		if tReply = "" {
 			// LLM call failed (bad key, rate limit, bad model, transport). Record the
@@ -122,24 +149,29 @@ ClassMethod Generate(pToken As %String, pProvider As %String, pModel As %String,
 		}
 		set tJson = ##class(DTL.Util.LLM).ParseJSON(tReply)
 		if '$isobject(tJson) {
-			// Reply came back but wasn't valid JSON — keep the raw text as the concise
-			// spec (better than empty) but flag it so the user knows to review closely.
-			// Distinguish a TRUNCATED reply (model hit the output-token limit -> JSON cut
-			// off mid-object) from a genuine format problem, so the user knows it's a
-			// size issue and not a bad spec.
+			// Reply came back but wasn't valid JSON — almost always the model hit its
+			// OUTPUT-TOKEN LIMIT and the JSON was cut off mid-object. A truncated/invalid
+			// concise spec must NOT be usable (the user explicitly must not build from it):
+			// mark it ERROR so review/approve are blocked. Keep the raw reply in ConciseSpec
+			// so the UI can offer a collapsed "view raw reply" for diagnosis, but with empty
+			// provenance and an ERROR status it cannot be approved or fed to the build.
 			do tDoc.ConciseSpec.Clear()  do tDoc.ConciseSpec.Write(tReply)
 			do tDoc.ConciseProvenance.Clear()  do tDoc.ConciseProvenance.Write("{}")
+			set tDoc.ConciseStatus = "ERROR"
 			if tFinish = "length" {
-				set tDoc.ConciseError = "The specification is large and the model's reply was cut off at its output-token limit, so the JSON is incomplete. Showing the partial reply — try a model with a larger output budget, or split the document. (No per-item source links until it returns complete JSON.)"
+				set tDoc.ConciseError = "The model's reply was cut off at its output-token limit, so the specification JSON is incomplete (truncated). This spec cannot be used. Try a model with a larger output budget (e.g. Claude Sonnet/Opus instead of Haiku) for the Concise-spec model, or split the document, then regenerate."
 			} else {
-				set tDoc.ConciseError = "The model did not return structured JSON; showing its raw reply — review carefully (no per-item source links)."
+				set tDoc.ConciseError = "The model did not return valid, complete JSON for the specification (likely truncated at the output-token limit). This spec cannot be used. Try a model with a larger output budget for the Concise-spec model, then regenerate."
 			}
+			do tDoc.%Save()
+			set tSC = $$$ERROR($$$GeneralError, "Concise-spec generation produced invalid/truncated JSON.")
+			quit
 		} else {
+			// ApplyConcise also folds the deterministic SCOPE FINDINGS (structured, not a
+			// prose blob) into the provenance JSON, so the UI can render them as actionable
+			// cards and let the reviewer fix/move rules — see ScopeFindings. We deliberately
+			// no longer append a text warning to ConciseError (that field is for real errors).
 			do ..ApplyConcise(tDoc, tJson)
-			// Deterministic scoping guardrail: flag likely mis-scoped generic rules so a
-			// reviewer catches them before generation silently drops them for some types.
-			set tScopeWarn = ..ScopeWarnings(tJson)
-			if tScopeWarn '= "" set tDoc.ConciseError = $select(tDoc.ConciseError'="":tDoc.ConciseError _ $char(10,10), 1:"") _ tScopeWarn
 		}
 		// Generation done -> the concise spec is READY and USABLE NOW. The completeness/
 		// faithfulness AUDIT ("judge") is a SEPARATE, OPTIONAL phase (see Verify) that runs
@@ -163,7 +195,7 @@ ClassMethod Generate(pToken As %String, pProvider As %String, pModel As %String,
 /// while running, then READY (verdict in ConciseVerdict) or ERROR. Safe to call only
 /// when a concise spec already exists; returns immediately otherwise. A failure here
 /// is non-fatal — the concise spec stays usable.
-ClassMethod Verify(pToken As %String, pProvider As %String, pModel As %String, pApiKey As %String, pRegion As %String = "") As %Status
+ClassMethod Verify(pHost As Ens.Host, pToken As %String, pProvider As %String, pModel As %String, pApiKey As %String, pRegion As %String = "") As %Status
 {
 	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
 	if '$isobject(tDoc) quit $$$ERROR($$$GeneralError, "No spec '" _ pToken _ "'")
@@ -173,7 +205,7 @@ ClassMethod Verify(pToken As %String, pProvider As %String, pModel As %String, p
 	set tSC = $$$OK
 	try {
 		set tRaw = tDoc.TextStr()
-		set tVer = ##class(DTL.Util.LLM).Chat(pProvider, pModel, pApiKey, "You are a strict, fair specification auditor. You output only the requested JSON.", ##class(DTL.Util.PromptBuilder).ConciseVerifyPrompt(tRaw, tDoc.ConciseStr()), .tVErr, pRegion, , , , ..#SPECMAXTOKENS)
+		set tVer = ..CallLLM(pHost, pProvider, pModel, pApiKey, "You are a strict, fair specification auditor. You output only the requested JSON.", ##class(DTL.Util.PromptBuilder).ConciseVerifyPrompt(tRaw, tDoc.ConciseStr()), pRegion, ..#SPECMAXTOKENS, .tVErr, .tVFinish)
 		if tVer '= "" {
 			set tVObj = ##class(DTL.Util.LLM).ParseJSON(tVer)
 			if $isobject(tVObj) {
@@ -196,22 +228,9 @@ ClassMethod Verify(pToken As %String, pProvider As %String, pModel As %String, p
 	quit tSC
 }
 
-/// Background entry point for the audit (JOB'd by the /verify REST call). Reads the
-/// stashed key, runs Verify, clears the key.
-ClassMethod VerifyJob(pToken As %String)
-{
-	set tArgs = $get(^DTL.ConciseVerifyKey(pToken))
-	try {
-		do ..Verify(pToken, $listget(tArgs, 1), $listget(tArgs, 2), $listget(tArgs, 3), $listget(tArgs, 4))
-	} catch ex {
-		set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
-		if $isobject(tDoc) { set tDoc.ConciseVerifyStatus = "ERROR", tDoc.ConciseError = ex.DisplayString()  do tDoc.%Save() }
-	}
-	kill ^DTL.ConciseVerifyKey(pToken)
-	quit
-}
-
-/// Start the audit in the BACKGROUND (so the /verify HTTP request returns at once).
+/// Start the audit off the durable queue (so the /verify HTTP request returns at
+/// once). Same architecture as Start: a supervised, redeliverable DTL.Proc.SpecForge
+/// worker runs the audit and always writes a terminal ConciseVerifyStatus.
 ClassMethod StartVerify(pToken As %String, pProvider As %String, pModel As %String, pApiKey As %String, pRegion As %String = "") As %Status
 {
 	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
@@ -219,9 +238,7 @@ ClassMethod StartVerify(pToken As %String, pProvider As %String, pModel As %Stri
 	if $zstrip(tDoc.ConciseStr(), "<>W") = "" quit $$$ERROR($$$GeneralError, "No concise spec to verify yet.")
 	set tDoc.ConciseVerifyStatus = "PENDING"
 	do tDoc.%Save()
-	set ^DTL.ConciseVerifyKey(pToken) = $listbuild(pProvider, pModel, pApiKey, pRegion)
-	job ##class(DTL.Service.SpecConcise).VerifyJob(pToken)
-	quit $$$OK
+	quit ..DispatchAsync(pToken, pProvider, pModel, pApiKey, pRegion, "verify")
 }
 
 /// Mark the audit as deliberately SKIPPED by the user (proceed without judging).
@@ -279,8 +296,76 @@ ClassMethod ApplyConcise(pDoc As DTL.Data.SpecDoc, pJson As %DynamicObject)
 			}
 		}
 	}
+	// Attach the deterministic SCOPE FINDINGS as STRUCTURED data on the provenance, so
+	// the UI can render actionable cards (and let the reviewer fix/move a rule) instead
+	// of parsing a prose blob. Shape: scopeFindings:[{groupIndex,itemIndex,id,segment,
+	// kind,scopedTo,rule,message}]. kind = "NARROWED" (generic seg pinned to specific
+	// type[s]) | "NOSCOPE" (no appliesTo at all). Empty array when nothing looks wrong.
+	set pJson.scopeFindings = ..ScopeFindings(pJson)
 	do pDoc.ConciseSpec.Clear()  do pDoc.ConciseSpec.Write(tMd)
 	do pDoc.ConciseProvenance.Clear()  do pDoc.ConciseProvenance.Write(pJson.%ToJSON())
+}
+
+/// STRUCTURED scope findings (the machine-readable form of ScopeWarnings). Returns a
+/// %DynamicArray of finding objects the UI renders as cards and can act on. Same
+/// heuristics as ScopeWarnings: a rule on a generic/shared segment (MSH/PID/PV1/PV2/
+/// NTE/EVN) narrowed to specific message type(s) is suspicious (kind=NARROWED); a rule
+/// with no message-type scope at all is flagged (kind=NOSCOPE). Each finding carries
+/// the group+item index so the UI can locate and edit the exact item.
+ClassMethod ScopeFindings(pJson As %DynamicObject) As %DynamicArray
+{
+	set tOut = []
+	quit:'$isobject(pJson) tOut
+	quit:'$isobject(pJson.groups) tOut
+	set tGeneric = ",MSH,PID,PV1,PV2,NTE,EVN,"
+	set gi = -1
+	set git = pJson.groups.%GetIterator()
+	while git.%GetNext(.gk, .g) {
+		set gi = gi + 1
+		continue:'$isobject(g)
+		set tType = $zconvert(g.type, "U")
+		set tSeg = tType
+		if tSeg [ "/" set tSeg = $zstrip($piece(tSeg, "/", $length(tSeg, "/")), "<>W")
+		set tSeg = $piece(tSeg, " ", 1)
+		set tIsGeneric = (tGeneric [ ("," _ tSeg _ ","))
+		continue:'$isobject(g.items)
+		set ii = -1
+		set iit = g.items.%GetIterator()
+		while iit.%GetNext(.ik, .item) {
+			set ii = ii + 1
+			continue:'$isobject(item)
+			set tHasWild = 0, tNarrow = "", tCount = 0
+			if $isobject(item.appliesTo) {
+				set ait = item.appliesTo.%GetIterator()
+				while ait.%GetNext(.ak, .av) {
+					set av = $zstrip($select($isobject(av):"", 1:av), "<>W")
+					continue:av=""
+					set tCount = tCount + 1
+					if av = "*" set tHasWild = 1
+					else  set tNarrow = tNarrow _ $select(tNarrow'="":", ", 1:"") _ av
+				}
+			}
+			set tKind = ""
+			if tIsGeneric, 'tHasWild, tNarrow '= "" {
+				set tKind = "NARROWED"
+				set tMsg = tSeg _ " is a shared segment, so this rule likely applies to ALL message types — but it is scoped only to " _ tNarrow _ "."
+			} elseif tCount = 0 {
+				set tKind = "NOSCOPE"
+				set tMsg = "This rule has no message-type scope (it will be treated as applying to all types). Confirm that is intended."
+			}
+			continue:tKind=""
+			set tF = {}
+			set tF.groupIndex = gi, tF.itemIndex = ii
+			set tF.id = item.id
+			set tF.segment = tSeg
+			set tF.kind = tKind
+			set tF.scopedTo = tNarrow
+			set tF.rule = item.rule
+			set tF.message = tMsg
+			do tOut.%Push(tF)
+		}
+	}
+	quit tOut
 }
 
 /// Render an item's message-type scope as an inline markdown tag. The wildcard

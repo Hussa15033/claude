@@ -1,8 +1,13 @@
-/// Stateless one-shot LLM caller for steps that are NOT part of a job's build
-/// conversation — e.g. generating/verifying the concise spec at upload time. Builds
-/// a transient, fully-traced request through EnsLib.Testing.Service to the shared
-/// DTL.Op.LLMConnector, so it reuses the same provider wiring (OpenAI / Bedrock /
-/// mock), auth, timeouts and retry as the main loop without needing a Job record.
+/// Stateless one-shot LLM caller for code paths that run OUTSIDE a hosted component
+/// and only need a single reply without a Job record — e.g. the no-production inline
+/// fallback for concise-spec generation, and tests. It submits through the inbound
+/// business service DTL.Svc.ApiService to the shared DTL.Op.LLMConnector, reusing the
+/// same provider wiring (OpenAI / Bedrock / mock), auth, timeouts and retry.
+///
+/// NOTE: a hosted component (a Business Process such as DTL.Proc.SpecForge) must NOT
+/// call Chat — it should send to the LLM operation DIRECTLY with ..SendRequestSync so
+/// the call is a child message of that host in the Visual Trace. Use BuildRequest to
+/// assemble the message, then send it yourself. Chat is only for non-hosted callers.
 Class DTL.Util.LLM Extends %RegisteredObject
 {
 
@@ -10,11 +15,11 @@ Parameter LLMTARGET = "DTL.Op.LLMConnector";
 
 /// One-shot chat: send a system + user prompt, return the raw assistant text ("" on
 /// failure with pErr set). Tokens/cost come back byref so the caller can record them.
-ClassMethod Chat(pProvider As %String, pModel As %String, pApiKey As %String, pSystem As %String, pUser As %String, Output pErr As %String, pRegion As %String = "", Output pInTok As %Integer, Output pOutTok As %Integer, Output pCost As %Numeric, pMaxTokens As %Integer = 0, Output pFinishReason As %String) As %String
+/// Build an LLMRequest carrying a system + user turn. Shared by Chat (testing-service
+/// path) and by hosted Business Processes that issue ..SendRequestSync to the
+/// LLMConnector directly (so the call shows as a child message in their Visual Trace).
+ClassMethod BuildRequest(pProvider As %String, pModel As %String, pApiKey As %String, pSystem As %String, pUser As %String, pRegion As %String = "", pMaxTokens As %Integer = 0) As DTL.Msg.LLMRequest
 {
-	set pErr = "", pInTok = 0, pOutTok = 0, pCost = 0, pFinishReason = ""
-	set sc = ##class(Ens.Director).CreateBusinessService("EnsLib.Testing.Service", .tSvc)
-	if $$$ISERR(sc) { set pErr = $system.Status.GetErrorText(sc) quit "" }
 	set tReq = ##class(DTL.Msg.LLMRequest).%New()
 	set tReq.Provider = pProvider
 	set tReq.Model = pModel
@@ -29,7 +34,16 @@ ClassMethod Chat(pProvider As %String, pModel As %String, pApiKey As %String, pS
 	set tU = ##class(DTL.Msg.ChatTurn).%New()
 	set tU.Role = "user", tU.Content = pUser
 	do tReq.Transcript.Insert(tU)
-	set sc = tSvc.SendRequestSync(..#LLMTARGET, tReq, .tResp, 600)
+	quit tReq
+}
+
+ClassMethod Chat(pProvider As %String, pModel As %String, pApiKey As %String, pSystem As %String, pUser As %String, Output pErr As %String, pRegion As %String = "", Output pInTok As %Integer, Output pOutTok As %Integer, Output pCost As %Numeric, pMaxTokens As %Integer = 0, Output pFinishReason As %String) As %String
+{
+	set pErr = "", pInTok = 0, pOutTok = 0, pCost = 0, pFinishReason = ""
+	set sc = ##class(Ens.Director).CreateBusinessService("DTL.Svc.ApiService", .tSvc)
+	if $$$ISERR(sc) { set pErr = $system.Status.GetErrorText(sc) quit "" }
+	set tReq = ..BuildRequest(pProvider, pModel, pApiKey, pSystem, pUser, pRegion, pMaxTokens)
+	set sc = tSvc.LLM(tReq, .tResp)
 	if $$$ISERR(sc) { set pErr = $system.Status.GetErrorText(sc) quit "" }
 	if '$isobject(tResp) { set pErr = "no response" quit "" }
 	set pFinishReason = tResp.FinishReason

@@ -69,7 +69,20 @@ XData ProductionDefinition
     <Setting Target="Adapter" Name="ConfirmComplete">1</Setting>
   </Item>
 
-  <Item Name="EnsLib.Testing.Service" Category="DTL" ClassName="EnsLib.Testing.Service" PoolSize="4" Enabled="true" Foreground="false" InactivityTimeout="0" Comment="Inject ForgeRequests + drive gated LLM calls" LogTraceEvents="false" Schedule="">
+  <!-- Concise-spec generator/auditor. Runs off the DURABLE queue so a slow/large
+       LLM reply or a process death can never strand a SpecDoc at PENDING: the
+       message is persisted, a pooled worker always writes a terminal status, and a
+       worker death triggers Ensemble redelivery. PoolSize>1 so several uploads can
+       be processed concurrently. -->
+  <Item Name="DTL.Proc.SpecForge" Category="DTL" ClassName="DTL.Proc.SpecForge" PoolSize="4" Enabled="true" Foreground="false" InactivityTimeout="0" Comment="Generate/audit the concise specification off the durable queue" LogTraceEvents="false" Schedule="">
+  </Item>
+
+  <!-- The single INBOUND boundary into the production. The REST layer, installer and
+       tests submit work by creating this service and calling its typed methods, which
+       then send on to the right host. Adapterless (driven programmatically, not by a
+       polling adapter). This replaces the misuse of EnsLib.Testing.Service as an entry
+       point — a Business Service is the supported way to get a message into a production. -->
+  <Item Name="DTL.Svc.ApiService" Category="DTL" ClassName="DTL.Svc.ApiService" PoolSize="0" Enabled="true" Foreground="false" InactivityTimeout="0" Comment="Inbound boundary: submit LLM / forge / concise requests into the production" LogTraceEvents="false" Schedule="">
   </Item>
 
 </Production>

@@ -337,16 +337,17 @@ ClassMethod CorrectJob(pJobId As %String, pInput As %String, pProduced As %Strin
 	quit pSC
 }
 
-/// Send the ForgeRequest asynchronously into the orchestrator via the built-in
-/// testing service, so the HTTP request can return immediately.
+/// Send the ForgeRequest asynchronously into the orchestrator through the inbound
+/// business service DTL.Svc.ApiService (the supported entry point), so the HTTP
+/// request can return immediately and the flow is visible in the Visual Trace.
 ClassMethod DispatchAsync(pReq As DTL.Msg.ForgeRequest) As %Status
 {
 	if '##class(Ens.Director).IsProductionRunning() {
 		quit $$$ERROR($$$GeneralError, "The DTL production is not running. Start it (DTL.Setup.Installer.Run) first.")
 	}
-	set tSC = ##class(Ens.Director).CreateBusinessService("EnsLib.Testing.Service", .tSvc)
+	set tSC = ##class(Ens.Director).CreateBusinessService("DTL.Svc.ApiService", .tSvc)
 	quit:$$$ISERR(tSC) tSC
-	quit tSvc.SendRequestAsync(..#TARGET, pReq)
+	quit tSvc.SubmitForge(pReq)
 }
 
 /// Generate a short, unique, URL-safe job id (lowercase hex, no underscores).

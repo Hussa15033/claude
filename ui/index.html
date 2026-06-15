@@ -291,7 +291,7 @@
   .tabs{display:flex;gap:4px;margin:16px 0 12px;border-bottom:1px solid var(--line)}
   .tab{padding:9px 16px;border:none;cursor:pointer;background:none;font-size:13px;color:var(--muted);font-weight:600;border-bottom:3px solid transparent;transition:.15s}
   .tab.active{color:var(--iris-blue);border-bottom-color:var(--iris-blue)}
-  .hidden{display:none}
+  .hidden{display:none!important}
   .pill{font-family:var(--mono);font-size:11px;background:#eef1f8;padding:3px 10px;border-radius:999px;color:var(--muted)}
   a{color:var(--iris-blue);font-weight:600;text-decoration:none}a:hover{text-decoration:underline}
   .links{display:flex;gap:16px;font-size:13px}
@@ -431,6 +431,13 @@
   .ambrow textarea{width:100%;min-height:48px;font-size:12px;margin-bottom:7px}
   .ambrow .ambacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
   .ambrow .ambstate{font-size:11.5px;color:var(--muted);font-style:italic}
+  /* Ambiguity source line — clickable, jumps to the passage in the original (pane 3) */
+  .ambrow .amb-src{margin:0 0 8px;font-size:11px;color:var(--muted);font-style:italic;line-height:1.4;cursor:pointer;border-left:2px solid var(--iris-blue);padding:3px 0 3px 8px;border-radius:0}
+  .ambrow .amb-src:hover{color:var(--iris-blue)}
+  .ambrow .amb-src .ci-srclbl{font-style:normal;font-weight:700;color:var(--iris-blue);letter-spacing:.3px}
+  .ambrow .amb-src.nosrc{cursor:default;border-left-color:var(--muted)}
+  .ambrow .amb-src.nosrc:hover{color:var(--muted)}
+  .ambrow.srcsel{box-shadow:0 0 0 2px var(--iris-blue) inset}
   /* per-ambiguity resolution options (radios) + custom input */
   .ambopts{display:flex;flex-direction:column;gap:6px;margin-bottom:4px}
   .ambopt{display:flex;align-items:flex-start;gap:8px;margin:0;font-size:12.5px;color:var(--ink);font-weight:500;
@@ -453,13 +460,38 @@
   .citem .ci-rule strong{font-weight:700}
   .citem .ci-src{margin-top:5px;font-size:11px;color:var(--muted);font-style:italic;line-height:1.4}
   .citem .ci-srclbl{font-style:normal;font-weight:700;color:var(--iris-blue);letter-spacing:.3px}
+  .citem .ci-tag.scope{background:var(--iris-blue);color:#fff}
+  .citem .ci-acts{margin-top:7px;display:flex;align-items:center;gap:8px}
+  /* Move-to control (shared by rule cards + scope cards) */
+  .movectl{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+  .movectl .movelbl{font-weight:700}
+  .movectl select{width:auto;max-width:220px;padding:4px 8px;font-size:11.5px}
+  /* Scope-review menu entry (mirrors the ambiguities pseudo-segment, in blue) */
+  .segitem.scope{color:var(--iris-blue)}
+  .segitem.scope.sel{background:var(--iris-blue);color:#fff}
+  .segitem.scope .segcount{background:rgba(52,54,153,.12);color:var(--iris-blue)}
+  .segitem.scope.sel .segcount{background:rgba(255,255,255,.25);color:#fff}
+  /* Scope-review cards */
+  .scopeintro{font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:10px}
+  .scopecard{border:1px solid var(--line);border-left:3px solid var(--iris-blue);border-radius:var(--radius-sm);padding:10px;margin-bottom:9px;background:var(--soft)}
+  .scopecard.noscope{border-left-color:var(--warn-amber)}
+  .scopecard .sc-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .scopecard .sc-seg{font-size:11px;font-weight:800;letter-spacing:.4px;background:var(--iris-blue);color:#fff;padding:1px 8px;border-radius:999px}
+  .scopecard .sc-tag{font-size:10.5px;font-weight:700;color:#9a6a00;background:var(--warn-bg);border:1px solid #f0d8a8;padding:1px 8px;border-radius:999px}
+  .scopecard .sc-rule{font-weight:500;font-size:13px;color:var(--ink);margin-bottom:5px}
+  .scopecard .sc-rule code{font-family:var(--mono);background:#fff;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:.92em}
+  .scopecard .sc-msg{font-size:11.5px;color:var(--muted);line-height:1.45;margin-bottom:9px}
+  .scopecard .sc-acts{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .scopecard .sc-acts button.ok{font-size:11.5px;padding:5px 10px}
   .cgrp{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--iris-blue);font-weight:800;margin:12px 0 6px;padding-bottom:3px;border-bottom:1px solid var(--line)}
   .cgrp:first-child{margin-top:0}
   .cmphi{background:rgba(245,166,35,.4);border-radius:2px;box-shadow:0 0 0 2px rgba(245,166,35,.55)}
   /* flash highlight applied to a rendered-markdown element when its source is located */
   .cmphi-flash{background:rgba(245,166,35,.28);border-radius:3px;box-shadow:0 0 0 2px rgba(245,166,35,.5);transition:background .3s,box-shadow .3s}
   .cmptools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:var(--muted)}
-  .vbadge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+  .vbadge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;vertical-align:middle;line-height:1}
+  .vbadge .iwrap{align-items:center}
+  #cmpverdict a{vertical-align:middle;margin-left:8px}
   .vbadge.ok{background:var(--iris-green-100);color:var(--iris-green-700)}
   .vbadge.warn{background:var(--warn-bg);color:#9a6a00}
   .modal .mft{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--line);background:var(--soft);flex-wrap:wrap}
@@ -1255,7 +1287,7 @@ async function generateConcise(token){
     const [gok,sp]=await jget("/specs/"+token);
     if(!gok){ if(Date.now()-lastSeen>STALL_MS)break; continue; }
     if(sp.conciseStatus==="READY")return Object.assign({ok:true},sp);
-    if(sp.conciseStatus==="ERROR")return{ok:false,error:sp.conciseError||"Concise-spec generation failed.",conciseStatus:"ERROR"};
+    if(sp.conciseStatus==="ERROR")return{ok:false,error:sp.conciseError||"Concise-spec generation failed.",conciseStatus:"ERROR",rawReply:sp.conciseSpec};
     // Still PENDING: this is normal progress — reset the stall clock and keep waiting.
     if(sp.conciseStatus==="PENDING"){sawPending=true;lastSeen=Date.now();continue;}
     // Any other/blank status: only bail if we've gone a long time with no PENDING heartbeat.
@@ -1285,9 +1317,10 @@ async function pollConciseReady(token){
 // A prominent, actionable error box for a failed concise-spec generation. Surfaces
 // the real provider message (bad key / rate limit / bad model) + a Settings link +
 // an optional Retry action — so the user never sees a silent "(empty)" again.
-function conciseErrBox(box,msg,retryFn){
+function conciseErrBox(box,msg,retryFn,rawReply){
   const e=el("div","err");e.style.marginTop="8px";
-  e.appendChild(el("b",null,"Concise spec failed. "));
+  const trunc=/truncat|cut off|output-token|did not return valid|incomplete|not return structured/i.test(msg||"");
+  e.appendChild(el("b",null,trunc?"Specification incomplete. ":"Concise spec failed. "));
   e.appendChild(document.createTextNode(msg||"The LLM call did not return content."));
   // This step uses the CONCISE-SPEC model (not the Build model). Make that explicit and
   // call out the common legacy/unavailable-model 404 so the user fixes the right setting.
@@ -1295,15 +1328,27 @@ function conciseErrBox(box,msg,retryFn){
   const hint=el("div");hint.style.cssText="margin-top:8px;font-size:12px;color:var(--muted)";
   hint.appendChild(document.createTextNode("This step uses the Concise-spec model: "));
   hint.appendChild(el("b",null,cmId));hint.appendChild(document.createTextNode("."));
-  if(/legacy|not[- ]?found|404|access denied|do not have access|don't have access|not active/i.test(msg||"")){
+  if(trunc){
+    hint.appendChild(el("br"));
+    hint.appendChild(document.createTextNode("The reply was likely cut off at the model's output-token limit. Choose a Concise-spec model with a larger output budget (e.g. Claude Sonnet or Opus rather than Haiku), or split the document, then regenerate. This specification cannot be used until it generates completely."));
+  } else if(/legacy|not[- ]?found|404|access denied|do not have access|don't have access|not active/i.test(msg||"")){
     hint.appendChild(el("br"));
     hint.appendChild(document.createTextNode("That model looks unavailable/legacy on your account — pick a current Concise-spec model in Settings (e.g. an active Haiku) and retry."));
   }
   e.appendChild(hint);
   const row=el("div");row.style.cssText="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap";
   const sa=el("a",null,"Open Settings");sa.href="#";sa.onclick=(ev)=>{ev.preventDefault();showView("settings");$("#concisemodel")&&$("#concisemodel").focus();};row.appendChild(sa);
-  if(retryFn){const ra=el("a",null,"Retry");ra.href="#";ra.onclick=(ev)=>{ev.preventDefault();retryFn();};row.appendChild(ra);}
-  e.appendChild(row);box.appendChild(e);
+  if(retryFn){const ra=el("a",null,"Regenerate");ra.href="#";ra.onclick=(ev)=>{ev.preventDefault();retryFn();};row.appendChild(ra);}
+  e.appendChild(row);
+  // If we have the raw (invalid/truncated) reply, offer it COLLAPSED for diagnosis —
+  // visible but clearly not usable as a spec.
+  if(rawReply&&rawReply.length){
+    const det=el("details","plancollapse");det.style.marginTop="10px";
+    const sm=el("summary");sm.textContent="View raw model reply ("+rawReply.length.toLocaleString()+" chars, not valid JSON)";det.appendChild(sm);
+    const pre=el("pre");pre.style.cssText="margin:8px 0 0;padding:10px 12px;background:var(--code-bg);color:var(--code-fg);border-radius:var(--radius-sm);max-height:340px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:11.5px";pre.textContent=rawReply;det.appendChild(pre);
+    e.appendChild(det);
+  }
+  box.appendChild(e);
 }
 function fileToB64(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.readAsDataURL(f);});}
 // Provider/model/key payload from Settings, for spec-side LLM calls.
@@ -1347,7 +1392,7 @@ $("#savedspec").onchange=async()=>{const tok=$("#savedspec").value;savedReady=nu
   else if(sp.conciseStatus==="READY"){const a=el("span",null,"Specification needs your review. ");a.style.color="#9a6a00";cs.appendChild(a);}
   else{const a=el("span",null,"Not yet built — review the parsing to build it. ");a.style.color="var(--muted)";cs.appendChild(a);}
   info.appendChild(cs);
-  if(sp.conciseStatus==="ERROR"&&sp.conciseError){conciseErrBox(info,sp.conciseError,()=>$("#reviewconcise").onclick());}
+  if(sp.conciseStatus==="ERROR"&&sp.conciseError){conciseErrBox(info,sp.conciseError,()=>$("#reviewconcise").onclick(),sp.conciseSpec);}
   else if(sp.conciseError){const w=el("div","specwarn");w.style.marginTop="6px";w.textContent=sp.conciseError;info.appendChild(w);}
   $("#savedspecreview").classList.remove("hidden");
   const rcLbl=sp.conciseApproved?["file-text","View specification"]:((sp.conciseStatus==="READY")?["scan-search","Review specification"]:["scan-search","Review parsing & build"]);
@@ -1367,7 +1412,7 @@ async function _legacyReviewConcise(){
   const stopT=elapsedTicker($("#reviewconcise"),"Generating a concise specification…");
   const csp=await generateConcise(currentSpecToken);
   stopT();$("#reviewconcise").disabled=false;$("#reviewconcise").textContent=lbl;
-  if(!csp.ok){conciseErrBox($("#savedspecinfo"),csp.error,()=>$("#reviewconcise").onclick());return;}
+  if(!csp.ok){conciseErrBox($("#savedspecinfo"),csp.error,()=>$("#reviewconcise").onclick(),csp.rawReply);return;}
   openCompareModal(currentSpecToken);
 };
 
@@ -1400,6 +1445,10 @@ function cmpShowTab(t){
     if(ct==="review")x.classList.toggle("hidden",cmpState.approved||!haveConcise);
     if(ct==="markdown")x.classList.toggle("hidden",!haveConcise&&!cmpState.approved);
   });
+  // Approved badge is DERIVED from state here (the one function every open path runs),
+  // so it can never be left stale by an opener that forgot to reset it — e.g. opening
+  // the builder for a brand-new spec right after viewing an approved one.
+  $("#cmpapprovedbadge").classList.toggle("hidden",!cmpState.approved);
   $("#cmpTabStart").classList.toggle("hidden",t!=="start");
   $("#cmpTabBuilding").classList.toggle("hidden",t!=="building");
   $("#cmpTabParse").classList.toggle("hidden",t!=="parse");
@@ -1475,7 +1524,7 @@ $("#cmptypecontinue").onclick=async()=>{
   setBuildLoader(20,"Generating specification…","Organising your text into reviewable rules.");
   const est=setInterval(()=>{const n=Math.min(92,(cmpState._tp=(cmpState._tp||20)+2));setBuildLoader(n);},700);
   const csp=await generateConcise(d.token);clearInterval(est);cmpState._tp=20;
-  if(!csp.ok){cmpShowTab("start");$("#cmpmsg").textContent="";conciseErrBox($("#cmpTypeWrap"),csp.error,()=>$("#cmptypecontinue").onclick());return;}
+  if(!csp.ok){cmpShowTab("start");$("#cmpmsg").textContent="";conciseErrBox($("#cmpTypeWrap"),csp.error,()=>$("#cmptypecontinue").onclick(),csp.rawReply);return;}
   setBuildLoader(100,"Finalizing…","");
   const [ok,sp2]=await jget("/specs/"+d.token);
   if(ok){cmpState.sp=sp2;cmpState.concise=sp2.conciseSpec||"";cmpState.prov=sp2.conciseProvenance||null;cmpState.ambs=null;cmpState.orig=sp2.text||txt;}
@@ -1524,14 +1573,15 @@ async function openCompareModal(token){
     if(sp.conciseError){const w=el("div","specwarn");w.style.marginBottom="10px";w.textContent=sp.conciseError;$("#cmpbanner").appendChild(w);}
     renderConciseItems();markParseStep(true);cmpShowTab("review");
   }
-  else if(sp.conciseStatus==="ERROR"){$("#cmpbanner").innerHTML="";conciseErrBox($("#cmpbanner"),sp.conciseError,()=>$("#cmpgenconcise").onclick());cmpShowTab("parse");}
+  else if(sp.conciseStatus==="ERROR"){$("#cmpbanner").innerHTML="";conciseErrBox($("#cmpbanner"),sp.conciseError,()=>$("#cmpgenconcise").onclick(),sp.conciseSpec);cmpShowTab("parse");}
   else if(sp.conciseStatus==="PENDING"){
     // Generation itself still running (no concise yet). Poll until READY/ERROR.
     markParseStep(true);showParseLoader("Generating specification…");setLoader(60,"Generating specification…","Organising the document into reviewable rules.");cmpShowTab("parse");
     const sp3=await pollConciseReady(token);
     if(sp3&&sp3.conciseStatus==="READY"){cmpState.sp=sp3;cmpState.concise=sp3.conciseSpec||"";cmpState.prov=sp3.conciseProvenance||null;cmpState.orig=sp3.text||cmpState.orig;
       renderJudge(sp3);renderConciseItems();markParseStep(true);cmpShowTab("review");}
-    else{$("#cmpbanner").innerHTML="";const w=el("div",(sp3&&sp3.conciseStatus==="ERROR")?"err":"specwarn");w.textContent=(sp3&&sp3.conciseError)||"The specification is still being prepared on the server. Reopen it shortly.";$("#cmpbanner").appendChild(w);cmpShowTab("parse");}
+    else if(sp3&&sp3.conciseStatus==="ERROR"){$("#cmpbanner").innerHTML="";conciseErrBox($("#cmpbanner"),sp3.conciseError,()=>$("#cmpgenconcise").onclick(),sp3.conciseSpec);cmpShowTab("parse");}
+    else{$("#cmpbanner").innerHTML="";const w=el("div","specwarn");w.textContent=(sp3&&sp3.conciseError)||"The specification is still being prepared on the server. Reopen it shortly.";$("#cmpbanner").appendChild(w);cmpShowTab("parse");}
   }
   else{cmpShowTab("parse");}
   icons();
@@ -1800,7 +1850,7 @@ $("#cmpgenconcise").onclick=async()=>{
   $("#cmpgenconcise").disabled=true;const stopT=elapsedTicker($("#cmpgenconcise"),"Generating specification…");
   const csp=await generateConcise(cmpState.token);
   stopT();$("#cmpgenconcise").disabled=false;$("#cmpgenconcise").innerHTML="";const gw=el("span","iwrap");gw.appendChild(licon("wand-sparkles"));gw.appendChild(document.createTextNode(" Looks right — generate specification"));$("#cmpgenconcise").appendChild(gw);icons();
-  if(!csp.ok){$("#parseBanner").innerHTML="";conciseErrBox($("#parseBanner"),csp.error,()=>$("#cmpgenconcise").onclick());return;}
+  if(!csp.ok){$("#parseBanner").innerHTML="";conciseErrBox($("#parseBanner"),csp.error,()=>$("#cmpgenconcise").onclick(),csp.rawReply);return;}
   // reload state + render the resolve view
   const [ok,sp]=await jget("/specs/"+cmpState.token);
   if(ok){cmpState.sp=sp;cmpState.concise=sp.conciseSpec||"";cmpState.prov=sp.conciseProvenance||null;cmpState.ambs=null;}
@@ -1869,33 +1919,20 @@ function renderConciseItems(){
   // Initialise resolution state once per open (keep prior answers on re-render).
   const ambs=(prov.ambiguities||[]).map(a=>{
     if(a&&typeof a==="object"){
-      return {q:String(a.question||a.q||""),options:(a.options||[]).map(o=>String(o)).filter(Boolean),segment:String(a.segment||a.group||"")};
+      return {q:String(a.question||a.q||""),options:(a.options||[]).map(o=>String(o)).filter(Boolean),segment:String(a.segment||a.group||""),src:String(a.sourceQuote||a.src||"")};
     }
-    return {q:String(a),options:[],segment:""};
+    return {q:String(a),options:[],segment:"",src:""};
   }).filter(a=>a.q.trim()!=="");
   if(!cmpState.ambs||cmpState.ambs.length!==ambs.length){
-    cmpState.ambs=ambs.map(a=>({q:a.q,options:a.options,segment:a.segment,status:"open",answer:"",choice:null}));
+    cmpState.ambs=ambs.map(a=>({q:a.q,options:a.options,segment:a.segment,src:a.src,status:"open",answer:"",choice:null}));
   }
-  // Build the segment menu — one entry per group, with a rule count.
-  segBox.innerHTML="";
-  prov.groups.forEach((g,i)=>{
-    const s=el("div","segitem");
-    s.appendChild(el("span",null,g.type||"General"));
-    s.appendChild(el("span","segcount",String((g.items||[]).length)));
-    s.onclick=()=>selectSegment(i);
-    segBox.appendChild(s);
-  });
-  // Ambiguities pseudo-segment at the bottom of the menu (only if any exist).
-  if(cmpState.ambs.length){
-    const a=el("div","segitem amb");a.id="ambMenuItem";
-    const aw=el("span","iwrap");aw.appendChild(licon("triangle-alert"));aw.appendChild(document.createTextNode(" Ambiguities"));a.appendChild(aw);
-    a.appendChild(el("span","segcount","0"));
-    a.onclick=()=>selectAmbiguities();
-    segBox.appendChild(a);
-  }
-  refreshAmbMenu();
-  // Open the first segment by default (or ambiguities if that's all there is).
-  if(prov.groups.length)selectSegment(0); else if(cmpState.ambs.length)selectAmbiguities();
+  // Scope findings: prefer the server's structured scopeFindings, else recompute
+  // client-side (older specs, or after edits). Either way the UI owns the live list.
+  cmpState.scope=(Array.isArray(prov.scopeFindings)&&prov.scopeFindings.length)?prov.scopeFindings.slice():recomputeScopeFindings();
+  // Build the segment menu (groups + Scope-review + Ambiguities pseudo-segments).
+  renderSegMenu();
+  // Open the first segment by default (or scope/ambiguities if that's all there is).
+  if(prov.groups.length)selectSegment(0); else if(cmpState.scope.length)selectScope(); else if(cmpState.ambs.length)selectAmbiguities();
   updateApproveGate();icons();
 }
 // Count of still-open ambiguities (must be 0 to approve).
@@ -1931,6 +1968,21 @@ function selectAmbiguities(){
     const q=el("div","ambq");
     const tag=el("span","qtag",a.status==="resolved"?"RESOLVED":(a.status==="dismissed"?"N/A":"OPEN"));
     q.appendChild(tag);q.appendChild(document.createTextNode(a.q));row.appendChild(q);
+    // Source line: where in the original spec this ambiguity arises, so the human can
+    // review the exact passage. Clicking it scrolls+highlights the snippet in pane 3
+    // (same locateSource the rule cards use). An ambiguity about something MISSING from
+    // the spec has no quote — say so instead of offering a dead link.
+    if(a.src&&a.src.trim()!==""){
+      const s=el("div","ci-src amb-src");
+      s.appendChild(el("span","ci-srclbl","source: "));
+      s.appendChild(el("span",null,"“"+a.src+"”"));
+      s.title="Show this passage in the original specification";
+      s.onclick=(e)=>{e.stopPropagation();[...box.querySelectorAll(".ambrow")].forEach(x=>x.classList.remove("srcsel"));row.classList.add("srcsel");locateSource(a.src);};
+      row.appendChild(s);
+    } else {
+      const s=el("div","ci-src amb-src nosrc");s.textContent="No direct source — this concerns something missing from or unclear in the specification.";
+      row.appendChild(s);
+    }
     if(a.status==="open"){
       const grp="amb"+i;
       // Which segment this decision gets filed under (defaults to the LLM-tagged one).
@@ -1997,16 +2049,24 @@ function selectSegment(i){
   const g=(cmpState.segs||[])[i];const box=$("#cmpItems");box.innerHTML="";
   $("#cmpRulesHd").textContent=(g&&g.type)?g.type:"Specification points";
   if(!g){return;}
-  (g.items||[]).forEach(item=>{
+  (g.items||[]).forEach((item,ii)=>{
     const hasSrc=item.sourceQuote&&String(item.sourceQuote).trim()!=="";
     const inf=!!item.inferred;
     const r=el("div","citem"+(inf?" inferred":(hasSrc?"":" nosrc")));
     const rule=el("div","ci-rule");rule.innerHTML=mdToHtml(item.rule||"").replace(/^<p>|<\/p>\s*$/g,"");
     if(inf)rule.appendChild(el("span","ci-tag inf","inferred"));
     else if(!hasSrc)rule.appendChild(el("span","ci-tag no","no source"));
+    // Show the rule's current message-type scope as a chip (so a narrowed scope is
+    // visible at a glance, matching the flagged findings).
+    const scopeTxt=cmpAppliesToText(item.appliesTo).replace(/^\s*_\(applies to:\s*|\)_\s*$/g,"");
+    if(scopeTxt)rule.appendChild(el("span","ci-tag scope",scopeTxt));
     r.appendChild(rule);
     if(hasSrc){
       const q=el("div","ci-src");q.appendChild(el("span","ci-srclbl","source: "));q.appendChild(el("span",null,"“"+item.sourceQuote+"”"));r.appendChild(q);
+    }
+    // Per-rule actions: move to another section (live). Only when >1 group exists.
+    if((cmpState.prov.groups||[]).length>1){
+      const acts=el("div","ci-acts");acts.appendChild(moveControl(i,ii));r.appendChild(acts);
     }
     // Click a rule to scroll+highlight its source on the right. (Click-only — the
     // old hover handler rebuilt the whole original-spec DOM on every mousemove,
@@ -2080,6 +2140,174 @@ $("#cmpregen").onclick=async()=>{if(!cmpState.token)return;$("#cmpregen").disabl
   stopT();$("#cmpregen").disabled=false;$("#cmpregen").innerHTML="";{const w=el("span","iwrap");w.appendChild(licon("refresh-cw"));w.appendChild(document.createTextNode(" Regenerate"));$("#cmpregen").appendChild(w);icons();}
   if(!csp.ok){$("#cmpmsg").textContent="Regenerate failed: "+(csp.error||"");return;}
   openCompareModal(cmpState.token);};
+// ---- Scope review + live rule re-categorisation -------------------------------
+// The concise markdown the user reviews/approves (cmpState.concise) is REBUILT from
+// the structured groups (cmpState.prov.groups) whenever a rule is moved to a different
+// section or its message-type scope is changed — so the markdown, the segment panes,
+// and the scope findings all stay in sync, live, with no server round-trip.
+
+// Mirror the server's AppliesToText: wildcard/empty -> no tag (applies to all); a
+// narrowed scope -> "  _(applies to: A, B)_". Keeps the rebuilt markdown identical in
+// form to what DTL.Service.SpecConcise.ApplyConcise produces.
+function cmpAppliesToText(appliesTo){
+  if(!Array.isArray(appliesTo))return"";
+  let list=[],wild=false;
+  appliesTo.forEach(v=>{v=String(v||"").trim();if(!v)return;if(v==="*"){wild=true;}else list.push(v);});
+  if(wild||!list.length)return"";
+  return"  _(applies to: "+list.join(", ")+")_";
+}
+// Rebuild cmpState.concise from the structured provenance (groups + items + the
+// ambiguities section), mirroring the server's ApplyConcise so approval sends a
+// consistent document. Refreshes the markdown editor unless the user hand-edited it.
+function rebuildConcise(){
+  const prov=cmpState.prov;if(!prov)return;
+  const nl="\n";let md="";
+  if(prov.title)md="# "+prov.title+nl+nl;
+  (prov.groups||[]).forEach(g=>{
+    md+="## "+(g.type||"General")+nl;
+    (g.items||[]).forEach(item=>{
+      md+="- "+(item.rule||"")+cmpAppliesToText(item.appliesTo)+(item.inferred?"  _(inferred)_":"")+nl;
+    });
+    md+=nl;
+  });
+  if(prov.ambiguities&&prov.ambiguities.length){
+    md+="## Ambiguities / decisions needed"+nl;
+    prov.ambiguities.forEach(a=>{
+      if(a&&typeof a==="object"){md+="- "+(a.question||"")+nl;(a.options||[]).forEach(o=>{md+="  - option: "+o+nl;});}
+      else md+="- "+a+nl;
+    });
+  }
+  cmpState.concise=md.replace(/\s+$/,"")+nl;
+  if(!cmpState.mdDirty)$("#cmpEdit").value=cmpFinalMarkdown();
+}
+// Client-side mirror of DTL.Service.SpecConcise.ScopeFindings, so the Scope-review
+// list updates the instant a rule is fixed/moved (no regenerate needed).
+const SCOPEGENERIC=",MSH,PID,PV1,PV2,NTE,EVN,";
+function recomputeScopeFindings(){
+  const prov=cmpState.prov;const out=[];
+  if(!prov||!prov.groups)return out;
+  prov.groups.forEach((g,gi)=>{
+    let type=String(g.type||"").toUpperCase();
+    let seg=type.indexOf("/")>=0?type.split("/").pop().trim():type;
+    seg=seg.split(" ")[0];
+    const isGeneric=SCOPEGENERIC.indexOf(","+seg+",")>=0;
+    (g.items||[]).forEach((item,ii)=>{
+      let wild=false,narrow=[],count=0;
+      if(Array.isArray(item.appliesTo))item.appliesTo.forEach(v=>{v=String(v||"").trim();if(!v)return;count++;if(v==="*")wild=true;else narrow.push(v);});
+      let kind="",msg="";
+      if(isGeneric&&!wild&&narrow.length){kind="NARROWED";msg=seg+" is a shared segment, so this rule likely applies to ALL message types — but it is scoped only to "+narrow.join(", ")+".";}
+      else if(count===0){kind="NOSCOPE";msg="This rule has no message-type scope (it will be treated as applying to all types). Confirm that is intended.";}
+      if(!kind)return;
+      out.push({groupIndex:gi,itemIndex:ii,segment:seg,kind:kind,scopedTo:narrow.join(", "),rule:item.rule,message:msg});
+    });
+  });
+  return out;
+}
+// Move a rule (group gi, item ii) into another group (targetGi). Mutates the
+// structured groups, rebuilds the markdown + scope findings, and re-renders.
+function moveRuleToGroup(gi,ii,targetGi){
+  const groups=cmpState.prov&&cmpState.prov.groups;if(!groups)return;
+  if(targetGi<0||targetGi>=groups.length||targetGi===gi)return;
+  const item=(groups[gi].items||[]).splice(ii,1)[0];if(!item)return;
+  (groups[targetGi].items=groups[targetGi].items||[]).push(item);
+  afterScopeEdit(targetGi);
+}
+// Set a rule's scope to "all message types" (the [*] wildcard) — the common fix for a
+// generic segment rule wrongly narrowed to one type.
+function applyAllTypes(gi,ii){
+  const groups=cmpState.prov&&cmpState.prov.groups;if(!groups||!groups[gi]||!groups[gi].items[ii])return;
+  groups[gi].items[ii].appliesTo=["*"];
+  afterScopeEdit(gi);
+}
+// Shared post-edit refresh: rebuild markdown, recount, re-render the menu + the pane
+// the user is on (preferring the Scope view if findings remain, else the touched group).
+function afterScopeEdit(focusGi){
+  cmpState.mdDirty=false;          // a structural edit re-derives the markdown
+  rebuildConcise();
+  cmpState.scope=recomputeScopeFindings();
+  renderSegMenu();
+  if(cmpState.activeSeg===-2)selectScope();
+  else selectSegment(typeof focusGi==="number"?focusGi:(cmpState.activeSeg<0?0:cmpState.activeSeg));
+  refreshScopeMenu();updateApproveGate();icons();
+}
+// (Re)build the left segment menu: one entry per group, plus the Scope-review and
+// Ambiguities pseudo-segments. Extracted from renderConciseItems so edits can refresh
+// just the menu.
+function renderSegMenu(){
+  const segBox=$("#cmpSegs");segBox.innerHTML="";
+  (cmpState.prov.groups||[]).forEach((g,i)=>{
+    const s=el("div","segitem");
+    s.appendChild(el("span",null,g.type||"General"));
+    s.appendChild(el("span","segcount",String((g.items||[]).length)));
+    s.onclick=()=>selectSegment(i);
+    segBox.appendChild(s);
+  });
+  // Scope-review pseudo-segment (only if the deterministic check flagged anything).
+  if((cmpState.scope||[]).length){
+    const sc=el("div","segitem scope");sc.id="scopeMenuItem";
+    const w=el("span","iwrap");w.appendChild(licon("scan-search"));w.appendChild(document.createTextNode(" Scope review"));sc.appendChild(w);
+    sc.appendChild(el("span","segcount",String(cmpState.scope.length)));
+    sc.onclick=()=>selectScope();
+    segBox.appendChild(sc);
+  }
+  if((cmpState.ambs||[]).length){
+    const a=el("div","segitem amb");a.id="ambMenuItem";
+    const aw=el("span","iwrap");aw.appendChild(licon("triangle-alert"));aw.appendChild(document.createTextNode(" Ambiguities"));a.appendChild(aw);
+    a.appendChild(el("span","segcount","0"));
+    a.onclick=()=>selectAmbiguities();
+    segBox.appendChild(a);
+  }
+  refreshAmbMenu();
+}
+// Update the Scope-review menu badge (count of remaining findings); hide it at zero.
+function refreshScopeMenu(){
+  const m=$("#scopeMenuItem");
+  if(!m){renderSegMenu();return;}
+  const n=(cmpState.scope||[]).length;
+  if(!n){m.remove();return;}
+  m.querySelector(".segcount").textContent=String(n);
+}
+// A reusable "Move to ▾" control: a select listing every OTHER group; choosing one
+// moves rule (gi,ii) there. Returned as an inline element to drop into a rule card.
+function moveControl(gi,ii){
+  const wrap=el("span","movectl");
+  wrap.appendChild(el("span","movelbl","Move to:"));
+  const sel=el("select");
+  const ph=document.createElement("option");ph.value="";ph.textContent="choose section…";sel.appendChild(ph);
+  (cmpState.prov.groups||[]).forEach((g,k)=>{if(k===gi)return;const o=document.createElement("option");o.value=String(k);o.textContent=g.type||"General";sel.appendChild(o);});
+  sel.onclick=e=>e.stopPropagation();
+  sel.onchange=e=>{e.stopPropagation();const t=sel.value;if(t!=="")moveRuleToGroup(gi,ii,+t);};
+  wrap.appendChild(sel);
+  return wrap;
+}
+// Render the Scope-review pane: one formatted card per finding, each with the reason,
+// the rule, and one-click fixes (apply [*], or move to another section).
+function selectScope(){
+  cmpState.activeSeg=-2;
+  [...$("#cmpSegs").children].forEach(c=>c.classList.toggle("sel",c.id==="scopeMenuItem"));
+  $("#cmpRulesHd").textContent="Scope review — generic rules should apply to all message types";
+  const box=$("#cmpItems");box.innerHTML="";
+  const findings=cmpState.scope||[];
+  if(!findings.length){box.appendChild(el("div","empty","No scope issues — every rule's message-type scope looks right."));return;}
+  const intro=el("div","scopeintro","A rule on a shared segment (MSH, PID, PV1, …) usually applies to every message type. These were scoped to specific types or left unscoped — confirm each, widen it to all types, or move it to the right section.");
+  box.appendChild(intro);
+  findings.forEach(f=>{
+    const card=el("div","scopecard "+(f.kind==="NARROWED"?"narrowed":"noscope"));
+    const head=el("div","sc-head");
+    const tag=el("span","sc-tag",f.kind==="NARROWED"?("scoped to "+f.scopedTo):"no scope set");
+    head.appendChild(el("span","sc-seg",f.segment));head.appendChild(tag);card.appendChild(head);
+    const rule=el("div","sc-rule");rule.innerHTML=mdToHtml(f.rule||"").replace(/^<p>|<\/p>\s*$/g,"");card.appendChild(rule);
+    card.appendChild(el("div","sc-msg",f.message));
+    const acts=el("div","sc-acts");
+    const all=el("button","ok");all.appendChild(licon("globe"));all.appendChild(document.createTextNode(" Apply to all types (*)"));
+    all.onclick=()=>applyAllTypes(f.groupIndex,f.itemIndex);
+    acts.appendChild(all);
+    acts.appendChild(moveControl(f.groupIndex,f.itemIndex));
+    card.appendChild(acts);
+    box.appendChild(card);
+  });
+  icons();
+}
 // Fold the human's resolved ambiguity decisions BACK INTO the concise markdown,
 // each under its CORRESPONDING segment (## group header) rather than a separate
 // section. The "## Ambiguities…" section (open questions) is removed so the spec the

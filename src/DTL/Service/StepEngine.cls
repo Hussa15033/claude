@@ -17,9 +17,10 @@
 /// success gate verifies the DTL against THE SPEC (compile + run-all-inputs +
 /// rule-coverage + LLM-as-judge conformance), not merely "did it run".
 ///
-/// Each LLM call goes through a transient EnsLib.Testing.Service so it is fully
-/// traced (the Job records the latest interop SessionId for the Visual Trace).
-/// The auto-run (ungated) path still lives in DTL.Proc.Orchestrator.
+/// Each LLM call is submitted through the inbound business service DTL.Svc.ApiService
+/// to DTL.Op.LLMConnector, so it is fully traced (the Job records the latest interop
+/// SessionId for the Visual Trace). The auto-run (ungated) path lives in
+/// DTL.Proc.Orchestrator, which sends to the LLM operation directly from the BP.
 Class DTL.Service.StepEngine Extends %RegisteredObject
 {
 
@@ -482,9 +483,9 @@ ClassMethod Judge(pJob As DTL.Data.Job, pSpec As %String, pInput As %String, pOu
 	set tUsr = ##class(DTL.Msg.ChatTurn).%New()
 	set tUsr.Role = "user", tUsr.Content = ##class(DTL.Util.PromptBuilder).JudgePrompt(pSpec, pInput, pOutput, pJob.SourceDocType)
 	do tReq.Transcript.Insert(tUsr)
-	set sc = ##class(Ens.Director).CreateBusinessService("EnsLib.Testing.Service", .tSvc)
+	set sc = ##class(Ens.Director).CreateBusinessService("DTL.Svc.ApiService", .tSvc)
 	if $$$ISERR(sc) quit ""
-	set sc = tSvc.SendRequestSync(..#LLMTARGET, tReq, .tResp, 600)
+	set sc = tSvc.LLM(tReq, .tResp)
 	if $$$ISERR(sc) || '$isobject(tResp) quit ""
 	// Account for the judge's tokens/cost in the running totals (transparency).
 	set tInTok = +tResp.InputTokens, tOutTok = +tResp.OutputTokens
@@ -795,7 +796,7 @@ ClassMethod Reject(pJob As DTL.Data.Job, pFeedback As %String) As %Status
 ClassMethod CallLLM(pJob As DTL.Data.Job, Output pSession As %String, Output pErr As %String, pPlanMode As %Boolean = 0, Output pInTok As %Integer, Output pOutTok As %Integer, Output pCost As %Numeric) As %String
 {
 	set pSession = "", pErr = "", pInTok = 0, pOutTok = 0, pCost = 0
-	set sc = ##class(Ens.Director).CreateBusinessService("EnsLib.Testing.Service", .tSvc)
+	set sc = ##class(Ens.Director).CreateBusinessService("DTL.Svc.ApiService", .tSvc)
 	if $$$ISERR(sc) { set pErr = $system.Status.GetErrorText(sc) quit "" }
 	set tReq = ##class(DTL.Msg.LLMRequest).%New()
 	set tReq.JobId = pJob.JobId
@@ -807,7 +808,7 @@ ClassMethod CallLLM(pJob As DTL.Data.Job, Output pSession As %String, Output pEr
 	// During spec-structuring (before the build conversation starts) send the whole
 	// transcript; afterwards send only the build portion (skips the big raw spec).
 	do pJob.FillTranscript(tReq, (pJob.BuildStartIndex > 1))
-	set sc = tSvc.SendRequestSync(..#LLMTARGET, tReq, .tResp, 600)
+	set sc = tSvc.LLM(tReq, .tResp)
 	set pSession = tSvc.%SessionId
 	if $$$ISERR(sc) { set pErr = $system.Status.GetErrorText(sc) quit "" }
 	if '$isobject(tResp) { set pErr = "no response" quit "" }
