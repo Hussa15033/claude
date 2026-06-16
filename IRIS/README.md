@@ -1,26 +1,30 @@
-# IRIS — Run, Compile & Test the DTL Interfaces
+# IRIS — Run, Compile & Test the DTL Framework
 
 This folder is the **operator's control panel** for the GenAI DTL framework. Behind
-everything here is the IRIS interoperability production `DTL.Setup.Production`
-(business service → orchestration process → LLM operation) that generates,
-compiles, and verifies HL7 v2 Data Transformations. These scripts and snippets
-let you **run**, **compile**, and **test** the whole thing without memorising the
+everything here is the IRIS interoperability production `DTL.Setup.Production` that
+generates, compiles, and **schema-validates** HL7 v2 Data Transformations from a
+written **specification** — not from sample messages. These scripts and snippets let
+you **run**, **compile**, and **test** the whole thing without memorising the
 internals.
 
 ```
                     ┌─────────────── you are here (IRIS/) ───────────────┐
    compile.sh ─┐    │  wraps →  DTL.Setup.Installer  (load+compile+wire)  │
-   run.sh ─────┼──► │           DTL.Setup.Production (the 3 hosts)        │
+   run.sh ─────┼──► │           DTL.Setup.Production (the production)     │
    test.sh ────┘    │           DTL.Test.HealthCheck (init test hook)     │
                     └────────────────────────────────────────────────────┘
         UI  http://localhost:52773/dtl/ui/index.html
-        API http://localhost:52773/dtl/api/{health,schemas,generate,jobs}
+        API http://localhost:52773/dtl/api/{health,schemas,projects,jobs}
 ```
 
 > **Prerequisites:** Docker, and the IRIS for Health Community image
 > (`intersystemsdc/irishealth-community:latest`). The scripts create/reuse a
 > container named `iris-dtl`. Default IRIS credentials: **SuperUser / SYS**
 > (the web apps are configured for unauthenticated access for the demo).
+
+> Verified running live against **IRIS for Health 2026.1**, end to end, against the
+> built-in offline mock LLM (no API key required), and against AWS Bedrock
+> (Anthropic Claude) and OpenAI.
 
 ---
 
@@ -101,12 +105,12 @@ do $system.OBJ.LoadDir(dtl_"/DTL","ck/recurse=1",.err,1)   ; reload from source
 
 `/deleteextent=0` deletes only the **code** (class definitions + compiled
 artifacts); it does **not** touch the persistent **data**. The `^DTL.Data.*`
-globals for `SpecDoc` and `Job` survive untouched — those classes carry an
-explicit `Storage` map in source, so the reload restores the identical storage
-layout and existing rows (saved specs, prior jobs) remain readable. Generated
-transforms in `DTL.Generated.*` are not touched either (they're regenerated on
-demand). This is verified on every run: data row counts are unchanged and the
-health hook reports `8/8`.
+globals for `Project`, `SpecDoc`, and `Job` survive untouched — those classes
+carry an explicit `Storage` map in source, so the reload restores the identical
+storage layout and existing rows (saved projects, specs, prior jobs) remain
+readable. Generated transforms in `DTL.Generated.*` are not touched either
+(they're regenerated on demand). This is verified on every run: data row counts
+are unchanged and the health hook reports `8/8`.
 
 > Use `IRIS/compile.sh` for a fast **incremental** compile while editing; use
 > `IRIS/run.sh` when you've **deleted** a member/class and need the stale compiled
@@ -119,31 +123,44 @@ Manual equivalents:
 do ##class(Ens.Director).StartProduction("DTL.Setup.Production")
 ; stop it
 do ##class(Ens.Director).StopProduction(10, 1)
-; generate a DTL for a built-in example pair, straight from the terminal
-do ##class(DTL.Setup.Installer).ForgeExample("ADT_A01_Admit", , 5, "CompileMatch")
 ```
 
-**Drive it from the UI:** open `http://localhost:52773/dtl/ui/index.html`, paste an
-input spec + one or more input/output sample pairs, choose the **provider**
-(OpenAI / Mock), enter your **OpenAI API key** and pick a **model** (⟳ loads them
-live), then click **Generate DTL**. Progress streams in attempt-by-attempt, the
-diff viewer shows expected vs the generated DTL's actual output, and the links bar
-deep-links to the **IRIS Production page** and the job's **Visual Trace**.
+**Drive it from the UI:** open `http://localhost:52773/dtl/ui/index.html`. Create a
+**project** (fixing one HL7 version), **upload** a specification document and
+**approve** its concise spec, let the project **derive the message types** the spec
+covers, **tick** the ones to build, and click **Generate** — one reviewed DTL per
+type, fanned out concurrently. No sample messages are required: the framework
+synthesises schema-valid test messages itself. Review each DTL (gate verdict, DTL
+source, synthetic + any of your own messages with their schema-validity badge),
+send live messages through it, then **export** all DTLs as one XML or keep them as
+the compiled `DTL.Generated.*` package. Pick the **provider** (OpenAI / Bedrock /
+Mock) and enter the **API key** per job in Settings.
 
-**Drive it from the REST API:**
+**Drive it from the REST API** (project-oriented):
 
 ```bash
-# start a job
-curl -s http://localhost:52773/dtl/api/generate -H 'Content-Type: application/json' -d '{
-  "inputName":"ADT_A01_Admit",
-  "inputSpec":"Rename EPICADT->EPIC, SITEA->001, bump 2.3->2.5",
-  "maxAttempts":5,"successPolicy":"CompileMatch",
-  "pairs":[{"input":"MSH|...","output":"MSH|..."}]
+# 1. create a project (fixes the HL7 version for every transform in it)
+curl -s http://localhost:52773/dtl/api/projects -H 'Content-Type: application/json' -d '{
+  "name":"Lab Interface","hl7Version":"2.5","provider":"mock"
 }'
-# -> {"jobId":"<id>","status":"QUEUED"}
+# -> {"token":"<tok>", ...}
 
-curl -s http://localhost:52773/dtl/api/jobs/<id>        # poll live status + attempts + diff
-curl -s http://localhost:52773/dtl/api/jobs/<id>/dtl    # the final generated DTL class
+# 2. attach a spec already uploaded + approved (POST /upload then approve-concise)
+curl -s http://localhost:52773/dtl/api/projects/<tok>/specs \
+  -H 'Content-Type: application/json' -d '{"specToken":"<specTok>"}'
+
+# 3. see the message types the approved specs cover
+curl -s http://localhost:52773/dtl/api/projects/<tok>/types
+
+# 4. lock the specs and generate one child job per selected type
+curl -s http://localhost:52773/dtl/api/projects/<tok>/generate \
+  -H 'Content-Type: application/json' -d '{"types":["2.5:ORU_R01"]}'
+
+# 5. poll the project until every child job settles
+curl -s http://localhost:52773/dtl/api/projects/<tok>
+
+# 6. download all generated DTLs as one importable XML
+curl -s http://localhost:52773/dtl/api/projects/<tok>/export > project-dtls.xml
 ```
 
 ---
@@ -163,17 +180,40 @@ It runs, in order:
 | Suite | What it proves |
 |---|---|
 | `DTL.Test.HealthCheck.Run()` | **Init test hook** — classes compiled, production running with all items, LLM endpoint reachable, HL7 schemas installed, `/dtl/api` + `/dtl/ui` registered, data dirs present, and a live compile+transform smoke test. Also exposed at `GET /dtl/api/health`. |
-| `DTL.Test.UtilTest.RunAll()` | Verifier / Extractor / DocType derivation against the reference DTLs. |
+| `DTL.Test.UtilTest.RunAll()` | Verifier / Extractor / SampleGen / SchemaValidate / DocType derivation against the reference DTLs. |
 | `DTL.Test.MockTest.RunAll()` | The mock's broken→wrong→correct self-correction curriculum. |
 | `DTL.Test.SecurityTest.RunAll()` | LLM code-injection is neutralized; generated classes are confined to `DTL.Generated.*`. |
 
-A green run ends with `ALL CHECKS PASSED (8/8)` and `ALL EXAMPLE PAIRS PASS`.
+A green run ends with the health hook reporting `8/8` and the MockTest
+broken→wrong→correct curriculum passing.
 
 You can also hit the hook over HTTP at any time:
 
 ```bash
 curl -s http://localhost:52773/dtl/api/health | python3 -m json.tool
 ```
+
+---
+
+## The production hosts
+
+Everything enters through a real Business Service and flows through the production,
+so every message is visible in the **Visual Trace** (no detached jobs, no test
+harnesses used as entry points).
+
+| Host | Kind | Role |
+|---|---|---|
+| `DTL.Svc.ApiService` | Business **Service** | The single, adapterless inbound boundary; typed methods so every REST-driven call is traced. (Replaced the old `EnsLib.Testing.Service` misuse.) |
+| `DTL.Svc.SpecFileService` | Business **Service** | File-drop intake for spec documents. |
+| `DTL.Svc.PairFileService` | Business **Service** | File-drop intake for sample messages. |
+| `DTL.Proc.SpecForge` | Business **Process** | Durable-queue worker that generates + verifies the concise spec. |
+| `DTL.Proc.Orchestrator` | Business **Process** | The ungated generate→compile→run→verify→regenerate loop (file-drop / test flows). |
+| `DTL.Op.LLMConnector` | Business **Operation** | OpenAI-compatible chat completions over HTTP (OpenAI / AWS Bedrock / mock). |
+
+The gated, step-by-step build (the UI's default) is driven by
+`DTL.Service.StepEngine`; `DTL.Service.ProjectManager` owns project lifecycle
+(create, attach specs, derive types, assemble per-type specs, fan out child jobs,
+export XML); `DTL.Service.JobManager` bridges REST → production.
 
 ---
 
@@ -185,15 +225,24 @@ curl -s http://localhost:52773/dtl/api/health | python3 -m json.tool
 | Runtime data (derived) | `<iris-mgr>/dtldata/` → `inputs/ outputs/ archive/ results/` |
 | Generated DTL artifacts | `<iris-mgr>/dtldata/results/*.dtl.cls` + `*.result.json` |
 | Deployed SPA | `<iris-mgr>/csp/dtlui/index.html` |
+| Project records | `^DTL.Data.Project*` globals (USER namespace) |
+| Uploaded-spec records | `^DTL.Data.SpecDoc*` globals (USER namespace) |
+| Job + per-attempt records | `^DTL.Data.Job*` globals (USER namespace) |
 | Generated DTL classes | the `DTL.Generated.*` package in the USER namespace |
 
 Find the data dir any time: `write ##class(DTL.Setup.Installer).DataDir()`
 
 ---
 
-## Switching to the real OpenAI API
+## LLM provider — OpenAI · AWS Bedrock · Mock
 
-The production defaults to the offline mock. To use OpenAI (see the project
-README for full steps): set the `DTL.Op.LLMConnector` settings `Mode=openai`,
-`ApiKeyCredentials=<cred>`, and the adapter `HTTPServer=api.openai.com`,
-`HTTPPort=443`, `SSLConfig=<ssl>`. No code change required.
+The mock and the live providers use the **identical wire format**
+(`POST /v1/chat/completions`). The API key is entered in the **UI Settings** and
+sent **per request** to your same-origin IRIS server, used for that job/project
+only, and is **never** written to the Job record or logs.
+
+`IRIS/run.sh` starts the offline mock automatically for key-free demos/CI. The
+production default `Mode` in `DTL.Setup.Production` is `openai`, but the UI lets you
+pick the provider per job/project. The installer creates the `DTLOpenAISSL` TLS
+configuration so HTTPS to `api.openai.com` works out of the box; see the project
+README for the full provider walkthrough.

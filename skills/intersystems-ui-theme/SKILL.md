@@ -190,6 +190,39 @@ an IRIS CSP **static** web application (see iris-interop-rest skill for the exac
 copying `index.html` into the app's physical directory (e.g.
 `<iris-mgr>/csp/<appname>/`).
 
+## Top-level SCREEN stack (master → detail → drill-down) over the tabbed pane
+The tabbed `showView` switches views WITHIN one workspace. For a multi-level app
+(e.g. a project list → a project detail → one item's full workspace) add a coarser
+**screen** layer ABOVE it: a handful of top-level `<section class="screen">` blocks
+toggled by `showScreen(s)` (`.screen.hidden{display:none}`), each its own full page.
+The existing single-item workspace becomes the deepest screen, reused verbatim as a
+drill-down — don't rebuild it. Two integration gotchas proven this session:
+- **Collapse a 2-column workspace when you hide one column.** If the drill-down hides
+  the left form (`.left-column{display:none}`), its empty grid track still reserves
+  ~440px and squashes the detail pane. Add a `.workspace.solo{grid-template-columns:1fr}`
+  class on entry so it goes full-width.
+- **Reuse the item poller, but stop it on `back`.** Opening an item sets the global
+  `currentJob`/id and calls the same `startPolling()`; the screen's Back button must
+  `clearInterval(pollTimer)` so the detached poll doesn't keep hitting a hidden view.
+- A **status pill** keyed by lifecycle state reads best as a coloured chip per state
+  (`.badge.st-DRAFT/.st-REVIEW/…`) and lowercased text; give the base `.badge` a
+  neutral background so an unmapped state is never invisible. On cards, put the title
+  and the pill on one flex row (`justify-content:space-between`), not stacked.
+- **Panels need their own padding.** If your `.panel` gets its inner padding from a
+  child class (`.col`/`.rbody`), a new panel without that class renders content flush
+  to its border — give the new screens' panels an explicit `padding` rule. (Catch this
+  kind of thing by screenshotting each screen — see the next note.)
+
+## Verify layout by SCREENSHOT, not by reading the markup
+Static review misses real layout bugs (flush-to-edge headings, full-bleed note boxes,
+a squashed grid track, an unstyled pill). Drive the deployed UI with a headless
+browser and eyeball each state. If the browser CDN is blocked, Chrome-for-Testing is
+downloadable from `storage.googleapis.com/chrome-for-testing-public/<ver>/linux64/chrome-linux64.zip`
+and runnable via Playwright's `executablePath` after `npx playwright install-deps`.
+Navigate by calling your own globals (`page.evaluate(t=>window.openProject(t), tok)`),
+`screenshot({fullPage:true})` each screen, and confirm a computed style when unsure
+(`getComputedStyle(el).paddingLeft`) — a cached page can lie, so re-deploy then re-shoot.
+
 ## Derive the REST base from the UI path (no hardcoded host)
 
 The page is served at `<app>/ui/` and the REST API is a sibling at `<app>/api`.

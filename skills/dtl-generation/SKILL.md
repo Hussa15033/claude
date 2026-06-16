@@ -137,6 +137,77 @@ specification**; you only have example **input** messages, never expected output
 - Keep the user's example inputs in a global keyed by job id so transform-all and
   the prompt's "inputs block" can reuse them.
 
+### Generate SYNTHETIC test messages when you have NO samples
+The honest spec-driven case is that the implementer has **no sample messages** —
+so the verification loop must NOT depend on them. Manufacture structurally-valid
+input messages straight from the IRIS HL7 schema:
+- Walk `EnsLib.HL7.Schema.GetContentArray(...)` (via the PPG-indirection trick
+  above) and emit one raw segment per REQUIRED segment in message order; an `"opt"`
+  node on a schema array entry marks an OPTIONAL segment.
+- **Value realism matters — drive values by the field NAME, not just the datatype.**
+  The schema gives BOTH the datatype (`DS:2.5:XPN`) AND the field name (`:PatientName`,
+  `:AdministrativeSex`, `:DateTimeOfMessage`). Use the datatype to fix the COMPOSITE
+  SHAPE and the name to bias the CONTENT, so you get `SMITH^JOHN^A` / `M` /
+  `20200101120000` / `MRN100001^^^HOSP^MR`, not `VAL1|VAL2|VAL3`. A row of
+  positional `VALn` placeholders is a useless sample for the human reviewing it.
+  Templates worth having: XPN→`Surname^Given^A`, XCN→`id^Surname^Given`, CX→
+  `MRN…^^^HOSP^MR`, XAD→`123 MAIN ST^^BOSTON^MA^02114^USA`, XTN→`(555)555-01nn`,
+  PL→`WARD^ROOM^bed^facility`, CE/CWE→`code^text^system`, TS→14-digit stamp; and
+  name-keyword overrides (date/time, sex→M/F, phone, address, facility→001) that win
+  over the datatype. Fill the meaningful LEADING fields (cap ~15, not every field of a
+  30-field segment), leave the trailing ones empty (valid HL7). Stamp MSH-9
+  `code^trigger^structure` from the DocType structure (`SIU_S12`→`SIU^S12^SIU_S12`) so
+  the header matches the message. **Re-validate after** (realism must not break
+  structural validity — see SchemaValidate).
+- Emit a few VARIANTS so the DTL is exercised more than one way: `minimal`
+  (required segments only), `full` (+ optionals), `seeded` (spec-derived code/ID
+  values woven into seedable fields so CONDITIONAL rules actually fire, e.g. a
+  `when PID-8 = F` rule). Make it **deterministic** (derive values from field
+  index, not RNG) so a bug reproduces.
+- Force a correct, well-formed MSH so the message imports and DocType-derives; then
+  `ImportFromString`-check each candidate and DROP any that doesn't parse — never
+  hand the loop an unusable input. (See `DTL.Util.SampleGen`.)
+- A user CAN still supply their own samples; run + validate them alongside the
+  synthetic set. They're never the primary requirement.
+
+### Validate the PRODUCED output against the target schema (automate the manual check)
+The implementer's real headache is "build the DTL, then read the HL7 schema by hand
+to see if the output is valid". Automate it with IRIS's own validator:
+```objectscript
+set msg=##class(EnsLib.HL7.Message).ImportFromString(crJoined,.sc)  do msg.PokeDocType(tgtDocType)
+set vsc=msg.Validate("dm")   // d=against DocType, m=enforce required segments; ONE string arg, returns %Status
+```
+`Validate("dm")` returns a %Status whose nested errors carry concrete, actionable
+messages (e.g. `<EnsEDI>ErrMapRequired: Missing required EVN element at segment 2
+(PID)`). Decompose it (see objectscript-gotchas #7) into structured findings
+`{kind, segment, field, severity, message}` — classify kind (MISSING_REQUIRED /
+CARDINALITY / CODE_TABLE / DATATYPE / LENGTH) and severity (missing-required = HIGH).
+This is a far stronger loop signal than "did it run": a structural defect in the
+OUTPUT is objective and tells the model exactly which segment/field to fix. (See
+`DTL.Util.SchemaValidate`.)
+
+### The synthetic round-trip = a real gate without samples
+Fold the two together into the accuracy gate (extends "gate on SPEC CONFORMANCE"):
+generate synthetic inputs → run the DTL over them AND any user samples → **schema-
+validate every produced output against the target DocType** → feed HIGH structural
+findings back into the repair loop. PASS only when: ran-on-all ∧ output-schema-valid
+(no HIGH defect) ∧ judge.conforms. A `create='new'` DTL that emits a sparse message
+(missing a required segment) is caught here even though it compiled and ran.
+
+### Carry per-rule PROVENANCE as `<annotation>` children (NOT attributes)
+Make each generated `<assign>`/`<if>` cite the spec rule it implements, so every
+field change is traceable back to the requirement — inside the class itself.
+`annotation` is **a child ELEMENT, not an attribute** (`<assign annotation='…'/>`
+FAILS to compile; the child form compiles and is preserved):
+```
+<assign value='&quot;EPIC&quot;' property='target.{MSH:3.1}' action='set'>
+  <annotation>Rule 3: set sending application to EPIC</annotation>
+</assign>
+```
+It survives the `<transform>`-fragment extraction (it's inside the transform), so the
+security re-wrap keeps it. Tell the model to annotate every action but not the bare
+copy-through. Backing property: `Ens.DTL.Action.Annotation`.
+
 ### Spec from an uploaded document → convert to Markdown
 When the spec is an uploaded file (PDF/DOCX/…), convert it to **Markdown** before
 giving it to the LLM — headings/tables/lists survive and the model parses a
@@ -404,3 +475,50 @@ turn. Two moves:
   GateFix prompts — send only the error/finding delta. (Earlier this skill said to
   restate the full schema in the repair prompt; with a cached system prefix that is
   pure waste — the delta is enough.)
+
+## Scale to a whole interface: the PROJECT workflow (many specs, many message types)
+A real interface project is MANY message types described across one or more spec
+documents — not one DTL. Wrap the proven single-DTL pipeline in a project layer
+rather than rewriting it:
+- **Project first.** Create a project that FIXES one HL7 version for everything in it
+  (source=target for in-version mapping; cross-version is a later concern). Attach
+  one or more spec documents; review each INDEPENDENTLY through the concise-spec +
+  approval gate above. Lock the specs once generation starts ("the real work has
+  started" — they must be immutable from then on).
+- **Derive the message types from the approved specs, don't ask up front.** Each
+  concise rule already carries an `appliesTo` scope (`["*"]` for a generic/shared
+  segment rule, or specific structures like `ADT^A01`). Parse every approved spec's
+  provenance, collect the named types, NORMALISE `^`↔`_` (`ADT^A01`→`ADT_A01`), and
+  resolve each against the project version (`$data(^EnsHL7.Schema(ver,"MS",struct))`).
+  Present the resolved list for the user to tick. If every rule is wildcard-only,
+  there are no specific types — let the user pick any DocType for the version.
+- **Per-type spec assembly is the crux.** A project spec covers many types but a DTL
+  targets ONE. For each selected type, gather every approved item whose `appliesTo`
+  is `*` OR names that type, and render a FOCUSED markdown spec + filtered provenance.
+  Each child build then sees only what's in scope — its plan/generate/judge stay
+  realistically sized. An item with no `appliesTo` defaults to all types.
+- **Fan out one child job per type.** Each child is the SAME single-DTL pipeline,
+  seeded with its assembled spec, dispatched onto the durable BP queue (PoolSize>1 so
+  they build concurrently). There is ONE human gate per project — the per-DTL review —
+  not a plan gate per child (the spec was already reviewed at project level). Roll the
+  project to a REVIEW state once all children settle at the review gate.
+- **Parallelism cuts wall-clock, not tokens.** Prompt caching keys on the build system
+  prompt, which embeds the per-type HL7 schema + assembled spec — so each type has a
+  different cacheable prefix; only the spec portion is shareable. With a big model at a
+  large output budget, N types is genuinely N× the cost. Surface a running estimate;
+  don't promise it's cheap.
+- **Don't force linear review of everything.** Forcing per-artifact human sign-off on
+  15 DTLs re-creates the toil the tool removes. Rank by the accuracy-gate signal —
+  surface failed / schema-invalid / low-judge-score DTLs first; let the
+  high-confidence ones be batch-accepted.
+- **Hand-off = compiled package + XML export.** The generated DTLs are real compiled
+  `DTL.Generated.*` classes (the "package"); export them all as one importable file
+  with `$system.OBJ.ExportToStream(.list,.stream)`. (See `DTL.Service.ProjectManager`,
+  `DTL.Data.Project`.)
+- **Roadmap — reusable `<subtransform>`.** Factoring a segment-level rule shared across
+  many types into a standalone sub-DTL called via `<subtransform>` is real DRY value,
+  but DEFER it until sub-document-level synthetic generation + validation exist: a
+  sub-DTL runs on a sub-document/segment, which whole-message SampleGen/SchemaValidate
+  can't generate or validate in isolation, so "review/test each subtransform" has no
+  verification story yet. Until then, one self-contained DTL per type; duplicate shared
+  logic rather than factor it.

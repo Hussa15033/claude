@@ -46,6 +46,15 @@ Property Provider As %String(MAXLEN = 16);
 /// for the History tab).
 Property ParentJobId As %String(MAXLEN = 64);
 
+/// If this job is one message type within a PROJECT, the owning project's Token.
+/// "" for standalone jobs. Lets the UI/REST group a project's child jobs and the
+/// export gather every project DTL.
+Property ProjectToken As %String(MAXLEN = 64);
+
+/// The message-type structure this job builds within its project (e.g. "ADT_A01").
+/// Mirrors the SourceDocType's structure; kept explicitly for grouping/labels.
+Property MessageType As %String(MAXLEN = 64);
+
 /// User-supplied display name / input spec.
 Property InputName As %String(MAXLEN = 256);
 
@@ -261,6 +270,8 @@ Method ToDynamic(pIncludeMessages As %Boolean = 1) As %DynamicObject
 	set o.sessionId = ..SessionId
 	set o.plan = ..Plan
 	set o.parentJobId = ..ParentJobId
+	set o.projectToken = ..ProjectToken
+	set o.messageType = ..MessageType
 	set o.provider = ..Provider
 	set o.costCap = ..CostCap
 	set o.createdAt = ..CreatedAt
@@ -340,6 +351,8 @@ Storage Default
 <Value name="33"><Value>GateReport</Value></Value>
 <Value name="34"><Value>CostCap</Value></Value>
 <Value name="35"><Value>BuildStartIndex</Value></Value>
+<Value name="36"><Value>ProjectToken</Value></Value>
+<Value name="37"><Value>MessageType</Value></Value>
 </Data>
 <DataLocation>^DTL.Data.JobD</DataLocation>
 <DefaultData>JobDefaultData</DefaultData>

@@ -1,4 +1,50 @@
-# DTL GenAI Framework — Synthesized Design
+# DTL GenAI Framework — Design
+
+> **⚠️ Status — this document is the ORIGINAL v1 design (pair-driven), kept for
+> historical/rationale value. The framework has since evolved substantially; the
+> sections below no longer describe the as-built system.** For the current
+> architecture see **[`../README.md`](../README.md)** (authoritative) and the
+> **[`../skills/`](../skills/)** SKILL files. The "Current architecture" summary
+> immediately below supersedes everything after it.
+
+---
+
+## Current architecture (as-built) — supersedes the v1 design below
+
+The framework is now **project-first** and **spec-driven**, not pair-driven:
+
+- **Entry into the production is a real Business Service** — `DTL.Svc.ApiService`
+  (single, adapterless, typed methods). The old design's `PairFileService →
+  Orchestrator` is still present for the file-drop path, but `EnsLib.Testing.Service`
+  is never used as an entry point. See the **iris-production-architecture** skill.
+- **Production hosts:** `DTL.Svc.ApiService` (inbound boundary), `DTL.Svc.SpecFileService`
+  + `DTL.Svc.PairFileService` (file intake), `DTL.Proc.SpecForge` (concise-spec
+  generation on a durable queue), `DTL.Proc.Orchestrator` (ungated regeneration loop),
+  `DTL.Op.LLMConnector` (HTTP → OpenAI / **AWS Bedrock** / mock). The gated,
+  step-by-step build is driven by `DTL.Service.StepEngine`; `DTL.Service.ProjectManager`
+  owns project lifecycle; `DTL.Service.JobManager` bridges REST → production.
+- **Spec-driven, no samples required.** A spec document (PDF/DOCX/text) is extracted,
+  the LLM produces a **concise spec grouped by message/segment type with provenance**,
+  the human reviews/approves it (the earliest, cheapest gate), then DTLs are generated
+  **from the spec** — the message is never required. `DTL.Util.SampleGen` synthesises
+  schema-valid test messages; `DTL.Util.SchemaValidate` validates produced output
+  against the target DocType; the accuracy gate round-trips them and an LLM-as-judge
+  checks spec conformance. Generated `<assign>`/`<if>` carry `<annotation>` provenance.
+- **Projects.** A `DTL.Data.Project` fixes one HL7 version, holds multiple specs (each
+  reviewed independently), derives the message types from the approved specs'
+  `appliesTo` scopes, and fans out one child `DTL.Data.Job` per selected type — each
+  the single-DTL pipeline, seeded with a per-type assembled spec. The package exports
+  as one XML or persists as the compiled `DTL.Generated.*` classes.
+- **Success gate.** Spec-driven jobs gate on **SpecConformance** (run-all-inputs +
+  output schema validity + LLM judge), not the v1 `CompileRun`/`CompileMatch` policies
+  (those remain only for the file-drop path that has an expected output). See the
+  **dtl-generation** skill for the full accuracy-gate rationale.
+
+Everything below this line is the v1 design as originally synthesized.
+
+---
+
+# DTL GenAI Framework — Synthesized Design (v1, historical)
 
 _Produced by a 3-proposal design panel with adversarial critique, then synthesized. Facts were re-verified against the live IRIS for Health 2026.1 container._
 

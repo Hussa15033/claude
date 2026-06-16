@@ -1,82 +1,193 @@
 # DTL Auto-Generation Framework (GenAI → InterSystems DTL)
 
 A framework that **uses GenAI to write InterSystems IRIS Data Transformation
-Language (DTL)** for HL7 v2 interface mappings. You provide an example HL7 v2
-*input* message and an example *output* message; an IRIS interoperability
-production asks an LLM for a DTL, **compiles it, runs it, verifies the result**
-against the expected output, and — if it fails to compile or doesn't match —
-feeds the errors/diff back to the LLM and **regenerates**, looping up to a
-configurable number of attempts or until it succeeds.
+Language (DTL)** for HL7 v2 interface mappings — driven by a **written
+specification**, not by sample messages.
 
-> The whole loop has been verified running in a live **IRIS for Health 2026.1**
-> container, end to end, against a built-in offline mock LLM (no OpenAI key
-> required). All three example pairs converge to a byte-exact transform.
+## The problem this solves
+
+When an implementation partner builds an HL7 v2 interface, they almost always
+work from a **specification document** and rarely have more than a handful of
+sample messages — sometimes none. The traditional workflow is painful:
+
+> hand-write a DTL in IRIS → test it against whatever sample messages you can
+> scrape together → manually read the HL7 schema to check the output is valid →
+> repeat.
+
+This framework collapses that loop. You give it the **spec** (and, optionally,
+the message types you care about); it asks an LLM to author the DTL, then —
+because you usually have no samples — it **manufactures schema-valid test
+messages itself**, runs the DTL, **validates the output against the target HL7
+schema automatically**, judges it against the spec, and regenerates on failure.
+A human reviews a spec that has been distilled to an explicit rule list, then
+reviews the finished DTL, with the produced output already schema-checked.
+
+> Verified running in a live **IRIS for Health 2026.1** container, end to end,
+> against a built-in offline mock LLM (no API key required), and against AWS
+> Bedrock (Anthropic Claude) and OpenAI.
 
 ---
 
-## Why this is non-trivial
+## Projects — building a whole interface at once
 
-Real health-interface example pairs come with a catch the framework is designed
-around: **the example output is not guaranteed to be the literal machine
-transform of the example input.** The pair illustrates the *kind* of
-transformation. So the framework separates *objective* gates (does it compile?
-does it run?) from a *reported-but-tunable* match score, and classifies field
-differences by whether the expected value is even derivable from the source
-(so illustrative values aren't hard-coded). See **Success policies** below.
+The top-level unit of work is a **project**. A project fixes the **HL7 version** for all
+its transformations, holds **one or more specification documents**, and generates a
+reviewed DTL for **every message type you select**.
+
+```
+ CREATE PROJECT           name + HL7 version (fixed for the whole project)
+        │
+ ADD SPECIFICATIONS       attach one or more spec docs; each is reviewed independently
+        │                 (concise spec + your approval — the per-document gate below)
+        ▼
+ SELECT MESSAGE TYPES     once every spec is approved, the project DERIVES the HL7
+        │                 message types the specs cover (from each rule's appliesTo
+        │                 scope), resolved against the project version. Tick the ones
+        │                 to build. (Specs lock here — "the real work has started".)
+        ▼
+ GENERATE ALL             one child job per selected type, fanned out concurrently on
+        │                 the durable BP queue. Each is the proven single-DTL pipeline,
+        │                 seeded with a per-type spec ASSEMBLED from the approved specs
+        │                 (wildcard/shared rules + rules scoped to that type).
+        ▼
+ REVIEW EACH DTL          open any transformation → review the gate verdict, the DTL,
+        │                 the synthetic + your test messages and their schema validity;
+        │                 send live messages through it; converse with the AI to change
+        │                 it (reject + feedback / correct an output) until happy.
+        ▼
+ SAVE / EXPORT            the generated DTLs are compiled classes in the IRIS namespace
+                          (the "package"); export them all as one importable XML.
+```
+
+Per-type spec assembly is the crux: a project spec covers many message types, but a
+DTL targets one. For each selected type the project gathers every approved rule whose
+`appliesTo` is `*` (generic/shared) **or** names that type, and builds a focused spec —
+so each child job's plan/generate/judge see only what's in scope. Reusable
+`<subtransform>` factoring of shared rules is on the **roadmap** (below).
+
+## How a single transformation is built (the spec-driven, human-gated flow)
+
+Each message type in a project runs this pipeline (it is also the engine behind the
+whole framework):
+
+```
+ 1. UPLOAD / TYPE SPEC          PDF · DOCX · text  →  extracted to markdown
+        │
+ 2. CONCISE SPEC (LLM)          de-noised, grouped by message/segment type, every
+        │                       rule carries a verbatim source quote + appliesTo scope
+        ▼
+ 3. REVIEW SPEC (human gate)    side-by-side: original ⇄ rule list; move rules between
+        │                       groups, resolve ambiguities (each shows its source passage)
+        ▼
+ 4. PLAN (LLM)                  one line per in-scope rule; coverage + conditional-rule gates
+        │                       ensure nothing is silently dropped
+        ▼  (human approves)
+ 5. GENERATE DTL (LLM)          from the SPEC only — the message is never required.
+        │                       Each <assign>/<if> annotated with the spec rule it implements.
+        ▼
+ 6. ACCURACY GATE (automatic)   ┌ run on synthetic + any user messages
+        │                       ├ schema-validate every OUTPUT vs the target DocType
+        │                       └ LLM-as-judge conformance vs the spec
+        ▼  (auto-repair loop on failure: compile / runtime / schema / spec findings fed back)
+ 7. REVIEW DTL (human gate)     informed review: gate verdict, per-message output validity,
+        │                       diff, full DTL source. Accept, reject+feedback, or correct.
+        ▼
+ 8. USE                         transform live messages, refine via conversation, export.
+```
+
+Steps 2–3 are the **earliest, cheapest checkpoint**: an extraction or
+interpretation error is caught on a one-page rule list *before* any DTL is built.
+The approved spec then becomes the single **authority** every later step is
+grounded on.
+
+### What makes it spec-driven, not sample-driven
+
+| Capability | Class | What it does |
+|---|---|---|
+| **Synthetic input generation** | `DTL.Util.SampleGen` | Walks the IRIS HL7 schema and manufactures **structurally-valid** synthetic input messages for any DocType — `minimal` (required segments only), `full` (+ optionals), `seeded` (spec-derived values woven in so conditional rules fire). Datatype-aware and deterministic. No real samples needed. |
+| **Output schema validation** | `DTL.Util.SchemaValidate` | Runs IRIS's own validator (`Validate("dm")`) on the **produced** message against the target DocType and decomposes the result into structured findings `{kind, segment, field, severity, message}`. Automates the manual "check the output against the schema" step. |
+| **Round-trip accuracy gate** | `DTL.Service.StepEngine` | Generates synthetic inputs → runs the DTL over them *and* any user-supplied samples → schema-validates every output → feeds structural defects back into the repair loop. A schema-invalid output **hard-blocks** success. |
+| **Per-rule provenance** | `DTL.Util.PromptBuilder` | Generated DTL attaches an `<annotation>` child to each `<assign>`/`<if>` naming the spec rule it implements, so every field change is traceable back to the requirement — inside the class itself. |
+
+You can still **bring your own sample messages** (optional): they are run and
+schema-validated alongside the synthetic set, and a supplied message also
+identifies the message type if you don't pick one explicitly.
 
 ---
 
 ## Architecture
 
+The framework is an **IRIS Interoperability production**. Everything enters
+through a real Business Service and flows through the production so every message
+is visible in the **Visual Trace** (no detached jobs, no test harnesses used as
+entry points).
+
 ```
-  Browser SPA (/dtl/ui)                  File drop (inputs/ + outputs/)
-        │  POST /generate, poll /jobs/{id}        │
-        ▼                                         ▼
-  ┌──────────────────┐  ForgeRequest   ┌─────────────────────┐  ForgeRequest  ┌──────────────────────┐
-  │ DTL.REST.Dispatch│ ──(async via──► │ DTL.Svc.            │ ─────────────► │ DTL.Proc.            │
-  │ (%CSP.REST)      │   JobManager +  │   PairFileService   │                │   Orchestrator       │
-  │  + DTL.Data.Job  │ ◄─Testing.Svc)─ │ (EnsLib.File inbound)│ ◄──────────── │ (regeneration loop)  │
-  └──────────────────┘   the BP writes └─────────────────────┘  ForgeResponse └──────────┬───────────┘
-        ▲   each attempt into DTL.Data.Job (polled live by the UI)            SendRequestSync│ ▲
-        └───────────────────────────────────────────────────────────────────  LLMRequest ▼ │ LLMResponse
-                                                                              ┌──────────────────────┐
-                                                                              │ DTL.Op.LLMConnector  │
-                                                                              │ (EnsLib.HTTP outbound)│
-                                                                              └──────────┬───────────┘
-                                                                       HTTP /v1/chat/completions
-                                                                                         ▼
-                                                              OpenAI  ──or──  mock/mock_llm.py (offline)
+  Browser SPA (/dtl/ui)                         File drop (inputs/)
+        │  REST: upload, concise, generate, jobs        │
+        ▼                                               ▼
+  ┌──────────────────┐                          ┌──────────────────────┐
+  │ DTL.REST.Dispatch│   typed methods          │ DTL.Svc.SpecFileService│  (spec docs)
+  │ (%CSP.REST)      │ ───────────────►┐        │ DTL.Svc.PairFileService│  (sample pairs)
+  └──────────────────┘                 ▼        └───────────┬──────────┘
+                              ┌──────────────────────┐      │
+                              │ DTL.Svc.ApiService    │◄─────┘   the single inbound
+                              │ (Business Service,    │          boundary — typed
+                              │  adapterless)         │          methods, fully traced
+                              └───────┬───────────────┘
+                  SubmitConcise │     │ Submit/Forge │ LLM (sync)
+                   (async)      ▼     ▼              ▼
+              ┌────────────────────┐ ┌──────────────────────┐
+              │ DTL.Proc.SpecForge │ │ DTL.Proc.Orchestrator │   durable BP queues
+              │ (concise spec gen) │ │ (regeneration loop)   │   (PoolSize > 1)
+              └─────────┬──────────┘ └──────────┬───────────┘
+                        │  SendRequestSync (host sends directly → child in trace)
+                        ▼                        ▼
+                              ┌──────────────────────┐
+                              │ DTL.Op.LLMConnector   │  Business Operation
+                              │ (HTTP: OpenAI /       │  /v1/chat/completions
+                              │  Bedrock / Mock)      │
+                              └──────────┬───────────┘
+                                         ▼
+                    OpenAI · AWS Bedrock (Anthropic) · mock/mock_llm.py (offline)
 ```
 
-There are **two ways in** — the browser UI / REST API, and the file-drop service —
-both feeding the same `DTL.Proc.Orchestrator` regeneration loop.
+The gated, step-by-step build (the UI's default) is driven **synchronously per
+step** by `DTL.Service.StepEngine`, persisting all state on `DTL.Data.Job` so each
+REST `/continue` call advances exactly one step and the conversation survives
+across user think-time. The ungated auto-run path (`DTL.Proc.Orchestrator`) drives
+the whole loop in one shot for the file-drop / test flows.
 
-The Orchestrator calls these **in-process** utilities each attempt (no extra
-messaging hops):
+### In-process utilities (no extra messaging hops)
 
 | Utility | Role |
 |---|---|
-| `DTL.Util.PromptBuilder` | System / initial-user / feedback prompts encoding the DTL grammar that compiles. |
-| `DTL.Util.Extractor`     | Strips markdown fences and slices out the `Class … }` definition from the LLM reply. |
-| `DTL.Util.Verifier`      | Compiles the DTL **from a string** (`$system.OBJ.LoadStream`), runs the transform, normalizes + diffs output vs expected, scores it. |
-| `DTL.Util.HL7`           | DocType derivation (structure, not trigger event), line-ending normalization, MSH-offset-correct field access. |
+| `DTL.Util.PromptBuilder` | All prompts: spec-structuring, concise spec, plan (+ coverage/conditional gates), generate, repair, judge — encoding the DTL grammar that compiles and the HL7 schema for the DocType. |
+| `DTL.Util.Extractor` | Strips markdown fences and slices the `Class … }` definition out of the LLM reply. |
+| `DTL.Util.Verifier` | Compiles the DTL **from a string** (`$system.OBJ.LoadStream`), runs the transform, diffs/scores output, reports changed fields. Security boundary: compiles only the `<transform>` fragment. |
+| `DTL.Util.SampleGen` | Schema-driven synthetic HL7 input generator (see above). |
+| `DTL.Util.SchemaValidate` | Output-vs-target-schema validator (see above). |
+| `DTL.Util.HL7` / `DTL.Util.HL7Schema` | DocType derivation, MSH-offset-correct field access; renders the exact valid segment paths/fields for a DocType into the prompt. |
 
 ### Components & messages
 
 | Class | Kind |
 |---|---|
-| `DTL.Svc.PairFileService` | Business **Service** — pairs `inputs/X.hl7` with `outputs/X.hl7`, derives DocTypes, emits a `ForgeRequest`. |
-| `DTL.Proc.Orchestrator` | Business **Process** — the generate→compile→run→verify→regenerate loop. |
-| `DTL.Op.LLMConnector` | Business **Operation** — OpenAI-compatible chat completions over HTTP (OpenAI **or** mock). |
-| `DTL.Msg.ForgeRequest` / `ForgeResponse` | Job in / result out (`Ens.Request` / `Ens.Response`). |
-| `DTL.Msg.LLMRequest` / `LLMResponse` | One chat call in / reply out, carrying the accumulating transcript. |
-| `DTL.Msg.ChatTurn` / `FieldDiff` / `SamplePair` | `%SerialObject` sub-objects (embedded; no extent pollution). |
-| `DTL.REST.Dispatch` | `%CSP.REST` API for the UI (generate / jobs / health / schemas). |
-| `DTL.Service.JobManager` | Bridges REST → production: creates a `Job`, dispatches the `ForgeRequest` async. |
+| `DTL.Svc.ApiService` | Business **Service** — the single, adapterless inbound boundary; typed methods (`LLM`, `SubmitConcise`, `SubmitForge`, `Forge`) so every call is traced. |
+| `DTL.Svc.SpecFileService` / `PairFileService` | Business **Services** — file-drop intake for spec documents and sample pairs. |
+| `DTL.Proc.SpecForge` | Business **Process** — durable-queue worker that generates + verifies the concise spec. |
+| `DTL.Proc.Orchestrator` | Business **Process** — the ungated generate→compile→run→verify→regenerate loop. |
+| `DTL.Op.LLMConnector` | Business **Operation** — OpenAI-compatible chat completions over HTTP (OpenAI, AWS Bedrock, or mock), with prompt caching. |
+| `DTL.Service.StepEngine` | The **gated** state machine: structure → plan → generate → accuracy-gate → review, all on `DTL.Data.Job`. |
+| `DTL.Service.ProjectManager` | Project lifecycle: create, attach specs, derive message types (parse `appliesTo`), assemble per-type specs, fan out child jobs, roll up status, export XML. |
+| `DTL.Data.Project` | Persistent project record: HL7 version, attached spec tokens, selected types, child job ids, lifecycle status. |
+| `DTL.Service.JobManager` | Bridges REST → production: creates a `Job`, dispatches into the production. |
 | `DTL.Data.Job` / `Attempt` | Persistent job record + per-attempt log (the live progress the UI polls). |
-| `DTL.Test.HealthCheck` | Init test hook — verifies every component is initialized (also `GET /health`). |
-| `DTL.Setup.Production` | The `Ens.Production` wiring all hosts (OpenAI by default; Mock selectable per job). |
-| `DTL.Setup.Installer` | Load + compile + prepare data dirs + wire web apps + start production; `ForgeExample()` helper. |
+| `DTL.Data.SpecDoc` | Persistent uploaded-spec record: extracted text, concise spec, provenance, approval state. |
+| `DTL.Msg.*` | `ConciseRequest`, `ForgeRequest`/`Response`, `LLMRequest`/`Response`, `ChatTurn`, `FieldDiff`, `SamplePair`. |
+| `DTL.REST.Dispatch` | `%CSP.REST` API for the UI. |
+| `DTL.Setup.Production` / `Installer` | Production wiring; load + compile + data dirs + web apps + start. |
+| `DTL.Test.HealthCheck` / `MockTest` / `UtilTest` / `SecurityTest` | Init hook + regression suites. |
 
 ---
 
@@ -85,144 +196,86 @@ messaging hops):
 Requires Docker.
 
 ```bash
-scripts/demo.sh
+IRIS/run.sh                # container, clean compile, mock LLM, production, web apps
 ```
 
-This will: start an `intersystemsdc/irishealth-community` container, load and
-compile the framework, launch the offline **mock LLM**, start the production,
-and run a forge job for each example pair. Expected output:
+Then open **http://localhost:52773/dtl/ui/index.html**.
 
-```
-Job ADT_A01_Admit:      success=1 verdict=SUCCESS attempts=3 score=1.000
-Job ADT_A08_Update:     success=1 verdict=SUCCESS attempts=3 score=1.000
-Job ORU_R01_LabResult:  success=1 verdict=SUCCESS attempts=3 score=1.000
-```
+`IRIS/run.sh` does a **clean-slate recompile** (purges the `DTL.*` code, keeping
+persistent data, then reloads) so a deleted class member can never linger as
+stale compiled code. Use `IRIS/compile.sh` for a fast incremental edit loop.
 
-The mock LLM scripts a **self-correction curriculum** — it deliberately returns
-a *non-compiling* DTL on attempt 1, a *compiling-but-wrong* DTL on attempt 2,
-and the *correct* DTL on attempt 3 — so you can watch the loop detect a compile
-error, then a field mismatch, then converge.
+### Using the UI
 
-### Web UI & REST API
+1. **Provide a specification** — type one or upload a document (PDF/DOCX/…); the
+   Specification Builder extracts it, the LLM produces a **concise, grouped,
+   source-referenced** spec, and you **review & approve** it (the earliest gate).
+2. **Choose the message type** to build the transformation for (loaded from the
+   installed HL7 schemas). No sample message is required — optionally expand
+   *"test with your own sample messages"* to add real ones.
+3. **Plan & Generate** — watch each step (structure → plan → generate →
+   auto-repair) live. The **accuracy gate** shows: runs on all messages, output
+   valid vs the HL7 schema (N/N), and the spec-conformance judge score.
+4. **Review** — accept, reject with feedback (regenerates), or correct an output
+   directly. The **Outputs** tab shows every test message (synthetic + yours)
+   with its schema-validity badge.
 
-The framework ships with a browser UI and a REST API, both served by IRIS.
+### LLM provider — OpenAI · AWS Bedrock · Mock
 
-```bash
-IRIS/run.sh                # bring everything up (container, compile, mock, production, web apps)
-```
-
-Then open the UI: **http://localhost:52773/dtl/ui/index.html**
-
-- **UI** (`/dtl/ui`): paste an **input specification** (free text) and one or more
-  **input/output sample pairs** (add/remove rows); choose the **LLM provider**
-  (OpenAI live API, or the offline Mock), the **model** (loaded live from your
-  account via the ⟳ button), and enter your **OpenAI API key** (remembered in the
-  browser, sent only to your same-origin IRIS server); pick a success policy + max
-  attempts; and click **Generate DTL**. A live progress panel shows each attempt
-  as it happens (compile-fail → mismatch → success), and a **side-by-side diff
-  viewer** shows expected vs the generated DTL's actual output, plus the final
-  DTL class source. A health indicator (top-right) runs the init test hook, and a
-  links bar deep-links to the **IRIS Production page** and this job's **Visual
-  Trace**.
-- **REST API** (`/dtl/api`), all JSON:
-
-  | Method & path | Purpose |
-  |---|---|
-  | `GET /dtl/api/health` | Init/health check (the test hook) — 200 if all green, 503 otherwise. |
-  | `GET /dtl/api/schemas` | Installed HL7 schema versions. |
-  | `POST /dtl/api/models` | Body `{apiKey}`; server-side proxy to OpenAI `/v1/models` (no browser CORS); returns chat-capable model ids. |
-  | `POST /dtl/api/generate` | Start a job; body `{inputSpec, inputName, provider, model, apiKey, maxAttempts, successPolicy, pairs:[{input,output},…]}`; returns `{jobId}`. |
-  | `GET /dtl/api/jobs/{id}` | Live job status: attempts log, score, diff, generated DTL, sessionId. |
-  | `GET /dtl/api/jobs/{id}/dtl` | The final generated DTL class source (text). |
-  | `GET /dtl/api/jobs` | Recent jobs. |
-  | `GET /dtl/api/links[/{id}]` | Management-Portal deep links: production config, and (with id) the Visual Trace for that job's session. |
-
-Behind the scenes `POST /generate` creates a persistent `DTL.Data.Job`, dispatches
-a `ForgeRequest` **asynchronously** into the running production's orchestrator,
-and returns immediately; the orchestrator writes each attempt into the Job record
-as it runs, so `GET /jobs/{id}` polling shows live progress. The web apps are
-configured for **unauthenticated** access for the demo (default IRIS creds are
-`SuperUser` / `SYS`); see `IRIS/README.md` to lock this down.
-
-### File-driven mode
-
-The runtime data directory is **derived from the IRIS manager directory** (no
-hardcoded paths) — by default `<mgr>/dtldata/` with `inputs/ outputs/ archive/
-results/` beneath it. The installer prints the exact location and wires it into
-the production. To find it any time:
-
-```objectscript
-write ##class(DTL.Setup.Installer).DataDir()   ; e.g. /usr/irissys/mgr/dtldata/
-```
-
-With the production running, drop an input file into that `inputs/` directory:
-
-```bash
-DATA=$(docker exec iris-dtl iris session IRIS -U USER \
-  "##class(DTL.Setup.Installer).DataDir()")
-docker cp inputs/ADT_A01_Admit.hl7 "iris-dtl:${DATA}inputs/"
-```
-
-The service pairs it with the matching `outputs/ADT_A01_Admit.hl7`, runs the
-loop, archives the input, and writes the generated `.dtl.cls` + `.result.json`
-to the `results/` subdirectory.
+Mock and the live providers use the **identical wire format**
+(`POST /v1/chat/completions`). Pick the provider in Settings; the API key is sent
+per-request to your same-origin IRIS server, used for that job only, and is
+**never** written to the Job record or logs. `IRIS/run.sh` starts the offline
+mock automatically for key-free demos/CI.
 
 ---
 
-## Example transformations (`inputs/` ↔ `outputs/`)
+## REST API (`/dtl/api`, all JSON)
 
-Same filename = one pair. Each shows a typical health-interface idiom and is
-**proven achievable** by a reference DTL (`reference/*.dtl.xml`):
-
-| Pair | Transformation demonstrated |
+| Method & path | Purpose |
 |---|---|
-| `ADT_A01_Admit` | Sending-app rename (`EPICADT`→`EPIC`), facility-code normalization (`SITEA`→`001`) across MSH/PID/PV1, version bump 2.3→2.5. |
-| `ADT_A08_Update` | Conditional **code mapping** of administrative sex (`F`→`2`, `M`→`1`, ISO-5218 style) via `<if>`, version bump. |
-| `ORU_R01_LabResult` | Header rewrites on a **grouped-segment** structure (PID lives in `PIDgrpgrp(1).PIDgrp`), version bump. |
+| `GET /health` | Init/health check (the test hook) — 200 if all green. |
+| `GET /projects` · `POST /projects` | List projects / create one (`{name, hl7Version, provider, model, …}`). |
+| `GET /projects/:tok` | Full project document: specs (+ review status), selected types, per-job summary. |
+| `POST /projects/:tok/specs` · `DELETE …/specs/:spec` | Attach / detach a spec (DRAFT only). |
+| `GET /projects/:tok/types` | Message types derived from the approved specs, resolved against the project version. |
+| `POST /projects/:tok/generate` | Lock specs + fan out one child job per selected type (`{types:[…], apiKey, region}`). |
+| `GET /projects/:tok/package` · `GET …/export` | List the project's generated DTL classes / download them all as one importable XML. |
+| `GET /schemas` | Installed HL7 schema versions **and** the full `version:structure` DocType list (for the message-type picker). |
+| `POST /models` · `POST /bedrock-models` | Server-side proxy to list chat-capable models for OpenAI / Bedrock. |
+| `POST /upload` | Upload a spec document; returns a `{token}` the UI polls. |
+| `GET /specs` · `GET /specs/:token` | List approved specs / fetch one (text, concise spec, provenance, status). |
+| `POST /specs/:token/concise` · `/verify-concise` · `/skip-verify` · `/approve-concise` | Generate / audit / skip-audit / approve the concise spec. |
+| `POST /generate` | Start a job; body `{inputSpec\|specToken, sourceDocType, targetDocType, inputs[], provider, model, apiKey, maxAttempts, costCap}`; returns `{jobId}`. |
+| `GET /jobs/:id` | Live job status: attempts, gate report, diff, generated DTL, sessionId. |
+| `GET /jobs/:id/dtl` | The final generated DTL class source (text). |
+| `POST /jobs/:id/continue` | Advance a gated job: `approve-spec` / `approve` / `accept` / `reject`. |
+| `GET /jobs/:id/outputs` | Every test message (user + synthetic) transformed, each with its output-vs-schema validation verdict. |
+| `GET /jobs/:id/synthetic` | The synthetic, spec-derived input messages generated to test this DTL. |
+| `POST /jobs/:id/transform` · `/correct` · `/refine` | Run the DTL on an ad-hoc message · apply a correction · spawn a refinement job. |
+| `GET /jobs/:id/messages` | The full LLM conversation (every request/response) for transparency. |
+| `GET /classes` · `GET /history` · `GET /links[/:id]` | Generated classes · job lineage · Management-Portal / Visual-Trace deep links. |
 
 ---
 
-## Success policies (handling the "output may not be a literal transform" caveat)
+## Success / accuracy policy
 
-Set on the `ForgeRequest` / service (`SuccessPolicy`):
+Spec-driven jobs gate on **spec conformance**, not a byte match (there is no
+expected output to match against). The accuracy gate passes only when the DTL:
 
-| Policy | Accepts when |
-|---|---|
-| `CompileOnly` | the DTL compiles |
-| `CompileRun` | it compiles **and** runs (objective gates only; score reported, not gating) |
-| `CompileMatch` *(demo default)* | output is a byte-exact match after normalization |
-| `CompileMatchTolerance` | compiles, runs, and `score ≥ MatchThreshold`, ignoring volatile fields (MSH-7 time, MSH-10 control id) |
+1. **runs** cleanly on every test message (synthetic + user), and
+2. produces output that is **valid against the target HL7 schema** (no HIGH
+   structural defect — missing required segment, bad datatype, …), and
+3. has **no HIGH-severity spec-conformance violation** from the LLM judge.
 
-Normalization always trims the trailing segment terminator that
-`OutputToString()` appends and reconciles CR/LF line endings. Field diffs are
-classified **HIGH** (expected value is present in the source → derivable) vs
-**LOW** (not in the source → likely illustrative; the feedback prompt tells the
-LLM *not* to hard-code these). The loop also has **cycle** (identical candidate
-repeated) and **plateau** (no score improvement) guards so it never burns the
-whole budget on an unsatisfiable pair.
+LOW-severity findings and the advisory "no field changed" coverage signal inform
+the reviewer but don't block success. The repair loop has **cycle** (identical
+candidate) and **plateau** (no score improvement) guards plus a per-job **cost
+cap**, so it never burns the whole budget on an unsatisfiable spec.
 
----
-
-## LLM provider — OpenAI (default) or Mock
-
-The framework now defaults to the **real OpenAI API**. The installer creates the
-required TLS config (`DTLOpenAISSL`) and the production's `DTL.Op.LLMConnector`
-ships with `Mode=openai`, `HTTPServer=api.openai.com:443`. There is nothing to
-configure by hand:
-
-1. Open the UI, leave **Provider = OpenAI**, paste your **API key**, click **⟳**
-   to load your account's models, pick one, and **Generate**. The key is sent
-   per-request to your same-origin IRIS server, used for that job only, and is
-   **never** written to the Job record or logs.
-2. The offline **Mock** provider is still available — switch the Provider
-   dropdown to *Mock* (no key needed) for an offline demo / CI. `IRIS/run.sh`
-   starts the mock automatically.
-
-Mock and OpenAI use the **identical wire format** (`POST /v1/chat/completions`);
-`DTL.Op.LLMConnector` points the HTTP adapter at the chosen provider per call
-(OpenAI over HTTPS+SSL, mock over plaintext) and adds the `Authorization: Bearer`
-header when a key is present. You can also set a server-side default key via an
-Ensemble credentials entry (`ApiKeyCredentials` setting) instead of per-request.
+(The legacy pair-driven policies — `CompileOnly` / `CompileRun` / `CompileMatch`
+/ `CompileMatchTolerance` — still exist for the file-drop flow that *does* have an
+expected output.)
 
 ---
 
@@ -230,48 +283,66 @@ Ensemble credentials entry (`ApiKeyCredentials` setting) instead of per-request.
 
 The framework compiles LLM-authored text in a live namespace, so it treats the
 reply as untrusted: `DTL.Util.Verifier.CompileDTL` **extracts only the
-`<transform>…</transform>` fragment** and re-wraps it into a forced,
-sanitized `DTL.Generated.*` class — it never compiles an LLM-supplied class
-wrapper. This neutralizes code-injection via smuggled methods (e.g. a
-`[ CodeMode = generator ]` method that would run at compile time) and prevents
-generated classes from landing in system packages. `DTL.Test.SecurityTest`
-proves both (the injection attempt leaves `^DTLPwned` unset and the `Pwn` method
-absent). Throwaway per-attempt classes are deleted; only the winner is promoted.
-For a shared IRIS instance or an untrusted endpoint, run the production under a
-least-privilege `$ROLES` context.
+`<transform>…</transform>` fragment** and re-wraps it into a forced, sanitized
+`DTL.Generated.*` class — it never compiles an LLM-supplied class wrapper. This
+neutralizes code injection via smuggled methods (e.g. a `[ CodeMode = generator ]`
+member that would run at compile time) and confines generated classes to one
+package. `DTL.Test.SecurityTest` proves both. Throwaway per-attempt classes are
+deleted; only the winner is promoted. For a shared instance, run the production
+under a least-privilege `$ROLES` context.
+
+## Roadmap
+
+Planned, not yet built:
+
+- **Reusable sub-transformations (`<subtransform>`).** Factor a segment-level rule
+  shared across many message types (e.g. a common PID normalization) into a
+  standalone sub-DTL and call it via `<subtransform>` from each parent. Deferred
+  deliberately: a sub-DTL runs on a sub-document/segment, which the current
+  whole-message `DTL.Util.SampleGen` / `DTL.Util.SchemaValidate` cannot generate or
+  validate in isolation — so per-sub-transform verification (and "send a live
+  message to each subtransformation") needs sub-document-level test generation and
+  validation designed in first. Until then, each message type produces one
+  self-contained DTL and shared logic is duplicated rather than factored out.
+- **Message-flow trace** — show which project DTL a given message routes to (via an
+  HL7 routing production / Visual Trace) and, using the per-rule `<annotation>`
+  provenance, which spec rules fired for that message (diff input↔output, map each
+  changed field back to its annotated rule).
 
 ## Repository layout
 
 ```
-inputs/        example HL7 v2 input messages
+inputs/        example HL7 v2 input messages (file-drop demo)
 outputs/       example HL7 v2 output messages (same basename = a pair)
 reference/     hand-verified reference DTLs proving each pair is achievable
 src/DTL/       the framework:
-                 Msg/      request/response + sample-pair/chat-turn messages
-                 Svc/      file-intake business service
-                 Proc/     orchestration business process (the regeneration loop)
-                 Op/       LLM business operation (OpenAI/mock over HTTP)
-                 Util/     Verifier, HL7, Extractor, PromptBuilder
-                 Data/     persistent Job + Attempt records (for the UI/REST)
-                 Service/  JobManager (REST→production bridge, async dispatch)
+                 Msg/      request/response + chat-turn/sample-pair messages
+                 Svc/      ApiService (inbound boundary) + file-intake services
+                 Proc/     SpecForge + Orchestrator business processes
+                 Op/       LLM business operation (OpenAI/Bedrock/mock over HTTP)
+                 Util/     Verifier, SampleGen, SchemaValidate, HL7, HL7Schema,
+                           Extractor, PromptBuilder, Pricing, …
+                 Data/     persistent Job/Attempt + SpecDoc records
+                 Service/  StepEngine (gated state machine), JobManager (REST bridge),
+                           SpecConcise (concise-spec generation)
                  REST/     %CSP.REST dispatch class (the API)
-                 Setup/    Production + Installer (compile, dirs, web apps)
-                 Test/     UtilTest, MockTest, SecurityTest, HealthCheck (init hook)
+                 Setup/    Production + Installer
+                 Test/     HealthCheck (init hook), MockTest, UtilTest, SecurityTest
 ui/            the single-file browser SPA (index.html)
 mock/          offline OpenAI-compatible mock LLM (mock_llm.py)
 scripts/       demo.sh, sync.sh, mock.sh
+skills/        IRIS production-architecture + interop-REST authoring skills
 IRIS/          operator control panel: run.sh, compile.sh, test.sh + README
-docs/          DESIGN.md (the synthesized architecture design)
+docs/          DESIGN.md
 ```
 
-See **`IRIS/README.md`** for the run / compile / test control panel.
-
 ## Tests
-
-Two terminal-runnable regression suites (also wired into the demo):
 
 ```objectscript
 do ##class(DTL.Test.UtilTest).RunAll()       ; Verifier/Extractor/HL7 vs the reference DTLs
 do ##class(DTL.Test.MockTest).RunAll()       ; the mock's broken→wrong→correct curriculum
 do ##class(DTL.Test.SecurityTest).RunAll()   ; code-injection + package-confinement guards
 ```
+
+`GET /dtl/api/health` runs the init hook (`DTL.Test.HealthCheck`) and returns 200
+only when every production component is initialized.

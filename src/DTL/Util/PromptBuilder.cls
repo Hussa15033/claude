@@ -56,7 +56,9 @@ ClassMethod DtlSchema() As %String
 	set p = p _ "<code><![CDATA[ <one or more lines of valid ObjectScript> ]]></code>  — raw ObjectScript escape hatch; source/target are in scope. Must be valid ObjectScript." _ nl
 	// trace / comment
 	set p = p _ "<trace value='EXPR'/>  — emit a trace message (self-closing)." _ nl
-	set p = p _ "<comment/>  — MUST be empty/self-closing; it takes NO text content (text inside <comment> is INVALID)." _ nl _ nl
+	set p = p _ "<comment/>  — MUST be empty/self-closing; it takes NO text content (text inside <comment> is INVALID)." _ nl
+	// annotation (provenance)
+	set p = p _ "<annotation>TEXT</annotation>  — an OPTIONAL child element of <assign>, <if>, <foreach>, <switch> (NOT an attribute). It carries a human-readable note and is preserved in the compiled DTL. Use it to record PROVENANCE: which specification rule this action implements. To attach one, make the action a paired (non-self-closing) tag with the <annotation> as its child, e.g. <assign value='&quot;EPIC&quot;' property='target.{MSH:3.1}' action='set'><annotation>Rule 3: set sending application to EPIC</annotation></assign>. Do NOT put it on <comment> and never write annotation as an attribute." _ nl _ nl
 	set p = p _ "Do NOT invent attributes (no id=, name=, desc= on these elements). Every element above is self-closing OR properly paired; never leave a tag unclosed." _ nl
 	quit p
 }
@@ -459,7 +461,8 @@ ClassMethod InitialFromSpecPrompt(pClassName As %String, pSrcDocType As %String,
 	set nl = $char(10)
 	set p = "Now write the DTL class named '" _ pClassName _ "' that implements the APPROVED SPECIFICATION above." _ nl
 	set p = p _ "Pin sourceDocType='" _ pSrcDocType _ "' and targetDocType='" _ pTgtDocType _ "'. Implement EVERY rule in the specification that applies to this message type. The HL7 schema for these DocTypes is in the system prompt — use only those paths." _ nl _ nl
-	set p = p _ "Derive the transformation from the SPECIFICATION ONLY; do not assume any particular field values — the DTL must be correct for ANY message of this type, not a single example. The class must COMPILE and produce a valid transform." _ nl
+	set p = p _ "Derive the transformation from the SPECIFICATION ONLY; do not assume any particular field values — the DTL must be correct for ANY message of this type, not a single example. The class must COMPILE and produce a valid transform." _ nl _ nl
+	set p = p _ "PROVENANCE (required): every <assign>/<if>/<foreach> you write MUST carry an <annotation> child naming the specification rule it implements (e.g. <annotation>Rule 5: map PID-8 F-&gt;2, M-&gt;1</annotation>). Quote the rule concisely. This lets a reviewer trace each field change back to the spec. Make those actions paired tags with the <annotation> inside; do not use annotation as an attribute, and do not annotate the bare copy-through." _ nl
 	quit p
 }
 

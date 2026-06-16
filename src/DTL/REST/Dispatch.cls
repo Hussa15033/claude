@@ -43,8 +43,20 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
   <Route Url="/jobs/:id/refine" Method="POST" Call="RefineJob" Cors="true"/>
   <Route Url="/jobs/:id/messages" Method="GET" Call="JobMessages" Cors="true"/>
   <Route Url="/jobs/:id/outputs" Method="GET" Call="JobOutputs" Cors="true"/>
+  <Route Url="/jobs/:id/synthetic" Method="GET" Call="JobSynthetic" Cors="true"/>
   <Route Url="/jobs/:id/transform" Method="POST" Call="JobTransform" Cors="true"/>
   <Route Url="/jobs/:id/correct" Method="POST" Call="CorrectJob" Cors="true"/>
+  <!-- Projects: the top-level multi-spec, multi-message-type workflow. -->
+  <Route Url="/projects"            Method="GET"  Call="ListProjects" Cors="true"/>
+  <Route Url="/projects"            Method="POST" Call="CreateProject" Cors="true"/>
+  <Route Url="/projects/:tok"       Method="GET"  Call="GetProject"   Cors="true"/>
+  <Route Url="/projects/:tok/specs" Method="POST" Call="AttachSpec"   Cors="true"/>
+  <Route Url="/projects/:tok/specs/:spec" Method="DELETE" Call="DetachSpec" Cors="true"/>
+  <Route Url="/projects/:tok/types" Method="GET"  Call="ProjectTypes" Cors="true"/>
+  <Route Url="/projects/:tok/generate" Method="POST" Call="ProjectGenerate" Cors="true"/>
+  <Route Url="/projects/:tok/package"  Method="GET"  Call="ProjectPackage" Cors="true"/>
+  <Route Url="/projects/:tok/export"   Method="GET"  Call="ProjectExport"  Cors="true"/>
+  <Route Url="/projects/:tok/complete" Method="POST" Call="ProjectComplete" Cors="true"/>
   <Route Url="/classes"         Method="GET"  Call="Classes"  Cors="true"/>
   <Route Url="/history"         Method="GET"  Call="History"  Cors="true"/>
   <Route Url="/links"           Method="GET"  Call="Links"    Cors="true"/>
@@ -61,17 +73,27 @@ ClassMethod Health() As %Status
 	quit $$$OK
 }
 
-/// GET /schemas - installed HL7 schema categories (e.g. 2.3, 2.5, 2.5.1).
+/// GET /schemas - installed HL7 schema versions AND the full list of message-structure
+/// DocTypes ("version:structure", e.g. 2.5:ADT_A01) for each, so the UI can offer a
+/// message-type picker for the SPEC-DRIVEN flow (no sample message needed to derive it).
+/// Returns {schemas:[ver,...], docTypes:["2.5:ADT_A01",...]}.
 ClassMethod Schemas() As %Status
 {
-	set tArr = []
+	set tArr = [], tDoc = []
 	set k = ""
 	for {
 		set k = $order(^EnsHL7.Schema(k))
 		quit:k=""
 		do tArr.%Push(k)
+		// structures live under ("MS", <structure>)
+		set tS = ""
+		for {
+			set tS = $order(^EnsHL7.Schema(k, "MS", tS))
+			quit:tS=""
+			do tDoc.%Push(k _ ":" _ tS)
+		}
 	}
-	do ..Json({"schemas": (tArr)})
+	do ..Json({"schemas": (tArr), "docTypes": (tDoc)})
 	quit $$$OK
 }
 
@@ -512,10 +534,19 @@ ClassMethod JobMessages(pId As %String) As %Status
 	quit $$$OK
 }
 
-/// GET /jobs/:id/outputs - all stored inputs transformed by the job's final DTL.
+/// GET /jobs/:id/outputs - all stored inputs (user + synthetic) transformed by the
+/// job's final DTL, each with its output-vs-target-schema validation verdict.
 ClassMethod JobOutputs(pId As %String) As %Status
 {
 	do ..Json({"outputs": (##class(DTL.Service.JobManager).Outputs(pId))})
+	quit $$$OK
+}
+
+/// GET /jobs/:id/synthetic - the spec-driven synthetic input messages generated to
+/// test this DTL (the partner usually has no real samples).
+ClassMethod JobSynthetic(pId As %String) As %Status
+{
+	do ..Json({"synthetic": (##class(DTL.Service.JobManager).SyntheticInputs(pId))})
 	quit $$$OK
 }
 
@@ -542,6 +573,107 @@ ClassMethod CorrectJob(pId As %String) As %Status
 	set tJob = ##class(DTL.Data.Job).OpenByJobId(pId, .sc)
 	do ..Json(tJob.ToDynamic(1))
 	quit $$$OK
+}
+
+// ---------------- Projects ----------------
+
+/// GET /projects - recent projects (newest first) for the landing screen.
+ClassMethod ListProjects() As %Status
+{
+	do ..Json({"projects": (##class(DTL.Service.ProjectManager).ListProjects())})
+	quit $$$OK
+}
+
+/// POST /projects - body {name, hl7Version, provider, model, conciseModel, costCap,
+/// maxAttempts}. Creates a DRAFT project. Returns {token}.
+ClassMethod CreateProject() As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
+	set tSC = ##class(DTL.Service.ProjectManager).Create(tPayload, .tTok, .tcSC)
+	if $$$ISERR(tSC) || $$$ISERR(tcSC) quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
+	set %response.Status = "201 Created"
+	do ..Json({"token": (tTok)})
+	quit $$$OK
+}
+
+/// GET /projects/:tok - full project document (specs + per-job summary). Refreshes the
+/// roll-up status first so REVIEW is reflected as children settle.
+ClassMethod GetProject(pTok As %String) As %Status
+{
+	do ##class(DTL.Service.ProjectManager).RefreshStatus(pTok)
+	set tPrj = ##class(DTL.Data.Project).OpenByToken(pTok, .sc)
+	if '$isobject(tPrj) quit ..ErrJson(404, "No project '" _ pTok _ "'")
+	do ..Json(tPrj.ToDynamic(1))
+	quit $$$OK
+}
+
+/// POST /projects/:tok/specs - body {specToken}. Attach an uploaded spec (DRAFT only).
+ClassMethod AttachSpec(pTok As %String) As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
+	set tSC = ##class(DTL.Service.ProjectManager).AttachSpec(pTok, tPayload.specToken, .tcSC)
+	if $$$ISERR(tSC) || $$$ISERR(tcSC) quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
+	quit ..GetProject(pTok)
+}
+
+/// DELETE /projects/:tok/specs/:spec - detach a spec (DRAFT only).
+ClassMethod DetachSpec(pTok As %String, pSpec As %String) As %Status
+{
+	set tSC = ##class(DTL.Service.ProjectManager).DetachSpec(pTok, pSpec, .tcSC)
+	if $$$ISERR(tSC) || $$$ISERR(tcSC) quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
+	quit ..GetProject(pTok)
+}
+
+/// GET /projects/:tok/types - the HL7 message types the approved specs cover, resolved
+/// against the project's HL7 version (the selectable list before generation).
+ClassMethod ProjectTypes(pTok As %String) As %Status
+{
+	set tRes = ##class(DTL.Service.ProjectManager).DeriveTypes(pTok, .tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, $system.Status.GetErrorText(tSC))
+	do ..Json(tRes)
+	quit $$$OK
+}
+
+/// POST /projects/:tok/generate - body {types:[structure,...], apiKey, region}. Locks
+/// the project and fans out one child job per selected type. Returns the project doc.
+ClassMethod ProjectGenerate(pTok As %String) As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
+	set tKey = tPayload.apiKey, tRegion = tPayload.region
+	set tSC = ##class(DTL.Service.ProjectManager).Generate(pTok, tPayload.types, tKey, tRegion, .tcSC)
+	if $$$ISERR(tSC) || $$$ISERR(tcSC) quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
+	set %response.Status = "202 Accepted"
+	quit ..GetProject(pTok)
+}
+
+/// GET /projects/:tok/package - the project's generated DTL classes (the "package").
+ClassMethod ProjectPackage(pTok As %String) As %Status
+{
+	do ..Json({"classes": (##class(DTL.Service.ProjectManager).PackageClasses(pTok))})
+	quit $$$OK
+}
+
+/// GET /projects/:tok/export - all project DTL classes as an importable IRIS XML export
+/// (served as text/xml with a download filename).
+ClassMethod ProjectExport(pTok As %String) As %Status
+{
+	set tXml = ##class(DTL.Service.ProjectManager).ExportXML(pTok, .tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, $system.Status.GetErrorText(tSC))
+	set %response.ContentType = "text/xml"
+	do %response.SetHeader("Content-Disposition", "attachment; filename=""dtl-project-" _ pTok _ ".xml""")
+	write tXml
+	quit $$$OK
+}
+
+/// POST /projects/:tok/complete - mark the project COMPLETE (package accepted).
+ClassMethod ProjectComplete(pTok As %String) As %Status
+{
+	set tSC = ##class(DTL.Service.ProjectManager).Complete(pTok, .tcSC)
+	if $$$ISERR(tSC) || $$$ISERR(tcSC) quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
+	quit ..GetProject(pTok)
 }
 
 /// GET /classes - all DTL classes generated this session, with source.

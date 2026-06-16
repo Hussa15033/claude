@@ -159,6 +159,36 @@ ClassMethod PlanJob(pJobId As %String)
 	}
 }
 
+/// Background entry point for a PROJECT child job. The per-type spec was already
+/// assembled + approved at the project level, so there is NO per-job plan gate: run
+/// Plan, then immediately GenerateOne, landing the job at AWAITING_ATTEMPT for the
+/// single per-DTL human review. Same silent-death guard as PlanJob — any throw writes
+/// FAILED onto the job so the project dashboard never shows a stuck child. Refreshes
+/// the owning project's roll-up status when done.
+ClassMethod ProjectBuildJob(pJobId As %String)
+{
+	try {
+		set tJob = ##class(DTL.Data.Job).OpenByJobId(pJobId, .sc)
+		if '$isobject(tJob) quit
+		set tSC = ..Plan(tJob)
+		// Reload (Plan saved + possibly re-planned) and only proceed if it parked at the
+		// plan gate as expected.
+		set tJob = ##class(DTL.Data.Job).OpenByJobId(pJobId, .sc)
+		if $isobject(tJob), tJob.Status = "AWAITING_PLAN" {
+			do ..GenerateOne(tJob)
+		}
+	} catch ex {
+		do ..FailJob(pJobId, "Project build failed: " _ ex.DisplayString())
+	}
+	// Best-effort project status roll-up (child reached a gate / terminal state).
+	try {
+		set tJob = ##class(DTL.Data.Job).OpenByJobId(pJobId, .sc)
+		if $isobject(tJob), tJob.ProjectToken '= "" {
+			do ##class(DTL.Service.ProjectManager).RefreshStatus(tJob.ProjectToken)
+		}
+	} catch {}
+}
+
 /// Background entry point for in-job spec structuring (JOB'd for a never-reviewed
 /// typed spec). Same rationale + silent-death guard as PlanJob.
 ClassMethod StructureSpecJob(pJobId As %String)
@@ -382,9 +412,14 @@ ClassMethod GenerateOne(pJob As DTL.Data.Job) As %Status
 }
 
 /// THE ACCURACY GATE. Given a compiled+ran candidate, verify it against the SPEC,
-/// not just "did it run". Three signals:
-///  1. RunAll  — runs the DTL over EVERY stored input (the example input may not
-///     exercise every rule; a DTL must not break on the others).
+/// not just "did it run". This is SPEC-DRIVEN: the developer typically has NO sample
+/// messages, so the gate manufactures its own. Signals:
+///  1. SYNTHETIC ROUND-TRIP — generate schema-valid synthetic inputs for the source
+///     DocType (DTL.Util.SampleGen), run the DTL over them AND over any user-supplied
+///     test messages, then SCHEMA-VALIDATE every produced output against the TARGET
+///     DocType (DTL.Util.SchemaValidate). This automates the partner's manual "check
+///     the output against the schema" step and proves the DTL runs on more than one
+///     hand-picked example.
 ///  2. Coverage — proves the DTL actually CHANGED fields (a spec-driven transform
 ///     that changes nothing means every assign was silently swallowed on a bad path).
 ///  3. LLM judge — a fresh-perspective grader decides if the produced output
@@ -400,22 +435,43 @@ ClassMethod AccuracyGate(pJob As DTL.Data.Job, pClassName As %String, pSpec As %
 	set pFindings = "", pScore = 0
 	set nl = $char(10)
 
-	// 1 + 2: run over all inputs and collect per-input change sets.
-	kill tInputs
+	// Ensure this job has its synthetic input set (generated once, cached + visible).
+	do ..EnsureSynthetic(pJob, pSpec)
+
+	// 1 + 2: build the COMBINED run set — user-supplied test messages (if any) AND the
+	// synthetic, schema-valid inputs — then run the DTL over all of them. tTag(i) labels
+	// each so the report/UI can tell synthetic from user-provided.
+	kill tInputs, tTag
+	set m = 0
 	set n = $order(^DTL.JobInputs(pJob.JobId, ""), -1)
-	if n = "" { set tInputs(1) = pJob.StreamStr(pJob.SourceHL7) }
-	else { for i = 1:1:n { set tInputs(i) = $get(^DTL.JobInputs(pJob.JobId, i)) } }
+	if n '= "" {
+		for i = 1:1:n { set tu = $get(^DTL.JobInputs(pJob.JobId, i))  continue:tu=""  set m = m + 1, tInputs(m) = tu, tTag(m) = "user:" _ i }
+	}
+	set s = $order(^DTL.JobSynth(pJob.JobId, ""), -1)
+	if s '= "" {
+		for i = 1:1:s { set tr = $get(^DTL.JobSynth(pJob.JobId, i))  continue:tr=""  set m = m + 1, tInputs(m) = $listget(tr, 1), tTag(m) = "synthetic:" _ $listget(tr, 2) }
+	}
+	// Absolute fallback: at least the primary source message.
+	if m = 0 { set tInputs(1) = pJob.StreamStr(pJob.SourceHL7), tTag(1) = "primary" }
 	set tRun = ##class(DTL.Util.Verifier).RunAll(pClassName, .tInputs, pJob.SourceDocType)
 	set pReport.runAll = tRun
 
-	// HARD requirement: the DTL must run cleanly on every example input.
+	// 1b: SCHEMA-VALIDATE every produced output against the TARGET DocType.
+	set tTgtDoc = $select(pJob.TargetDocType'="":pJob.TargetDocType, 1:pJob.SourceDocType)
+	set tSchema = ..ValidateOutputs(tRun, .tTag, tTgtDoc, .tSchemaHigh)
+	set pReport.schemaValidation = tSchema
+
+	// HARD requirement: the DTL must run cleanly on every input.
 	set tBadHigh = "", tBadLow = ""
-	if 'tRun.ran set tBadHigh = tBadHigh _ "- The DTL throws a runtime error on at least one of the example inputs (it must run cleanly on all of them)." _ nl
-	// Coverage (anyChange) is now an ADVISORY signal, NOT a hard gate: a correct
-	// transform whose changes are all conditional+untriggered (or already-matching)
-	// on these example inputs legitimately changes nothing. Surface it as LOW so the
-	// reviewer/LLM can sanity-check target paths, but don't fail the gate on it alone.
-	if 'tRun.anyChange set tBadLow = tBadLow _ "- [LOW] The DTL produced output identical to the input for every example — no field changed. If the spec mandates changes for this message, verify the target paths are valid (a wrong path is silently ignored). If the spec's changes are all conditional and not triggered by these inputs, this is expected." _ nl
+	if 'tRun.ran set tBadHigh = tBadHigh _ "- The DTL throws a runtime error on at least one input (it must run cleanly on every message of this type)." _ nl
+	// Structural schema defects in the OUTPUT are HARD: a produced message that violates
+	// the target schema (missing required segment, bad datatype) is objectively wrong,
+	// independent of any LLM opinion. Feed the concrete findings back.
+	if tSchemaHigh '= "" set tBadHigh = tBadHigh _ tSchemaHigh
+	// Coverage (anyChange) is an ADVISORY signal, NOT a hard gate: a correct transform
+	// whose changes are all conditional+untriggered (or already-matching) on these
+	// inputs legitimately changes nothing.
+	if 'tRun.anyChange set tBadLow = tBadLow _ "- [LOW] The DTL produced output identical to the input for every test message — no field changed. If the spec mandates changes for this message, verify the target paths are valid (a wrong path is silently ignored). If the spec's changes are all conditional and not triggered by these inputs, this is expected." _ nl
 
 	// 3: LLM-as-judge conformance on the primary output (scoped to this DocType).
 	set tJudge = ..Judge(pJob, pSpec, pJob.StreamStr(pJob.SourceHL7), pPrimaryOutput)
@@ -456,13 +512,103 @@ ClassMethod AccuracyGate(pJob As DTL.Data.Job, pClassName As %String, pSpec As %
 		set pFindings = tBadHigh
 	}
 
-	// PASS when it ran everywhere and there are NO HIGH-severity violations. LOW items
-	// and the advisory coverage signal do NOT block success — they were the source of
-	// the never-passing plateau (the gate used to require an EMPTY violations list and
-	// ignored severity entirely, so any LOW nitpick blocked SUCCESS forever).
-	set tPass = tRun.ran && (tHigh = 0)
+	// PASS when it ran everywhere, the OUTPUT is schema-valid (no HIGH structural
+	// defect), and there are NO HIGH-severity judge violations. LOW items and the
+	// advisory coverage signal do NOT block success.
+	set tPass = tRun.ran && (tHigh = 0) && (tSchemaHigh = "")
 	set pReport.pass = tPass
 	quit $select(tPass:"SUCCESS", 1:"MISMATCH")
+}
+
+/// Ensure the job has a cached set of synthetic input messages (generated once, on
+/// the first gate pass for the job, and reused thereafter for reproducibility). They
+/// are stored in ^DTL.JobSynth(jobId, n) = $lb(hl7, variantLabel) and surfaced to the
+/// UI via the outputs/report. Seeds are pulled from the spec so conditional rules can
+/// fire on at least one synthetic message.
+ClassMethod EnsureSynthetic(pJob As DTL.Data.Job, pSpec As %String)
+{
+	quit:$data(^DTL.JobSynth(pJob.JobId))         // already generated for this job
+	set tDoc = pJob.SourceDocType
+	quit:tDoc=""
+	// Spec-derived seeds: short uppercase code tokens (F, M, U), facility/app codes, and
+	// quoted literals the spec mentions — so a 'when PID-8 = F' rule actually triggers.
+	kill tSeeds  set tSeedN = ..SpecSeeds(pSpec, .tSeeds)
+	kill tMsgs, tMeta
+	set tN = ##class(DTL.Util.SampleGen).Generate(tDoc, 3, .tSeeds, .tMsgs, .tMeta)
+	for i = 1:1:tN { set ^DTL.JobSynth(pJob.JobId, i) = $listbuild($get(tMsgs(i)), $get(tMeta(i))) }
+	// Record an empty marker even if generation produced nothing, so we don't retry every
+	// attempt (a DocType the schema can't resolve won't suddenly start resolving).
+	if tN = 0 set ^DTL.JobSynth(pJob.JobId) = 0
+}
+
+/// Extract candidate SEED values from the spec text: short ALL-CAPS code tokens and
+/// quoted literals that look like HL7 codes/values (so conditional-rule triggers are
+/// present in at least one synthetic input). Returns the count; fills pSeeds(1..k).
+ClassMethod SpecSeeds(pSpec As %String, Output pSeeds) As %Integer
+{
+	kill pSeeds  set n = 0, kSeen = ""
+	// 1) single-quoted or double-quoted short literals: '001', "F", "EPIC"
+	for q = "'", """" {
+		set tPos = 0
+		for {
+			set tPos = $find(pSpec, q, tPos)
+			quit:tPos=0
+			set tEnd = $find(pSpec, q, tPos)
+			quit:tEnd=0
+			set tTok = $extract(pSpec, tPos, tEnd - 2)
+			set tPos = tEnd
+			continue:tTok=""
+			continue:$length(tTok)>12
+			continue:tTok[" "
+			continue:kSeen[(","_tTok_",")
+			set n = n + 1, pSeeds(n) = tTok, kSeen = kSeen _ "," _ tTok _ ","
+			quit:n>=12
+		}
+		quit:n>=12
+	}
+	quit n
+}
+
+/// Run schema validation on every produced output in a RunAll result and summarise.
+/// Returns a %DynamicArray of per-output {tag, ran, valid, findingCount, findings[]};
+/// pHighText (output) accumulates the HIGH-severity findings as repair-feedback text.
+ClassMethod ValidateOutputs(pRun As %DynamicObject, ByRef pTag, pTgtDocType As %String, Output pHighText As %String) As %DynamicArray
+{
+	set pHighText = "", nl = $char(10)
+	set tArr = [], tHighSeen = ""
+	quit:'$isobject(pRun) tArr
+	quit:'$isobject(pRun.results) tArr
+	set it = pRun.results.%GetIterator()
+	while it.%GetNext(.k, .r) {
+		continue:'$isobject(r)
+		set tRow = {}
+		set tIdx = +r.index
+		set tRow.tag = $get(pTag(tIdx), ("#" _ tIdx))
+		set tRow.ran = ''r.ran
+		if 'r.ran {
+			set tRow.valid = 0, tRow.findingCount = 0, tRow.findings = []
+			do tArr.%Push(tRow)
+			continue
+		}
+		set tV = ##class(DTL.Util.SchemaValidate).Validate(r.output, pTgtDocType)
+		set tRow.valid = tV.valid
+		set tRow.findingCount = tV.findingCount
+		set tRow.findings = tV.findings
+		do tArr.%Push(tRow)
+		// Collect distinct HIGH findings for the repair prompt (dedup by message).
+		if 'tV.valid {
+			set fit = tV.findings.%GetIterator()
+			while fit.%GetNext(.fk, .f) {
+				continue:'$isobject(f)
+				continue:f.severity'="HIGH"
+				continue:tHighSeen[("|"_f.message_"|")
+				set tHighSeen = tHighSeen _ "|" _ f.message _ "|"
+				set tLoc = $select(f.segment'="":" [" _ f.segment _ $select(f.field'="":"-"_f.field, 1:"") _ "]", 1:"")
+				set pHighText = pHighText _ "- The produced output is not valid for target DocType '" _ pTgtDocType _ "': " _ f.message _ tLoc _ nl
+			}
+		}
+	}
+	quit tArr
 }
 
 /// Call the LLM-as-judge and return the parsed verdict object (or "" on failure).
@@ -717,24 +863,55 @@ ClassMethod Accept(pJob As DTL.Data.Job) As %Status
 	quit tSC
 }
 
-/// Run the job's final DTL over every stored input message and persist the
-/// produced outputs in ^DTL.JobOutputs(jobId, n) = $lb(input, output, error).
+/// Run the job's final DTL over every test message — user-supplied AND synthetic —
+/// and persist each produced output WITH its target-schema validation verdict, in
+/// ^DTL.JobOutputs(jobId, n) = $lb(input, output, error, tag, validJSON). The synthetic
+/// set is the spec-driven safety net (the partner usually has no real samples), and
+/// each output is schema-checked so the reviewer sees, per message, whether it conforms.
 ClassMethod TransformAll(pJob As DTL.Data.Job)
 {
 	kill ^DTL.JobOutputs(pJob.JobId)
 	set tCls = pJob.GeneratedClassName
 	quit:tCls=""
+	do ..EnsureSynthetic(pJob, pJob.StreamStr(pJob.StructuredSpec))
+	set tTgtDoc = $select(pJob.TargetDocType'="":pJob.TargetDocType, 1:pJob.SourceDocType)
+	set tRow = 0
+	// User-supplied inputs first.
 	set n = $order(^DTL.JobInputs(pJob.JobId, ""), -1)
-	if n = "" {
+	if (n = ""), '$data(^DTL.JobSynth(pJob.JobId)) {
 		set ^DTL.JobInputs(pJob.JobId, 1) = pJob.StreamStr(pJob.SourceHL7)
 		set n = 1
 	}
-	for i = 1:1:n {
-		set tIn = $get(^DTL.JobInputs(pJob.JobId, i))
-		continue:tIn=""
-		set sc = ##class(DTL.Util.Verifier).RunTransform(tCls, tIn, pJob.SourceDocType, .tOut, .tErr)
-		set ^DTL.JobOutputs(pJob.JobId, i) = $listbuild(tIn, $get(tOut), $select($$$ISOK(sc):"", 1:tErr))
+	if n '= "" {
+		for i = 1:1:n {
+			set tIn = $get(^DTL.JobInputs(pJob.JobId, i))
+			continue:tIn=""
+			set tRow = tRow + 1
+			do ..StoreOutput(pJob, tCls, tTgtDoc, tRow, tIn, "user:" _ i)
+		}
 	}
+	// Synthetic inputs.
+	set s = $order(^DTL.JobSynth(pJob.JobId, ""), -1)
+	if s '= "" {
+		for i = 1:1:s {
+			set tr = $get(^DTL.JobSynth(pJob.JobId, i))
+			continue:tr=""
+			set tRow = tRow + 1
+			do ..StoreOutput(pJob, tCls, tTgtDoc, tRow, $listget(tr, 1), "synthetic:" _ $listget(tr, 2))
+		}
+	}
+}
+
+/// Transform one input and persist the row with its output-schema validation verdict.
+ClassMethod StoreOutput(pJob As DTL.Data.Job, pCls As %String, pTgtDoc As %String, pRow As %Integer, pIn As %String, pTag As %String)
+{
+	set sc = ##class(DTL.Util.Verifier).RunTransform(pCls, pIn, pJob.SourceDocType, .tOut, .tErr)
+	set tValJson = ""
+	if $$$ISOK(sc) {
+		set tV = ##class(DTL.Util.SchemaValidate).Validate($get(tOut), pTgtDoc)
+		set tValJson = tV.%ToJSON()
+	}
+	set ^DTL.JobOutputs(pJob.JobId, pRow) = $listbuild(pIn, $get(tOut), $select($$$ISOK(sc):"", 1:tErr), pTag, tValJson)
 }
 
 /// Apply a correction: the reviewer gives a corrected output and/or feedback for a

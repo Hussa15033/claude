@@ -30,6 +30,36 @@ Method Foo() As %String
 Argumentless `quit` (to exit a `for`/`while` loop) is fine everywhere. A `quit`
 with an argument at the **top level** of a method (not in a block) is also fine.
 
+**Corollary — you cannot `quit <value>` to break a loop _and_ return.** Inside a
+`for`/`while` body, `quit 1` is the same `#1043` error: the parser can't tell
+"break the loop" from "return 1". So this is illegal:
+```objectscript
+for i=1:1:n { if match quit 1 }   // ✗ #1043
+```
+Use a flag and a top-level/return after the loop:
+```objectscript
+set found=0
+for i=1:1:n { if match set found=1 }   // ✓ set, don't quit-with-arg
+quit found
+```
+This bit a `Project.AllSpecsApproved()` / `ItemApplies()` loop that tried to
+`quit 0` on the first non-matching element.
+
+## 1a. `elseif` is not a standalone command after a one-line `if`
+
+`elseif` only works in the **brace** form (`if {...} elseif {...}`) or the dotted
+argumentless-if form. After a postconditional one-liner it is rejected as
+`#1026 Invalid command : 'elseif'`:
+```objectscript
+if 'x set a=1
+elseif 'y set a=1        // ✗ #1026 — `elseif` can't follow a one-line `if`
+```
+Collapse the condition instead, or use the brace form:
+```objectscript
+if ('x)||('y) set a=1                       // ✓ collapse
+if 'x { set a=1 } elseif 'y { set a=1 }     // ✓ brace form
+```
+
 ## 2. The `iris session` terminal cannot run multi-line blocks or `$$$` macros
 
 When piping ObjectScript into `iris session IRIS -U USER <<'EOF' ... EOF`, the

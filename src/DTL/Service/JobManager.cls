@@ -30,23 +30,62 @@ ClassMethod StartJob(pPayload As %DynamicObject, Output pJobId As %String, Outpu
 		// works as an input source. ---
 		set tInputs = ..CollectMessages(pPayload, "inputs", "input")
 		set tIn = $listget(tInputs, 1)
-		if (tIn = "") {
-			set pSC = $$$ERROR($$$GeneralError, "At least one example INPUT message is required.")
+		// SPEC-DRIVEN: a sample input message is NO LONGER required. The transformation
+		// is defined by the spec + the chosen message type. The source/target DocType may
+		// be supplied explicitly (the normal path now); if a sample IS provided we derive
+		// the DocType from it for convenience. When no sample is given we synthesise the
+		// primary message from the schema so the rest of the flow (which needs a concrete
+		// message to compile/run against) still works.
+		set tSrcDoc = $zstrip(pPayload.sourceDocType, "<>W")
+		set tTgtDoc = $zstrip(pPayload.targetDocType, "<>W")
+		if (tIn '= "") {
+			if tSrcDoc = "" set tSrcDoc = ##class(DTL.Util.HL7).DeriveDocType(tIn)
+			if tTgtDoc = "" set tTgtDoc = tSrcDoc
+		}
+		if tSrcDoc = "" {
+			set pSC = $$$ERROR($$$GeneralError, "Choose the HL7 message type to build the transformation for (or supply a sample input message to derive it from).")
 			quit
 		}
-		// The spec can be supplied as raw text (inputSpec) OR — preferred — as a saved
-		// upload token (specToken) whose APPROVED CONCISE spec we reuse directly.
-		set tSpecToken = pPayload.specToken
-		set tConcise = "", tConciseProv = ""
-		if tSpecToken '= "" {
-			set tSDoc = ##class(DTL.Data.SpecDoc).OpenByToken(tSpecToken, .sdsc)
-			if $isobject(tSDoc) {
-				set tConcise = tSDoc.ConciseStr()
-				set tConciseProv = tSDoc.ConciseProvStr()
-				if $zstrip(tSDoc.TextStr(), "<>W") '= "" set tSpec = tSDoc.TextStr()
+		if tTgtDoc = "" set tTgtDoc = tSrcDoc
+		// No sample input -> generate a synthetic primary message from the schema.
+		set tSynthPrimary = 0
+		if tIn = "" {
+			kill tGenMsgs, tGenMeta
+			set tGN = ##class(DTL.Util.SampleGen).Generate(tSrcDoc, 1, "", .tGenMsgs, .tGenMeta)
+			if tGN < 1 {
+				set pSC = $$$ERROR($$$GeneralError, "Could not resolve a schema for message type '" _ tSrcDoc _ "'. Check the DocType (e.g. 2.5:ADT_A01) or supply a sample input message.")
+				quit
 			}
+			set tIn = $get(tGenMsgs(1)), tSynthPrimary = 1
+			// Make this synthetic primary part of the stored input set is NOT desired (it
+			// would look 'user-supplied'); EnsureSynthetic generates the labelled set later.
+			set tInputs = ""
 		}
-		if $zstrip($get(tSpec), "<>W") = "" set tSpec = pPayload.inputSpec
+		// The spec can be supplied three ways:
+		//  (a) PROJECT mode — a per-type spec ALREADY ASSEMBLED + approved at the project
+		//      level (structuredSpec + specProvenance on the payload). No further review.
+		//  (b) a saved upload token (specToken) whose APPROVED CONCISE spec we reuse, or
+		//  (c) raw text (inputSpec) that gets structured in-job.
+		set tProjectToken = pPayload.projectToken
+		set tAssembled = pPayload.structuredSpec
+		set tConcise = "", tConciseProv = ""
+		if $zstrip(tAssembled, "<>W") '= "" {
+			// PROJECT mode: the assembled per-type spec IS the authority.
+			set tConcise = tAssembled
+			set tConciseProv = pPayload.specProvenance
+			set tSpec = tAssembled
+		} else {
+			set tSpecToken = pPayload.specToken
+			if tSpecToken '= "" {
+				set tSDoc = ##class(DTL.Data.SpecDoc).OpenByToken(tSpecToken, .sdsc)
+				if $isobject(tSDoc) {
+					set tConcise = tSDoc.ConciseStr()
+					set tConciseProv = tSDoc.ConciseProvStr()
+					if $zstrip(tSDoc.TextStr(), "<>W") '= "" set tSpec = tSDoc.TextStr()
+				}
+			}
+			if $zstrip($get(tSpec), "<>W") = "" set tSpec = pPayload.inputSpec
+		}
 		if $zstrip(tSpec, "<>W") = "" {
 			set pSC = $$$ERROR($$$GeneralError, "An input specification (text, document, or saved spec) is required.")
 			quit
@@ -88,10 +127,11 @@ ClassMethod StartJob(pPayload As %DynamicObject, Output pJobId As %String, Outpu
 		set tJob.Provider = pPayload.provider
 		set tJob.Model = pPayload.model   // store the model (NOT the key) for display
 		set tJob.ParentJobId = pPayload.parentJobId
-		set tJob.SourceDocType = ##class(DTL.Util.HL7).DeriveDocType(tIn)
-		// Default target = same structure as the input, upgraded version if the
-		// spec mentions one is left to the LLM; pin target to source by default.
-		set tJob.TargetDocType = ##class(DTL.Util.HL7).DeriveDocType(tIn)
+		set tJob.ProjectToken = tProjectToken
+		set tJob.MessageType = pPayload.messageType
+		set tJob.SourceDocType = tSrcDoc
+		// Target defaults to the source structure; the spec/LLM may upgrade the version.
+		set tJob.TargetDocType = tTgtDoc
 		do tJob.SourceHL7.Write(tIn)
 		do tJob.ExpectedHL7.Write(tOut)
 		set tJob.CreatedAt = ##class(DTL.Data.Job).Now()
@@ -126,6 +166,12 @@ ClassMethod StartJob(pPayload As %DynamicObject, Output pJobId As %String, Outpu
 				set tJob.LastError = "Dispatch failed: " _ $system.Status.GetErrorText(pSC)
 				do tJob.%Save()
 			}
+		} elseif (tProjectToken '= "") {
+			// ----- PROJECT mode: the per-type spec was assembled + approved at the project
+			// level. There is ONE human gate for the whole project (per-DTL review), not a
+			// per-job plan gate — so run plan + generate straight through in the background,
+			// landing at AWAITING_ATTEMPT for the reviewer. -----
+			job ##class(DTL.Service.StepEngine).ProjectBuildJob(pJobId)
 		} elseif tHaveConcise {
 			// ----- preferred path: the APPROVED concise spec (reviewed at upload) is
 			// already the authority — go straight to planning, no in-job structuring.
@@ -267,8 +313,11 @@ ClassMethod Refine(pParentId As %String, pFeedback As %String, Output pJobId As 
 	quit pSC
 }
 
-/// Outputs of transforming every stored input with the job's final DTL.
-/// Returns a %DynamicArray of {index, input, output, error}.
+/// Outputs of transforming every stored input (user-supplied AND synthetic) with the
+/// job's final DTL. Returns a %DynamicArray of {index, input, output, error, tag,
+/// source ('user'|'synthetic'|'primary'), variant, validation:{valid,findingCount,
+/// findings[]}}. The validation object is the OUTPUT-vs-target-schema verdict, so the
+/// reviewer sees per message whether the produced output conforms to the HL7 schema.
 ClassMethod Outputs(pJobId As %String) As %DynamicArray
 {
 	set arr = []
@@ -279,6 +328,31 @@ ClassMethod Outputs(pJobId As %String) As %DynamicArray
 		continue:row=""
 		set o = {}
 		set o.index = i, o.input = $listget(row, 1), o.output = $listget(row, 2), o.error = $listget(row, 3)
+		set tTag = $listget(row, 4)
+		set o.tag = tTag
+		set o.source = $select(tTag["synthetic":"synthetic", tTag["user":"user", 1:"primary")
+		set o.variant = $piece(tTag, ":", 2)
+		set tValJson = $listget(row, 5)
+		set o.validation = ""
+		if tValJson '= "" { try { set o.validation = ##class(%DynamicAbstractObject).%FromJSON(tValJson) } catch {} }
+		do arr.%Push(o)
+	}
+	quit arr
+}
+
+/// The synthetic input messages generated for a job (spec-driven, schema-valid), so
+/// the UI can show "we tested your DTL against these N messages we built from the
+/// spec". Returns a %DynamicArray of {index, variant, hl7}.
+ClassMethod SyntheticInputs(pJobId As %String) As %DynamicArray
+{
+	set arr = []
+	set s = $order(^DTL.JobSynth(pJobId, ""), -1)
+	quit:s="" arr
+	for i = 1:1:s {
+		set tr = $get(^DTL.JobSynth(pJobId, i))
+		continue:tr=""
+		set o = {}
+		set o.index = i, o.hl7 = $listget(tr, 1), o.variant = $listget(tr, 2)
 		do arr.%Push(o)
 	}
 	quit arr

@@ -107,6 +107,10 @@
   .viewhd{display:flex;align-items:center;gap:12px;margin-bottom:6px}.viewhd h2{margin:0}
   label{display:block;font-size:11.5px;color:var(--ink);margin:16px 0 6px;font-weight:700}
   label .opt{color:var(--muted);font-weight:500}
+  label .req{color:#c0353a;font-weight:700}
+  .samplesum{cursor:pointer;font-weight:600;font-size:13px;padding:6px 0;user-select:none}
+  .samplesum svg{width:15px;height:15px}
+  details#ownsamples{border-top:1px dashed var(--line);padding-top:8px}
 
   /* ---- form fields ---- */
   textarea,input,select{width:100%;color:var(--ink);background:#fff;border:1px solid var(--line-strong);
@@ -369,7 +373,22 @@
   .gate .gv{margin:6px 0 0;padding-left:2px}
   .gate .gv .vrow{padding:4px 0;border-top:1px dashed var(--line)}
   .gate .sev{font-size:10px;font-weight:800;padding:1px 6px;border-radius:999px;margin-right:6px}
-  .gate .sev.HIGH{background:var(--bad-bg);color:#c0353a}.gate .sev.LOW{background:var(--warn-bg);color:#9a6a00}
+  .gate .sev.HIGH{background:var(--bad-bg);color:#c0353a}.gate .sev.LOW{background:var(--warn-bg);color:#9a6a00}.gate .sev.MED{background:var(--warn-bg);color:#9a6a00}
+  /* synthetic-sample + output-schema-validation UI (Outputs tab) */
+  .synthintro{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--iris-green-700);background:var(--iris-green-100);border:1px solid var(--iris-green);border-radius:var(--radius-sm);padding:9px 12px;margin-bottom:12px}
+  .synthintro svg{width:15px;height:15px;flex:0 0 auto}
+  .srcchip{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px}
+  .srcchip svg{width:12px;height:12px}
+  .srcchip.syn{background:#eef3fb;color:#3a5a8c;border:1px solid #cfddf2}
+  .srcchip.usr{background:var(--iris-green-100);color:var(--iris-green-700);border:1px solid var(--iris-green)}
+  .schemabadge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px}
+  .schemabadge svg{width:12px;height:12px}
+  .schemabadge.ok{background:var(--iris-green-100);color:var(--iris-green-700)}
+  .schemabadge.bad{background:var(--warn-bg);color:#9a6a00}
+  .schemafindings{margin:6px 0 2px;border:1px solid #f0d8a8;background:var(--warn-bg);border-radius:var(--radius-sm);padding:6px 9px;font-size:11.5px}
+  .schemafindings .sfrow{padding:2px 0;display:flex;gap:6px;align-items:baseline}
+  .schemafindings .sev{font-size:9.5px;font-weight:800;padding:1px 5px;border-radius:999px;flex:0 0 auto}
+  .schemafindings .sev.HIGH{background:var(--bad-bg);color:#c0353a}.schemafindings .sev.MED{background:#fdeccb;color:#9a6a00}.schemafindings .sev.LOW{background:#fdeccb;color:#9a6a00}
   .confbadge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
   .confbadge.hi{background:var(--iris-green-100);color:var(--iris-green-700)}
   .confbadge.mid{background:var(--warn-bg);color:#9a6a00}
@@ -489,11 +508,12 @@
   /* flash highlight applied to a rendered-markdown element when its source is located */
   .cmphi-flash{background:rgba(245,166,35,.28);border-radius:3px;box-shadow:0 0 0 2px rgba(245,166,35,.5);transition:background .3s,box-shadow .3s}
   .cmptools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:var(--muted)}
-  .vbadge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;vertical-align:middle;line-height:1}
+  .vbadge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;vertical-align:middle;line-height:1;background:#eef1f6;color:#5a6478}
   .vbadge .iwrap{align-items:center}
   #cmpverdict a{vertical-align:middle;margin-left:8px}
   .vbadge.ok{background:var(--iris-green-100);color:var(--iris-green-700)}
   .vbadge.warn{background:var(--warn-bg);color:#9a6a00}
+  .vbadge.bad{background:var(--bad-bg);color:#c0353a}
   .modal .mft{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--line);background:var(--soft);flex-wrap:wrap}
   .modal .mft .sp{flex:1 1 auto}
 
@@ -561,6 +581,45 @@
   .ploader .plabel{font-size:13px;font-weight:700;color:var(--ink)}
   .ploader .psub{font-size:11.5px;color:var(--muted);max-width:280px}
 
+  /* ---- projects (top-level screens) ---- */
+  .screen{display:flex;flex-direction:column;gap:18px}
+  .screen.hidden{display:none}
+  .screenhd{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+  .screentitle{font-size:22px;font-weight:800;margin:0}
+  .screensub{color:var(--muted);font-size:13px;margin:4px 0 0;max-width:680px}
+  .back{margin-bottom:8px;padding:4px 10px;font-size:12px}
+  .projgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+  .projcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px;cursor:pointer;transition:border-color .12s,transform .08s}
+  .projcard:hover{border-color:var(--iris-green);transform:translateY(-1px)}
+  .projcard .pc-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .projcard .pc-name{font-weight:800;font-size:15px}
+  .projcard .pc-meta{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+  .speclist,.typelist,.jobgrid{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+  .jobgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+  .specrow{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:var(--radius-md);padding:10px 12px}
+  .specrow .sr-name{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .typeitem{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:var(--radius-md);padding:10px 14px;cursor:pointer}
+  .typeitem:hover{border-color:var(--iris-green)}
+  .typeitem input[type=checkbox]{flex:0 0 auto;width:16px;height:16px;margin:0}
+  .typeitem .ti-struct{font-weight:700;flex:0 0 auto}
+  .typeitem .ti-doc{font-size:12px;color:var(--muted);font-family:var(--mono,ui-monospace,Menlo,Consolas,monospace)}
+  .typeitem .ti-rules{font-size:11.5px;color:var(--muted);margin-left:auto;white-space:nowrap;flex:0 0 auto}
+  .jobcard{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:var(--radius-md);padding:13px 14px;cursor:pointer;transition:border-color .12s}
+  .jobcard:hover{border-color:var(--iris-green)}
+  .jobcard .jc-type{font-weight:800;font-size:14px}
+  .jobcard .jc-class{font-size:11px;color:var(--muted);font-family:var(--mono,monospace);margin-top:3px;word-break:break-all}
+  .jobcard .jc-foot{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11.5px}
+  .jobviewbar{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+  /* project-detail panels need their own inner padding (.panel alone has none —
+     padding normally comes from .col/.rbody which these don't use) */
+  #projectview .panel{padding:20px 22px}
+  #projectview .panel .note{width:auto}
+  /* in a project drill-down the standalone spec form is hidden, so the workspace
+     collapses to a single full-width column (otherwise the empty 440px grid track
+     squashes the review pane) */
+  .workspace.solo{grid-template-columns:1fr}
+  .vbadge.st-DRAFT{background:#eef1f6;color:#5a6478}.vbadge.st-LOCKED,.vbadge.st-GENERATING{background:var(--warn-bg);color:#9a6a00}
+  .vbadge.st-REVIEW{background:#eef3fb;color:#3a5a8c}.vbadge.st-COMPLETE{background:var(--iris-green-100);color:var(--iris-green-700)}
   /* responsive */
   @media(max-width:1180px){.workspace{grid-template-columns:1fr}}
   @media(max-width:1080px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
@@ -585,6 +644,65 @@
 
   <!-- MAIN WORKSPACE -->
   <main class="main">
+
+    <!-- ============================ PROJECTS LIST ============================ -->
+    <!-- The PRIMARY entry point. A project fixes the HL7 version, holds multiple
+         specifications, and (once they're all reviewed) generates a DTL per selected
+         message type. -->
+    <section id="projectsview" class="screen">
+      <div class="screenhd">
+        <div><h1 class="screentitle">Projects</h1><p class="screensub">Each project targets one HL7 version, holds one or more specifications, and generates a reviewed DTL for every message type you select.</p></div>
+        <button class="primary" id="newproject"><span class="iwrap"><i data-lucide="plus"></i> New project</span></button>
+      </div>
+      <div id="projectlist" class="projgrid"><div class="empty">Loading projects…</div></div>
+    </section>
+
+    <!-- ============================ PROJECT DETAIL ============================ -->
+    <section id="projectview" class="screen hidden">
+      <div class="screenhd">
+        <div>
+          <button class="ghost back" id="backtoprojects"><span class="iwrap"><i data-lucide="arrow-left"></i> Projects</span></button>
+          <h1 class="screentitle" id="pv-name">Project</h1>
+          <p class="screensub" id="pv-meta"></p>
+        </div>
+        <span id="pv-statusbadge" class="vbadge"></span>
+      </div>
+
+      <!-- STAGE 1: specifications (editable only while DRAFT) -->
+      <article class="panel" id="pv-specpanel">
+        <div class="lpanehd"><h2 style="margin:0">Specifications</h2>
+          <div class="lpanetools"><button class="ghost" id="pv-addspec"><span class="iwrap"><i data-lucide="plus"></i> Add specification</span></button></div></div>
+        <div class="note" style="font-size:12px">Add one or more specification documents. Each is reviewed (concise spec + your approval) independently. Once you start generating, the specifications are <b>locked</b>.</div>
+        <div id="pv-speclist" class="speclist"></div>
+      </article>
+
+      <!-- STAGE 2: pick message types -->
+      <article class="panel hidden" id="pv-typepanel">
+        <div class="lpanehd"><h2 style="margin:0">Message types</h2>
+          <div class="lpanetools"><button class="ghost" id="pv-refreshtypes" title="Reload from the approved specs"><i data-lucide="refresh-cw"></i></button></div></div>
+        <div class="note" style="font-size:12px">These message types were found in the approved specification(s), resolved against HL7 <b id="pv-ver"></b>. Tick the ones to build a DTL for.</div>
+        <div id="pv-typelist" class="typelist"></div>
+        <div class="row" style="margin-top:12px"><button class="primary" id="pv-generate"><span class="iwrap"><i data-lucide="wand-sparkles"></i> Generate all selected DTLs</span></button></div>
+        <div id="pv-generr" class="err hidden"></div>
+      </article>
+
+      <!-- STAGE 3: generated DTLs grid -->
+      <article class="panel hidden" id="pv-jobspanel">
+        <div class="lpanehd"><h2 style="margin:0">Generated transformations</h2>
+          <div class="lpanetools">
+            <button class="ghost" id="pv-export"><span class="iwrap"><i data-lucide="download"></i> Export XML</span></button>
+            <button class="ghost" id="pv-package"><span class="iwrap"><i data-lucide="package"></i> View package</span></button>
+          </div></div>
+        <div class="note" style="font-size:12px">One DTL per message type. Open any to review it, send live messages through it, or converse with the AI to change it.</div>
+        <div id="pv-jobgrid" class="jobgrid"></div>
+      </article>
+    </section>
+
+    <!-- ============================ JOB DRILL-DOWN ============================ -->
+    <!-- The per-DTL workspace (review, outputs, live test, conversation). Shown when a
+         project transformation is opened; reused verbatim from the single-DTL flow. -->
+    <section id="jobview" class="screen hidden">
+    <div class="jobviewbar"><button class="ghost back" id="backtoproject"><span class="iwrap"><i data-lucide="arrow-left"></i> Back to project</span></button><span id="jv-typelabel" class="pill"></span></div>
 
     <!-- GUIDED STEPPER — reflects where the active job is in the workflow -->
     <nav class="stepper" id="stepper" aria-label="Workflow progress">
@@ -635,10 +753,20 @@
 
           <label>Job name <span class="opt">(optional)</span></label><input id="jobname" placeholder="ADT_A01_Admit"/>
 
-          <h2 style="margin-top:24px">2 · Example input messages</h2>
-          <div class="note" style="font-size:12px">The input message is used <b>only locally</b> to identify the message type and verify the built DTL — it is <b>not sent to the LLM</b>. The DTL is generated from the specification.</div>
+          <h2 style="margin-top:24px">2 · Message type</h2>
+          <div class="note" style="font-size:12px">Choose the HL7 message type this transformation is for. The DTL is built <b>from the specification</b> — we generate synthetic, schema-valid test messages of this type to exercise and validate it, so <b>no sample messages are required</b>.</div>
+          <div class="row" style="gap:10px;align-items:flex-end">
+            <label style="flex:1">Source message type <span class="req">*</span>
+              <select id="srcdoc"><option value="">— select source DocType —</option></select></label>
+            <label style="flex:1">Target message type <span class="opt">(optional)</span>
+              <select id="tgtdoc"><option value="">— same as source —</option></select></label>
+          </div>
+
+          <details id="ownsamples" style="margin-top:16px"><summary class="samplesum"><span class="iwrap"><i data-lucide="flask-conical"></i> Test with your own sample messages <span class="opt">(optional)</span></span></summary>
+          <div class="note" style="font-size:12px;margin-top:8px">If you <i>do</i> have real sample messages, add them here — they'll be run through the DTL and schema-validated alongside the synthetic ones. Each input is used <b>only locally</b> (it's <b>not sent to the LLM</b>) and also identifies the message type if you didn't pick one above.</div>
           <div id="inputs"></div>
-          <button class="ghost" id="addinput"><span class="iwrap"><i data-lucide="plus"></i> Add input message</span></button>
+          <button class="ghost" id="addinput"><span class="iwrap"><i data-lucide="plus"></i> Add sample message</span></button>
+          </details>
 
           <div class="row"><button class="primary" id="go"><span class="iwrap"><i data-lucide="arrow-right"></i> Plan &amp; Generate</span></button><button class="ghost" id="sample"><span class="iwrap"><i data-lucide="sparkles"></i> Load example</span></button></div>
           <div id="formerr" class="err hidden"></div>
@@ -778,7 +906,23 @@
         </article>
       </div>
     </section>
+    </section><!-- /#jobview -->
   </main>
+
+<!-- NEW PROJECT modal -->
+<div class="overlay" id="projmodal">
+  <div class="modal">
+    <div class="mhd"><h2><span class="iwrap"><i data-lucide="folder-plus"></i> New project</span></h2><button class="x" id="projmodalclose"><i data-lucide="x"></i></button></div>
+    <div class="mbd">
+      <label>Project name</label><input id="np-name" placeholder="Epic ADT + ORU interface"/>
+      <label style="margin-top:12px">HL7 version <span class="req">*</span> <span class="opt">— fixed for the whole project</span></label>
+      <select id="np-version"><option value="">— select HL7 version —</option></select>
+      <div class="note" style="font-size:12px;margin-top:10px">All transformations in this project target this HL7 version. You'll add specifications next; message types are derived from them after review.</div>
+      <div id="np-err" class="err hidden" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:14px"><button class="primary" id="np-create"><span class="iwrap"><i data-lucide="check"></i> Create project</span></button></div>
+    </div>
+  </div>
+</div>
 
 <!-- spec reader modal -->
 <div class="overlay" id="specmodal">
@@ -2363,6 +2507,9 @@ $("#cmpapprove").onclick=async()=>{if(!cmpState.token)return;
   $("#cmpapprove").disabled=false;$("#cmpapprove").innerHTML="";{const w=el("span","iwrap");w.appendChild(licon("check"));w.appendChild(document.createTextNode(" Approve specification"));$("#cmpapprove").appendChild(w);icons();}
   if(!ok){$("#cmpmsg").textContent="Approve failed: "+(sp.error||"");return;}
   $("#cmpmodal").classList.remove("show");
+  // PROJECT context: a spec approved while working inside a project is attached to it,
+  // not used as a standalone build. The hook returns true if it handled the approval.
+  if(typeof afterSpecApproved==="function"&&afterSpecApproved(cmpState.token)){return;}
   // The approved spec is now the active one for the build. Point the form at it and
   // reflect "ready" in the left panel (whichever source the user is on).
   currentSpecToken=cmpState.token;savedReady=cmpState.orig||edited;
@@ -2383,6 +2530,17 @@ function addInput(val=""){const box=$("#inputs");const wrap=el("div","ex");const
 function renumber(){[...document.querySelectorAll("#inputs .ex")].forEach((p,i)=>{p.querySelector("b").textContent="Input "+(i+1);p.querySelector(".tagp").style.display=i===0?"":"none";});}
 function collectInputs(){return [...document.querySelectorAll("#inputs .ex textarea")].map(t=>t.value).filter(v=>v.trim());}
 $("#addinput").onclick=()=>addInput();
+// Populate the source/target message-type pickers from the installed HL7 schemas, so
+// the SPEC-DRIVEN flow needs no sample message to identify the message type. Sorted,
+// common ADT/ORU/ORM families surfaced first.
+async function loadDocTypes(){
+  const [ok,j]=await jget("/schemas");if(!ok||!Array.isArray(j.docTypes))return;
+  const dts=j.docTypes.slice().sort();
+  const fill=(sel,firstLabel)=>{const s=$(sel);if(!s)return;const cur=s.value;s.innerHTML="";s.appendChild(el("option",null,firstLabel)).value="";
+    dts.forEach(d=>{const o=el("option",null,d);o.value=d;s.appendChild(o);});if(cur)s.value=cur;};
+  fill("#srcdoc","— select source DocType —");
+  fill("#tgtdoc","— same as source —");
+}
 
 // ---- provider / model / key ------------------------------------------------
 const LS_KEY="iscdtl.apikey",LS_REM="iscdtl.remember",LS_MODEL="iscdtl.model",LS_REGION="iscdtl.bedrockregion",
@@ -2545,11 +2703,16 @@ $("#go").onclick=async()=>{
       openCompareModal(currentSpecToken);return showErr("Finish & approve the specification first (opened for you).");
     }
     specToken=currentSpecToken;spec=sp.text||sp.conciseSpec||" ";
-    if(!inputs.length)return showErr("Add at least one example input message.");
+    const srcDoc=$("#srcdoc").value, tgtDoc=$("#tgtdoc").value;
+    // Spec-driven: a message type (or a sample message that implies one) is required —
+    // a sample message itself is NOT.
+    if(!srcDoc && !inputs.length)return showErr("Choose the source message type (or add a sample message to derive it from).");
     if(needsKey()&&!$("#apikey").value.trim())return showErr("Enter your "+(isBedrock()?"AWS Bedrock":"OpenAI")+" API key in Settings (or switch Provider to Mock).");
     if(needsKey()&&!$("#model").value.trim())return showErr("Select a model in Settings — enter a valid API key, then pick one.");
     persistKey();
     const body={inputSpec:spec,inputName:$("#jobname").value.trim(),provider:$("#provider").value,model:$("#model").value,apiKey:needsKey()?$("#apikey").value.trim():"",autoApprove:false,inputs};
+    if(srcDoc)body.sourceDocType=srcDoc;
+    if(tgtDoc)body.targetDocType=tgtDoc;
     if(specToken)body.specToken=specToken;
     body.maxAttempts=+($("#maxattempts").value||5);
     body.costCap=+($("#costcap").value||0);
@@ -2747,14 +2910,27 @@ function renderGateReport(gr,passed){
   const mk=(ok,t)=>{const s=el("span","iwrap");s.appendChild(licon(ok?"check":"x"));s.appendChild(document.createTextNode(t));s.style.color=ok?"var(--iris-green-700)":"#c0353a";return s;};
   chk.appendChild(mk(!!ra.ran,"runs on all inputs"));
   chk.appendChild(mk(!!ra.anyChange,"actually transforms fields"));
+  // OUTPUT SCHEMA VALIDATION — every produced output checked against the target
+  // DocType's HL7 schema (the partner's manual step, automated). Compute the worst case.
+  const sv=Array.isArray(gr.schemaValidation)?gr.schemaValidation:[];
+  let svRan=0,svValid=0,svBad=0,synthCount=0;
+  sv.forEach(x=>{if(x.ran){svRan++;if(x.valid)svValid++;else svBad++;}if(String(x.tag||"").indexOf("synthetic")===0)synthCount++;});
+  if(sv.length){chk.appendChild(mk(svBad===0&&svRan>0,"output valid vs HL7 schema ("+svValid+"/"+svRan+")"));}
   const jdg=gr.judge||{};
   if(jdg&&typeof jdg==="object"){chk.appendChild(mk(!!jdg.conforms,"spec-conformance judge"+(jdg.score!=null?(" ("+Math.round(jdg.score*100)+"%)"):"")));}
   card.appendChild(chk);
   // per-input change counts
   if(ra.results&&ra.results.length){
     const r=el("div");r.style.cssText="font-size:11.5px;color:var(--muted);margin-top:4px";
-    r.textContent="Inputs: "+ra.results.map(x=>"#"+x.index+" "+(x.ran?(x.changedCount+" field"+(x.changedCount===1?"":"s")+" changed"):"runtime error")).join(" · ");
+    r.textContent="Tested on "+ra.results.length+" message"+(ra.results.length===1?"":"s")+(synthCount?(" ("+synthCount+" synthetic, built from the spec)"):"")+": "+ra.results.map(x=>"#"+x.index+" "+(x.ran?(x.changedCount+" field"+(x.changedCount===1?"":"s")+" changed"):"runtime error")).join(" · ");
     card.appendChild(r);
+  }
+  // output schema-validation findings (the automated "check against the schema" result)
+  const svFindings=[];sv.forEach(x=>{(x.findings||[]).forEach(f=>{if(f.severity==="HIGH")svFindings.push({tag:x.tag,f});});});
+  if(svFindings.length){
+    const v=el("div","gv");v.appendChild(el("div",null,"Output not valid against the target HL7 schema:")).style.fontWeight="700";
+    const seen={};svFindings.forEach(o=>{const key=o.f.message;if(seen[key])return;seen[key]=1;const row=el("div","vrow");const sev=el("span","sev HIGH","SCHEMA");row.appendChild(sev);const loc=o.f.segment?(" ["+o.f.segment+(o.f.field?("-"+o.f.field):"")+"]"):"";row.appendChild(document.createTextNode((o.f.message||"")+loc));v.appendChild(row);});
+    card.appendChild(v);
   }
   // judge violations
   if(jdg.violations&&jdg.violations.length){
@@ -2831,8 +3007,21 @@ async function loadLinks(jobId){try{const [ok,j]=await jget("/links"+(jobId?("/"
 // OUTPUTS view
 async function loadOutputs(){$("#outjob").textContent=currentJob?("Job "+currentJob):"";const box=$("#outlist");box.innerHTML="";if(!currentJob){box.appendChild(el("div","empty","Build a DTL first."));return;}
   const [ok,j]=await jget("/jobs/"+currentJob+"/outputs");if(!ok||!j.outputs.length){box.appendChild(el("div","empty","No outputs yet — accept a build on the Progress tab."));return;}
-  j.outputs.forEach(r=>{const c=el("div","card");c.style.borderLeftColor=r.error?"var(--bad)":"var(--iris-green)";
-    c.appendChild(el("div",null,"Input "+r.index)).style.fontWeight="700";
+  // Intro: the DTL is tested against synthetic, spec-derived messages when no real
+  // samples were supplied — surface that so the partner trusts the coverage.
+  const synthN=j.outputs.filter(r=>r.source==="synthetic").length, userN=j.outputs.filter(r=>r.source==="user").length;
+  if(synthN){const intro=el("div","synthintro");intro.appendChild(licon("flask-conical"));intro.appendChild(el("span",null," Tested against "+synthN+" message"+(synthN===1?"":"s")+" generated from the specification"+(userN?(" and "+userN+" you supplied"):"")+". Each output is validated against the target HL7 schema."));box.appendChild(intro);}
+  j.outputs.forEach(r=>{const v=r.validation;const schemaBad=(v&&typeof v==="object"&&v.valid===0);
+    const c=el("div","card");c.style.borderLeftColor=r.error?"var(--bad)":(schemaBad?"#d98a00":"var(--iris-green)");
+    const hd=el("div");hd.style.cssText="font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap";
+    hd.appendChild(el("span",null,(r.source==="synthetic"?("Synthetic — "+(r.variant||"")):(r.source==="user"?("Your message "+(r.variant||r.index)):("Message "+r.index)))));
+    // source chip
+    const chip=el("span","srcchip "+(r.source==="synthetic"?"syn":"usr"));chip.appendChild(licon(r.source==="synthetic"?"flask-conical":"user"));chip.appendChild(el("span",null," "+(r.source==="synthetic"?"spec-generated":"your sample")));hd.appendChild(chip);
+    // schema-validation badge
+    if(!r.error&&v&&typeof v==="object"){const vb=el("span","schemabadge "+(v.valid?"ok":"bad"));vb.appendChild(licon(v.valid?"shield-check":"shield-alert"));vb.appendChild(el("span",null,v.valid?" schema-valid":(" "+(v.findingCount||0)+" schema issue"+((v.findingCount===1)?"":"s"))));hd.appendChild(vb);}
+    c.appendChild(hd);
+    // schema findings detail (the automated schema check, per message)
+    if(!r.error&&v&&v.valid===0&&Array.isArray(v.findings)&&v.findings.length){const fl=el("div","schemafindings");v.findings.slice(0,6).forEach(f=>{const fr=el("div","sfrow");fr.appendChild(el("span","sev "+(f.severity||"MED"),f.severity||"MED"));const loc=f.segment?(" ["+f.segment+(f.field?("-"+f.field):"")+"]"):"";fr.appendChild(el("span",null," "+(f.message||"")+loc));fl.appendChild(fr);});c.appendChild(fl);}
     const inT=norm(r.input),outT=r.error?("[runtime error] "+r.error):norm(r.output);
     const d=r.error?{aCls:null,bCls:null,aSeg:null,bSeg:null}:lineDiff(inT,outT);
     const io=el("div","io");
@@ -2943,6 +3132,224 @@ $("#sample").onclick=()=>{
   $("#cmpTypeText").value="Inbound ADT^A01 admit from EPICADT (HL7 v2.3). Rename the sending application to EPIC, normalize the facility code SITEA to 001 across MSH/PID/PV1, and upgrade the message to v2.5.";
 };
 
+// ============================ PROJECT WORKFLOW =============================
+// Top-level screens: "projects" (list) · "project" (detail) · "job" (per-DTL
+// drill-down, the legacy single-DTL workspace). showScreen toggles them.
+let currentProject=null;       // active project token
+let projPollTimer=null;        // detail-screen poll while generating
+let afterSpecApproved=null;    // hook set while attaching a spec to a project
+
+function showScreen(s){
+  $("#projectsview").classList.toggle("hidden",s!=="projects");
+  $("#projectview").classList.toggle("hidden",s!=="project");
+  $("#jobview").classList.toggle("hidden",s!=="job");
+  if(s!=="project"&&projPollTimer){clearInterval(projPollTimer);projPollTimer=null;}
+  if(s==="projects")loadProjects();
+}
+
+// ---- HL7 versions for the create modal (distinct versions from /schemas) ----
+async function loadVersions(){
+  const [ok,j]=await jget("/schemas");if(!ok)return;
+  const sel=$("#np-version");if(!sel)return;const cur=sel.value;
+  sel.innerHTML="";sel.appendChild(el("option",null,"— select HL7 version —")).value="";
+  (j.schemas||[]).forEach(v=>{const o=el("option",null,v);o.value=v;sel.appendChild(o);});
+  if(cur)sel.value=cur;
+}
+
+// ---- projects list ----
+async function loadProjects(){
+  const box=$("#projectlist");box.innerHTML="";
+  const [ok,j]=await jget("/projects");
+  if(!ok){box.appendChild(el("div","empty","Could not load projects."));return;}
+  if(!j.projects||!j.projects.length){box.appendChild(el("div","empty","No projects yet. Click “New project” to begin."));return;}
+  j.projects.forEach(p=>{
+    const c=el("div","projcard");
+    const top=el("div","pc-top");
+    top.appendChild(el("div","pc-name",p.name||"(untitled)"));
+    top.appendChild(el("span","vbadge st-"+p.status,(p.status||"").toLowerCase()));
+    c.appendChild(top);
+    const m=el("div","pc-meta");
+    m.appendChild(el("span",null,"HL7 "+p.hl7Version));
+    m.appendChild(el("span",null,(p.specs?p.specs.length:0)+" spec"+((p.specs&&p.specs.length===1)?"":"s")));
+    if(p.selectedTypes&&p.selectedTypes.length)m.appendChild(el("span",null,p.selectedTypes.length+" DTL"+(p.selectedTypes.length===1?"":"s")));
+    c.appendChild(m);
+    c.onclick=()=>openProject(p.token);
+    box.appendChild(c);
+  });
+  icons();
+}
+
+// ---- create project ----
+$("#newproject").onclick=()=>{$("#np-name").value="";$("#np-version").value="";$("#np-err").className="err hidden";loadVersions();$("#projmodal").classList.add("show");$("#np-name").focus();};
+$("#projmodalclose").onclick=()=>$("#projmodal").classList.remove("show");
+$("#np-create").onclick=async()=>{
+  const name=$("#np-name").value.trim(),ver=$("#np-version").value;
+  if(!ver){$("#np-err").textContent="Choose an HL7 version.";$("#np-err").className="err";return;}
+  const body={name:name,hl7Version:ver,provider:$("#provider").value,model:$("#model").value,conciseModel:($("#concisemodel")?$("#concisemodel").value:"")||$("#model").value,maxAttempts:+($("#maxattempts").value||5),costCap:+($("#costcap").value||0)};
+  $("#np-create").disabled=true;$("#np-create").innerHTML='<span class=spinner></span> Creating…';
+  const [ok,j]=await jpost("/projects",body);
+  $("#np-create").disabled=false;$("#np-create").innerHTML="";{const w=el("span","iwrap");w.appendChild(licon("check"));w.appendChild(document.createTextNode(" Create project"));$("#np-create").appendChild(w);icons();}
+  if(!ok){$("#np-err").textContent=j.error||"Could not create project.";$("#np-err").className="err";return;}
+  $("#projmodal").classList.remove("show");
+  openProject(j.token);
+};
+
+// ---- project detail ----
+$("#backtoprojects").onclick=()=>{currentProject=null;showScreen("projects");};
+async function openProject(tok){
+  currentProject=tok;showScreen("project");
+  await renderProject();
+  // Poll while generating so child-build progress + REVIEW transition show live.
+  if(projPollTimer)clearInterval(projPollTimer);
+  projPollTimer=setInterval(async()=>{
+    const p=await fetchProject();if(!p)return;
+    if(p.status==="GENERATING"||p.status==="REVIEW")renderProject(p);
+  },2500);
+}
+async function fetchProject(){if(!currentProject)return null;const [ok,j]=await jget("/projects/"+currentProject);return ok?j:null;}
+
+async function renderProject(pre){
+  const p=pre||await fetchProject();if(!p)return;
+  $("#pv-name").textContent=p.name||"Project";
+  $("#pv-meta").textContent="HL7 "+p.hl7Version+" · "+(p.provider||"")+(p.model?(" · "+p.model):"");
+  $("#pv-ver").textContent=p.hl7Version;
+  const sb=$("#pv-statusbadge");sb.className="vbadge st-"+p.status;sb.textContent=(p.status||"").toLowerCase();
+  // STAGE 1 — specifications
+  $("#pv-addspec").style.display=p.specsEditable?"":"none";
+  const sl=$("#pv-speclist");sl.innerHTML="";
+  if(!p.specs.length){sl.appendChild(el("div","empty","No specifications yet — add at least one."));}
+  p.specs.forEach(s=>{
+    const row=el("div","specrow");
+    row.appendChild(licon("file-text"));
+    row.appendChild(el("span","sr-name",s.fileName||s.token));
+    const ready=s.conciseApproved;
+    const b=el("span","vbadge "+(ready?"ok":""),ready?"approved":(s.conciseStatus==="READY"?"needs review":s.conciseStatus||s.status));
+    if(!ready)b.style.cssText="background:var(--warn-bg);color:#9a6a00";
+    row.appendChild(b);
+    if(!ready){const rb=el("button","ghost");rb.style.cssText="padding:3px 9px;font-size:11px";rb.appendChild(el("span",null,"Review"));rb.onclick=()=>reviewProjectSpec(s.token);row.appendChild(rb);}
+    if(p.specsEditable){const x=el("button","rm");x.appendChild(licon("x"));x.title="Remove";x.onclick=()=>detachSpec(s.token);row.appendChild(x);}
+    sl.appendChild(row);
+  });
+  // STAGE 2 — types (only once all specs approved and not yet generating)
+  const canTypes=p.allSpecsApproved&&(p.status==="DRAFT"||p.status==="LOCKED");
+  $("#pv-typepanel").classList.toggle("hidden",!canTypes);
+  if(canTypes)loadProjectTypes();
+  // STAGE 3 — jobs grid
+  const hasJobs=p.jobs&&p.jobs.length;
+  $("#pv-jobspanel").classList.toggle("hidden",!hasJobs);
+  if(hasJobs)renderJobGrid(p);
+  icons();
+}
+
+// Attach a spec by opening the builder; on approval the hook attaches it to the project.
+$("#pv-addspec").onclick=()=>{
+  afterSpecApproved=(tok)=>{
+    jpost("/projects/"+currentProject+"/specs",{specToken:tok}).then(()=>{afterSpecApproved=null;renderProject();});
+    return true;   // handled — don't fall through to single-DTL behaviour
+  };
+  openBuilderNew();
+};
+function reviewProjectSpec(tok){
+  // Re-open the builder on an existing spec; on (re)approval, refresh the project.
+  afterSpecApproved=(t)=>{afterSpecApproved=null;renderProject();return true;};
+  openCompareModal(tok);
+}
+async function detachSpec(tok){
+  await fetch(api("/projects/"+currentProject+"/specs/"+tok),{method:"DELETE"});
+  renderProject();
+}
+
+// ---- message-type selection ----
+let projTypes=[];
+async function loadProjectTypes(){
+  const [ok,j]=await jget("/projects/"+currentProject+"/types");if(!ok)return;
+  projTypes=j.types||[];
+  const box=$("#pv-typelist");box.innerHTML="";
+  if(j.wildcardOnly){box.appendChild(el("div","note","The specification rules aren't tied to specific message types. Pick the DocTypes to build below."));}
+  if(!projTypes.length){
+    // wildcard-only or none derived → let the user pick from all structures for the version.
+    box.appendChild(el("div","empty","No specific message types were derived from the specs."));
+    return;
+  }
+  projTypes.forEach((t,i)=>{
+    const it=el("label","typeitem");
+    const cb=el("input");cb.type="checkbox";cb.value=t.structure;cb.checked=true;cb.dataset.idx=i;
+    it.appendChild(cb);
+    it.appendChild(el("span","ti-struct",t.structure));
+    it.appendChild(el("span","ti-doc",t.docType));
+    it.appendChild(el("span","ti-rules",t.ruleCount+" rule"+(t.ruleCount===1?"":"s")));
+    box.appendChild(it);
+  });
+  icons();
+}
+$("#pv-refreshtypes").onclick=loadProjectTypes;
+$("#pv-generate").onclick=async()=>{
+  const sel=[...document.querySelectorAll("#pv-typelist input:checked")].map(c=>c.value);
+  if(!sel.length){$("#pv-generr").textContent="Select at least one message type.";$("#pv-generr").className="err";return;}
+  if(needsKey()&&!$("#apikey").value.trim()){$("#pv-generr").textContent="Enter your API key in Settings (or switch Provider to Mock).";$("#pv-generr").className="err";return;}
+  $("#pv-generr").className="err hidden";
+  const body={types:sel,apiKey:needsKey()?$("#apikey").value.trim():""};
+  if(isBedrock())body.region=$("#bedrockregion").value.trim()||"us-east-1";
+  $("#pv-generate").disabled=true;$("#pv-generate").innerHTML='<span class=spinner></span> Generating '+sel.length+' DTL'+(sel.length===1?"":"s")+'…';
+  const [ok,j]=await jpost("/projects/"+currentProject+"/generate",body);
+  $("#pv-generate").disabled=false;$("#pv-generate").innerHTML="";{const w=el("span","iwrap");w.appendChild(licon("wand-sparkles"));w.appendChild(document.createTextNode(" Generate all selected DTLs"));$("#pv-generate").appendChild(w);icons();}
+  if(!ok){$("#pv-generr").textContent=j.error||"Generation failed.";$("#pv-generr").className="err";return;}
+  renderProject(j);
+};
+
+// ---- generated DTLs grid ----
+function renderJobGrid(p){
+  const box=$("#pv-jobgrid");box.innerHTML="";
+  p.jobs.forEach(jb=>{
+    const c=el("div","jobcard");
+    const ok=(jb.verdict==="SUCCESS"||jb.status==="SUCCESS");
+    c.style.borderLeftColor=ok?"var(--iris-green)":(jb.status==="FAILED"?"var(--bad)":"var(--warn-amber)");
+    c.appendChild(el("div","jc-type",jb.messageType||jb.sourceDocType||"(type)"));
+    if(jb.generatedClassName)c.appendChild(el("div","jc-class",jb.generatedClassName));
+    const foot=el("div","jc-foot");
+    const settled=(jb.status==="AWAITING_ATTEMPT"||jb.status==="SUCCESS");
+    const stLabel=jb.status==="AWAITING_ATTEMPT"?"ready to review":(jb.status||"").toLowerCase().replace(/_/g," ");
+    const st=el("span","vbadge "+(settled?"ok":(jb.status==="FAILED"?"bad":"warn")),stLabel);foot.appendChild(st);
+    if(jb.finalScore!=null&&jb.status!=="GENERATING"&&jb.status!=="QUEUED")foot.appendChild(el("span",null,"score "+Math.round((jb.finalScore||0)*100)+"%"));
+    c.appendChild(foot);
+    if(jb.status==="GENERATING"||jb.status==="PLANNING"||jb.status==="JUDGING"||jb.status==="QUEUED"){
+      const pb=el("div","jc-foot");pb.appendChild(el("span","spinner"));pb.appendChild(el("span",null," building…"));c.appendChild(pb);
+    }else{
+      c.onclick=()=>openJobFromProject(jb.jobId,jb.messageType);
+    }
+    box.appendChild(c);
+  });
+  icons();
+}
+
+// Open a project's child job in the per-DTL workspace (the legacy single-DTL view).
+function openJobFromProject(jobId,type){
+  currentJob=jobId;
+  $("#jv-typelabel").textContent=type||"";
+  showScreen("job");
+  // Hide the standalone entry form — in project mode the left column is review-only —
+  // and collapse the workspace to a single full-width column so the review pane isn't
+  // squashed into the (now empty) form track.
+  const lc=document.querySelector(".left-column");if(lc)lc.style.display="none";
+  const ws=document.querySelector("#jobview .workspace");if(ws)ws.classList.add("solo");
+  showView("progress");
+  startPolling();
+}
+$("#backtoproject").onclick=()=>{
+  if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
+  showScreen("project");
+  renderProject();
+};
+
+// ---- export / package ----
+$("#pv-export").onclick=()=>{window.location=api("/projects/"+currentProject+"/export");};
+$("#pv-package").onclick=async()=>{
+  const [ok,j]=await jget("/projects/"+currentProject+"/package");
+  if(!ok)return;
+  const names=(j.classes||[]).map(c=>"• "+(c.messageType||"")+" → "+(c.className||"(not built)")+(c.exists?"":" [missing]")).join("\n");
+  alert("DTL package ("+(j.classes||[]).length+" classes):\n\n"+names+"\n\nThese compiled classes live in the IRIS namespace. Use “Export XML” to download them for import elsewhere.");
+};
+
 (function init(){
   // Load persisted settings (provider, model, key, region, limits).
   const pv=localStorage.getItem(LS_PROVIDER);if(pv)$("#provider").value=pv;
@@ -2958,7 +3365,11 @@ $("#sample").onclick=()=>{
   syncProvider();
   syncQuickModel();
   syncSpecSrc();
-  addInput();checkHealth();loadLinks();updateKPIs(null);setStepper(null);
+  addInput();loadDocTypes();checkHealth();loadLinks();updateKPIs(null);setStepper(null);
+  // PROJECT-FIRST: the app opens on the Projects screen. The single-DTL workspace is
+  // now a drill-down reached by opening a transformation inside a project.
+  loadVersions();
+  showScreen("projects");
   // Lucide is deferred; render icons once it's available (and once now in case it's cached).
   icons();window.addEventListener("load",icons);
 })();
