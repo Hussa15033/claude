@@ -102,6 +102,10 @@ Method ToDynamic(pDeep As %Boolean = 1) As %DynamicObject
 	set o.maxAttempts = ..MaxAttempts
 	set o.createdAt = ..CreatedAt
 	set o.updatedAt = ..UpdatedAt
+	// Headline stats (cost + counts + avg score) for BOTH the list card and the detail
+	// page — cheap rollup from the ledger + child jobs; included even on the shallow
+	// (pDeep=0) list call so cards can show cost without a second request.
+	set o.stats = ..ComputeStats()
 	set o.selectedTypes = []
 	for i = 1:1:..SelectedTypes.Count() { do o.selectedTypes.%Push(..SelectedTypes.GetAt(i)) }
 	// Per-spec review status (so the UI knows which specs still need approving).
@@ -115,11 +119,18 @@ Method ToDynamic(pDeep As %Boolean = 1) As %DynamicObject
 			set s.fileName = tDoc.FileName
 			set s.status = tDoc.Status
 			set s.conciseStatus = tDoc.ConciseStatus
+			set s.conciseStarted = tDoc.ConciseStarted
 			set s.conciseApproved = tDoc.ConciseApproved
 			set s.confidence = tDoc.Confidence
+			// Whether the original uploaded document is stored, so the UI can offer a
+			// "download original" link on each spec (view-only access after lock).
+			set s.hasOriginal = $select(tDoc.OrigBytes.Size > 0:1, 1:0)
 		} else {
-			set s.fileName = "(missing)", s.status = "ERROR", s.conciseApproved = 0
+			set s.fileName = "(missing)", s.status = "ERROR", s.conciseApproved = 0, s.hasOriginal = 0
 		}
+		// Per-spec cost subtotal (generation + review), summed from the cost ledger.
+		set sAgg = ##class(DTL.Util.Cost).ForRef(tTok)
+		set s.cost = sAgg.cost, s.costByCategory = sAgg.byCategory
 		do o.specs.%Push(s)
 	}
 	set o.allSpecsApproved = ..AllSpecsApproved()
@@ -142,10 +153,62 @@ Method ToDynamic(pDeep As %Boolean = 1) As %DynamicObject
 			} else {
 				set j.status = "MISSING"
 			}
+			// Per-DTL cost subtotal (plan + generate + judge), summed from the cost ledger.
+			set jAgg = ##class(DTL.Util.Cost).ForRef(tJid)
+			set j.cost = jAgg.cost, j.costByCategory = jAgg.byCategory
 			do o.jobs.%Push(j)
 		}
 	}
 	quit o
+}
+
+/// Headline stats for the project, shown on BOTH the projects-list card and the detail
+/// page. Cost/tokens/calls come from the cost LEDGER (the sole authority) by summing
+/// every spec token + job id; the rest are scanned from the child jobs. Returns
+/// {totalCost, totalTokens, totalCalls, specsCount, specsApproved, dtlsTotal,
+///  dtlsBuilt, dtlsFailed, avgScore} — avgScore is over jobs that produced a candidate.
+Method ComputeStats() As %DynamicObject
+{
+	set s = {}
+	set tCost = 0, tTok = 0, tCalls = 0
+	// --- cost/tokens/calls from the ledger (spec rows + dtl rows) ---
+	for i = 1:1:..SpecTokens.Count() {
+		set a = ##class(DTL.Util.Cost).ForRef(..SpecTokens.GetAt(i))
+		set tCost = tCost + a.cost, tTok = tTok + a.inTok + a.outTok, tCalls = tCalls + a.calls
+	}
+	for i = 1:1:..JobIds.Count() {
+		set tJid = ..JobIds.GetAt(i)
+		continue:tJid=""
+		set a = ##class(DTL.Util.Cost).ForRef(tJid)
+		set tCost = tCost + a.cost, tTok = tTok + a.inTok + a.outTok, tCalls = tCalls + a.calls
+	}
+	// --- spec counts ---
+	set tSpecApproved = 0
+	for i = 1:1:..SpecTokens.Count() {
+		set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(..SpecTokens.GetAt(i), .dsc)
+		if $isobject(tDoc), tDoc.ConciseApproved set tSpecApproved = tSpecApproved + 1
+	}
+	// --- dtl counts + average score (over jobs that produced a candidate) ---
+	set tBuilt = 0, tFailed = 0, tScoreSum = 0, tScoreN = 0
+	for i = 1:1:..JobIds.Count() {
+		set tJid = ..JobIds.GetAt(i)
+		continue:tJid=""
+		set tJob = ##class(DTL.Data.Job).OpenByJobId(tJid, .jsc)
+		continue:'$isobject(tJob)
+		if (tJob.Status = "SUCCESS") || (tJob.Status = "AWAITING_ATTEMPT") set tBuilt = tBuilt + 1
+		if tJob.Status = "FAILED" set tFailed = tFailed + 1
+		if tJob.GeneratedClassName '= "" { set tScoreSum = tScoreSum + (+tJob.FinalScore), tScoreN = tScoreN + 1 }
+	}
+	set s.totalCost = tCost
+	set s.totalTokens = tTok
+	set s.totalCalls = tCalls
+	set s.specsCount = ..SpecTokens.Count()
+	set s.specsApproved = tSpecApproved
+	set s.dtlsTotal = ..JobIds.Count()
+	set s.dtlsBuilt = tBuilt
+	set s.dtlsFailed = tFailed
+	set s.avgScore = $select(tScoreN > 0: (tScoreSum / tScoreN), 1: "")
+	quit s
 }
 
 /// True only if every attached spec has an APPROVED concise spec (the gate to LOCK).

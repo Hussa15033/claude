@@ -42,8 +42,9 @@ reviewed DTL for **every message type you select**.
         ▼
  SELECT MESSAGE TYPES     once every spec is approved, the project DERIVES the HL7
         │                 message types the specs cover (from each rule's appliesTo
-        │                 scope), resolved against the project version. Tick the ones
-        │                 to build. (Specs lock here — "the real work has started".)
+        │                 scope) and pre-selects them. A family→structure picker also
+        │                 lets you add ANY other message type for the version. Tick the
+        │                 ones to build. (Specs lock here — "the real work has started".)
         ▼
  GENERATE ALL             one child job per selected type, fanned out concurrently on
         │                 the durable BP queue. Each is the proven single-DTL pipeline,
@@ -64,6 +65,29 @@ DTL targets one. For each selected type the project gathers every approved rule 
 `appliesTo` is `*` (generic/shared) **or** names that type, and builds a focused spec —
 so each child job's plan/generate/judge see only what's in scope. Reusable
 `<subtransform>` factoring of shared rules is on the **roadmap** (below).
+
+## Cost transparency — one ledger, everything reconciles
+
+Every LLM call the system makes — spec generation, spec audit, and each DTL's plan /
+generate / judge — writes one row to a **cost ledger** (`DTL.Data.CostEntry`), with the
+dollar amount computed at record time from the reported tokens via a single pricing
+table (`DTL.Util.Pricing`). **Every figure shown anywhere is a sum of ledger rows**, so
+they can't disagree:
+
+- **Per specification** — generation + audit cost, shown on each spec row.
+- **Per DTL (message type)** — plan + generate + judge cost.
+- **Project total** = its specs' + DTLs' rows; **account grand total** = a running
+  counter the same recorder maintains.
+- A **Costs & ledger** tab on each project shows the breakdown plus the full
+  chronological ledger (every call, labelled, filterable by category), and the project
+  list + a stats strip surface the headline cost/score/token figures. Costs tick live
+  while DTLs build.
+
+Cost is kept low by **prompt-caching the large static prefixes**: the build path caches
+its system prompt (DTL + HL7 schema + structured spec), and the spec path caches the raw
+source document across its generate + audit + retries + regenerations — billed once,
+re-read from cache (~10% of input price) thereafter (Anthropic/Bedrock `cache_control`;
+OpenAI automatic prefix caching). See `GET /projects/:tok/costs`.
 
 ## How a single transformation is built (the spec-driven, human-gated flow)
 
@@ -238,8 +262,9 @@ mock automatically for key-free demos/CI.
 | `GET /projects` · `POST /projects` | List projects / create one (`{name, hl7Version, provider, model, …}`). |
 | `GET /projects/:tok` | Full project document: specs (+ review status), selected types, per-job summary. |
 | `POST /projects/:tok/specs` · `DELETE …/specs/:spec` | Attach / detach a spec (DRAFT only). |
-| `GET /projects/:tok/types` | Message types derived from the approved specs, resolved against the project version. |
+| `GET /projects/:tok/types` | Message types derived from the approved specs (pre-selected) **plus** the full catalogue of every structure for the version, grouped by family, for the picker. |
 | `POST /projects/:tok/generate` | Lock specs + fan out one child job per selected type (`{types:[…], apiKey, region}`). |
+| `GET /projects/:tok/costs` | Full cost breakdown from the ledger: per-spec, per-DTL, the labelled chronological timeline, project total, account grand total. |
 | `GET /projects/:tok/package` · `GET …/export` | List the project's generated DTL classes / download them all as one importable XML. |
 | `GET /schemas` | Installed HL7 schema versions **and** the full `version:structure` DocType list (for the message-type picker). |
 | `POST /models` · `POST /bedrock-models` | Server-side proxy to list chat-capable models for OpenAI / Bedrock. |
@@ -321,9 +346,10 @@ src/DTL/       the framework:
                  Proc/     SpecForge + Orchestrator business processes
                  Op/       LLM business operation (OpenAI/Bedrock/mock over HTTP)
                  Util/     Verifier, SampleGen, SchemaValidate, HL7, HL7Schema,
-                           Extractor, PromptBuilder, Pricing, …
-                 Data/     persistent Job/Attempt + SpecDoc records
+                           Extractor, PromptBuilder, Pricing, Cost (ledger API), …
+                 Data/     persistent Job/Attempt + SpecDoc + Project + CostEntry records
                  Service/  StepEngine (gated state machine), JobManager (REST bridge),
+                           ProjectManager (project orchestration),
                            SpecConcise (concise-spec generation)
                  REST/     %CSP.REST dispatch class (the API)
                  Setup/    Production + Installer

@@ -123,10 +123,24 @@ ClassMethod SpecStructurePrompt(pRawSpec As %String, pSrcDocType As %String, pIn
 /// carrying a verbatim reference back to the original so the side-by-side review can
 /// link each concise item to its source. STRICT JSON so the UI can render groups +
 /// click-to-reference reliably.
+/// The SOURCE DOCUMENT as a stable, cacheable system prefix. Both the concise-spec
+/// GENERATE call and the VERIFY/audit call put the (large, identical) raw specification
+/// here as their FIRST system block, byte-for-byte the same, and flag it as a prompt-
+/// cache breakpoint — so the document is billed at full input price ONCE and re-read
+/// from cache on the audit, on the length-escalation retry, and on any regeneration
+/// (Anthropic/Bedrock cache_control; OpenAI auto-caches a stable ≥1024-token prefix).
+/// The per-call task instructions then reference "the SPECIFICATION in the system
+/// context above" instead of re-embedding the document.
+ClassMethod SpecSourcePrefix(pRawSpec As %String) As %String
+{
+	set nl = $char(10)
+	quit "SPECIFICATION (raw extracted text) — the single source document this task operates on:" _ nl _ nl _ pRawSpec
+}
+
 ClassMethod ConciseSpecPrompt(pRawSpec As %String) As %String
 {
 	set nl = $char(10)
-	set p = "You are turning a raw, noisy interface SPECIFICATION (extracted from a PDF/Word document — it may contain page headers/footers, broken tables, column bleed, hyphenation) into a CLEAR, CONCISE, organised specification for an HL7 v2 integration engineer to review." _ nl _ nl
+	set p = "You are turning a raw, noisy interface SPECIFICATION (extracted from a PDF/Word document — it may contain page headers/footers, broken tables, column bleed, hyphenation) into a CLEAR, CONCISE, organised specification for an HL7 v2 integration engineer to review. The raw specification is provided in the system context above." _ nl _ nl
 	set p = p _ "Organise the transformation requirements GROUPED BY the HL7 message type and segment they apply to (e.g. a group for ADT^A01 / MSH, one for PID, etc.; use a 'General' group for cross-message rules). Be concise: one concrete, testable requirement per item; drop prose, boilerplate, and document chrome." _ nl _ nl
 	set p = p _ "Do NOT invent requirements. Every item MUST be traceable to the source text via a verbatim quote. If you must infer something to make a rule actionable, mark inferred=true and leave sourceQuote empty." _ nl _ nl
 	set p = p _ "Produce STRICT JSON ONLY (no prose, no code fence), matching exactly:" _ nl
@@ -138,15 +152,14 @@ ClassMethod ConciseSpecPrompt(pRawSpec As %String) As %String
 	set p = p _ "  ]," _ nl
 	set p = p _ "  ""ambiguities"": [ {""question"": ""<an unclear/contradictory/missing thing that needs a human decision>"", ""segment"": ""<the EXACT group `type` from groups[] that this question relates to, e.g. 'PID' or 'MSH'>"", ""sourceQuote"": ""<the verbatim snippet from the SPECIFICATION that this ambiguity arises from, so the reviewer can locate it; empty string only if it stems from something MISSING from the spec>"", ""options"": [""<one concrete, actionable way to resolve it>"", ""<a different concrete option>""]} ]" _ nl
 	set p = p _ "}" _ nl _ nl
-	set p = p _ "Give every item a UNIQUE id (groupindex+itemindex, e.g. g2i3). sourceQuote must be copied verbatim from the SPECIFICATION below so the reviewer can locate it." _ nl _ nl
+	set p = p _ "Give every item a UNIQUE id (groupindex+itemindex, e.g. g2i3). sourceQuote must be copied verbatim from the SPECIFICATION in the system context above so the reviewer can locate it." _ nl _ nl
 	set p = p _ "CRITICAL — MESSAGE-TYPE SCOPING via the ""appliesTo"" field on EVERY item:" _ nl
 	set p = p _ "- ""appliesTo"" lists the HL7 message type(s) the rule governs, as an array of structure names like ""ADT^A01"", ""ORU^R01"", ""REF^I12"", ""SIU^S12"", ""ACK""." _ nl
 	set p = p _ "- A rule that comes from a GENERIC/SHARED segment definition (e.g. a generic MSH, PID, OBR, OBX section that is NOT under a specific message type, and therefore applies to ALL messages) MUST use appliesTo=[""*""] (the wildcard meaning 'all message types'). Most segment-field-format rules are generic — default to [""*""] unless the spec explicitly restricts the rule to particular message type(s)." _ nl
 	set p = p _ "- Only list specific message types in appliesTo when the spec EXPLICITLY scopes the rule to them (e.g. a rule that only applies 'in a Discharge Summary' or 'for ACK messages'). Do NOT guess a single message type just because a rule sits near one example — when in doubt, use [""*""]." _ nl
 	set p = p _ "- This matters because a downstream DTL is built for ONE message type at a time: a generic rule wrongly scoped to one message type would be silently dropped for all others. Erring toward [""*""] is safe; wrongly narrowing is not." _ nl
-	set p = p _ "For EVERY ambiguity, supply 2-4 concrete, mutually-exclusive resolution OPTIONS the reviewer can choose from (each option a short, actionable decision, e.g. ""Map F to 2 and M to 1"" or ""Leave PID-8 unchanged""), set ""segment"" to the EXACT `type` string of the group in groups[] the question belongs to (so the resolved decision can be filed with that segment), AND set ""sourceQuote"" to the verbatim spec passage the ambiguity arises from (copied exactly from the SPECIFICATION below, so the reviewer can jump straight to it in the original — leave it empty ONLY when the ambiguity is about something MISSING from the spec). The reviewer may also type a custom answer, so the options need not be exhaustive — but make them specific, not vague. If there are genuinely no ambiguities, return an empty array." _ nl
-	set p = p _ "Output ONLY the JSON object." _ nl _ nl
-	set p = p _ "SPECIFICATION (raw extracted text):" _ nl _ pRawSpec _ nl
+	set p = p _ "For EVERY ambiguity, supply 2-4 concrete, mutually-exclusive resolution OPTIONS the reviewer can choose from (each option a short, actionable decision, e.g. ""Map F to 2 and M to 1"" or ""Leave PID-8 unchanged""), set ""segment"" to the EXACT `type` string of the group in groups[] the question belongs to (so the resolved decision can be filed with that segment), AND set ""sourceQuote"" to the verbatim spec passage the ambiguity arises from (copied exactly from the SPECIFICATION in the system context above, so the reviewer can jump straight to it in the original — leave it empty ONLY when the ambiguity is about something MISSING from the spec). The reviewer may also type a custom answer, so the options need not be exhaustive — but make them specific, not vague. If there are genuinely no ambiguities, return an empty array." _ nl
+	set p = p _ "Output ONLY the JSON object. The raw SPECIFICATION to organise is in the system context above." _ nl
 	quit p
 }
 
@@ -161,8 +174,7 @@ ClassMethod ConciseVerifyPrompt(pRawSpec As %String, pConcise As %String) As %St
 	set p = p _ "Return STRICT JSON ONLY:" _ nl
 	set p = p _ "{""complete"": true|false, ""faithful"": true|false, ""score"": 0.0-1.0, ""missing"": [""<requirement in the original not captured>""], ""hallucinated"": [""<concise item with no basis in the original>""], ""notes"": ""<one line>""}" _ nl _ nl
 	set p = p _ "complete=true only if no material requirement is missing; faithful=true only if nothing is hallucinated. score = fraction of original requirements correctly and faithfully captured. Be strict but do not penalise pure reorganisation/concision." _ nl _ nl
-	set p = p _ "ORIGINAL SPECIFICATION:" _ nl _ pRawSpec _ nl _ nl
-	set p = p _ "CONCISE SPECIFICATION:" _ nl _ pConcise _ nl
+	set p = p _ "The ORIGINAL SPECIFICATION is provided in the system context above. The CONCISE SPECIFICATION to audit against it is:" _ nl _ pConcise _ nl
 	quit p
 }
 

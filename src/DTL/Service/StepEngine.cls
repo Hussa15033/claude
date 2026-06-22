@@ -234,7 +234,7 @@ ClassMethod Plan(pJob As DTL.Data.Job) As %Status
 			quit
 		}
 		set pJob.SessionId = tSession
-		do ..AddAssistantTurn(pJob, tReply, tInTok, tOutTok, tCost)
+		do ..AddAssistantTurn(pJob, tReply, tInTok, tOutTok, tCost, "dtl.plan")
 
 		// COVERAGE GATE: every specification rule THAT APPLIES TO THIS MESSAGE TYPE must
 		// be accounted for in the plan, so a conditional/"runtime" rule (e.g. a "required
@@ -251,7 +251,7 @@ ClassMethod Plan(pJob As DTL.Data.Job) As %Status
 			set tReply2 = ..CallLLM(pJob, .tSession, .tErr, 1, .tInTok, .tOutTok, .tCost)
 			quit:tReply2=""    // transport hiccup: keep the best plan we have, don't fail the step
 			set pJob.SessionId = tSession
-			do ..AddAssistantTurn(pJob, tReply2, tInTok, tOutTok, tCost)
+			do ..AddAssistantTurn(pJob, tReply2, tInTok, tOutTok, tCost, "dtl.plan")
 			set tReply = tReply2
 		}
 
@@ -267,7 +267,7 @@ ClassMethod Plan(pJob As DTL.Data.Job) As %Status
 			set tReply3 = ..CallLLM(pJob, .tSession, .tErr, 1, .tInTok, .tOutTok, .tCost)
 			quit:tReply3=""
 			set pJob.SessionId = tSession
-			do ..AddAssistantTurn(pJob, tReply3, tInTok, tOutTok, tCost)
+			do ..AddAssistantTurn(pJob, tReply3, tInTok, tOutTok, tCost, "dtl.plan")
 			set tReply = tReply3
 		}
 
@@ -1000,7 +1000,11 @@ ClassMethod CallLLM(pJob As DTL.Data.Job, Output pSession As %String, Output pEr
 }
 
 /// Append an assistant turn carrying the token/cost of the call that produced it.
-ClassMethod AddAssistantTurn(pJob As DTL.Data.Job, pContent As %String, pInTok As %Integer, pOutTok As %Integer, pCost As %Numeric)
+/// pCategory tags the cost-ledger row (dtl.plan | dtl.generate); it defaults to
+/// dtl.generate (the common case — the actual DTL-building calls). The per-turn
+/// transcript cost is kept for the conversation view; the AUTHORITATIVE cost figure
+/// is the ledger row recorded here, which also maintains the account grand total.
+ClassMethod AddAssistantTurn(pJob As DTL.Data.Job, pContent As %String, pInTok As %Integer, pOutTok As %Integer, pCost As %Numeric, pCategory As %String = "dtl.generate")
 {
 	set t = ##class(DTL.Msg.ChatTurn).%New()
 	set t.Role = "assistant"
@@ -1009,8 +1013,18 @@ ClassMethod AddAssistantTurn(pJob As DTL.Data.Job, pContent As %String, pInTok A
 	set t.OutputTokens = +pOutTok
 	set t.Cost = +pCost
 	do pJob.Transcript.Insert(t)
-	set ^DTL.Usage("cost") = (+$get(^DTL.Usage("cost"))) + (+pCost)
-	set ^DTL.Usage("tokens") = (+$get(^DTL.Usage("tokens"))) + (+pInTok) + (+pOutTok)
+	do ..LedgerDtl(pJob, pCategory, pInTok, pOutTok)
+}
+
+/// Record a DTL-side LLM call on the cost ledger, labelled for the project timeline.
+/// The ledger recomputes the dollar amount from the tokens (single pricing formula)
+/// and bumps the account grand total — so this REPLACES the old direct ^DTL.Usage
+/// bump. The per-turn transcript Cost is kept only as a display echo of the same call.
+ClassMethod LedgerDtl(pJob As DTL.Data.Job, pCategory As %String, pInTok As %Integer, pOutTok As %Integer)
+{
+	set tType = $select(pJob.MessageType'="":pJob.MessageType, pJob.SourceDocType'="":pJob.SourceDocType, 1:("job " _ pJob.JobId))
+	set tWhat = $case(pCategory, "dtl.plan":"Planning", "dtl.judge":"Judging", :"Generation")
+	do ##class(DTL.Util.Cost).Record(pCategory, "dtl", pJob.JobId, tWhat _ " of DTL " _ tType, pJob.Model, pInTok, pOutTok)
 }
 
 /// Append the LLM-judge exchange to the transcript (visible in the UI) as a
@@ -1029,8 +1043,7 @@ ClassMethod AddJudgeTurn(pJob As DTL.Data.Job, pContent As %String, pInTok As %I
 	set t.Cost = +pCost
 	set t.Aux = 1
 	do pJob.Transcript.Insert(t)
-	set ^DTL.Usage("cost") = (+$get(^DTL.Usage("cost"))) + (+pCost)
-	set ^DTL.Usage("tokens") = (+$get(^DTL.Usage("tokens"))) + (+pInTok) + (+pOutTok)
+	do ..LedgerDtl(pJob, "dtl.judge", pInTok, pOutTok)
 }
 
 ClassMethod SafeName(pName As %String) As %String

@@ -54,6 +54,7 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
   <Route Url="/projects/:tok/specs/:spec" Method="DELETE" Call="DetachSpec" Cors="true"/>
   <Route Url="/projects/:tok/types" Method="GET"  Call="ProjectTypes" Cors="true"/>
   <Route Url="/projects/:tok/generate" Method="POST" Call="ProjectGenerate" Cors="true"/>
+  <Route Url="/projects/:tok/costs"    Method="GET"  Call="ProjectCosts"  Cors="true"/>
   <Route Url="/projects/:tok/package"  Method="GET"  Call="ProjectPackage" Cors="true"/>
   <Route Url="/projects/:tok/export"   Method="GET"  Call="ProjectExport"  Cors="true"/>
   <Route Url="/projects/:tok/complete" Method="POST" Call="ProjectComplete" Cors="true"/>
@@ -380,7 +381,7 @@ ClassMethod GetSpec(pToken As %String) As %Status
 	if tProv '= "" { try { set tProvObj = ##class(%DynamicAbstractObject).%FromJSON(tProv) } catch {} }
 	set tVerObj = ""
 	if tDoc.ConciseVerdict '= "" { try { set tVerObj = ##class(%DynamicAbstractObject).%FromJSON(tDoc.ConciseVerdict) } catch {} }
-	do ..Json({"token": (tDoc.Token), "fileName": (tDoc.FileName), "status": (tDoc.Status), "text": (tDoc.TextStr()), "error": (tDoc.Error), "confidence": (tDoc.Confidence), "meta": (tMetaObj), "conciseStatus": (tDoc.ConciseStatus), "conciseVerifyStatus": (tDoc.ConciseVerifyStatus), "conciseApproved": (tDoc.ConciseApproved), "conciseSpec": (tDoc.ConciseStr()), "conciseProvenance": (tProvObj), "conciseVerdict": (tVerObj), "conciseError": (tDoc.ConciseError)})
+	do ..Json({"token": (tDoc.Token), "fileName": (tDoc.FileName), "status": (tDoc.Status), "text": (tDoc.TextStr()), "error": (tDoc.Error), "confidence": (tDoc.Confidence), "meta": (tMetaObj), "conciseStatus": (tDoc.ConciseStatus), "conciseStarted": (tDoc.ConciseStarted), "conciseVerifyStatus": (tDoc.ConciseVerifyStatus), "conciseApproved": (tDoc.ConciseApproved), "conciseSpec": (tDoc.ConciseStr()), "conciseProvenance": (tProvObj), "conciseVerdict": (tVerObj), "conciseError": (tDoc.ConciseError)})
 	quit $$$OK
 }
 
@@ -626,12 +627,18 @@ ClassMethod DetachSpec(pTok As %String, pSpec As %String) As %Status
 	quit ..GetProject(pTok)
 }
 
-/// GET /projects/:tok/types - the HL7 message types the approved specs cover, resolved
-/// against the project's HL7 version (the selectable list before generation).
+/// GET /projects/:tok/types - the message types the approved specs cover (pinned,
+/// pre-checked) PLUS the full catalogue of every message structure installed for the
+/// project's HL7 version, grouped by family — so the UI can let the user also build
+/// DTLs for types the spec doesn't mention. Shape:
+///   {types:[{structure,docType,ruleCount}], wildcardOnly, hl7Version,
+///    families:[{family, structures:[...]}]}
 ClassMethod ProjectTypes(pTok As %String) As %Status
 {
 	set tRes = ##class(DTL.Service.ProjectManager).DeriveTypes(pTok, .tSC)
 	if $$$ISERR(tSC) quit ..ErrJson(400, $system.Status.GetErrorText(tSC))
+	set tAll = ##class(DTL.Service.ProjectManager).AllTypes(pTok, .taSC)
+	if $$$ISOK(taSC), $isobject(tAll) set tRes.families = tAll.families
 	do ..Json(tRes)
 	quit $$$OK
 }
@@ -647,6 +654,15 @@ ClassMethod ProjectGenerate(pTok As %String) As %Status
 	if $$$ISERR(tSC) || $$$ISERR(tcSC) quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
 	set %response.Status = "202 Accepted"
 	quit ..GetProject(pTok)
+}
+
+/// GET /projects/:tok/costs - the full cost breakdown: per-spec subtotals, per-DTL
+/// subtotals, the complete labelled timeline, the project total and the account grand
+/// total. Every figure is a sum of cost-ledger rows, so they always reconcile.
+ClassMethod ProjectCosts(pTok As %String) As %Status
+{
+	do ..Json(##class(DTL.Util.Cost).ForProject(pTok))
+	quit $$$OK
 }
 
 /// GET /projects/:tok/package - the project's generated DTL classes (the "package").

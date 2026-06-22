@@ -51,6 +51,13 @@ Property ConciseProvenance As %Stream.GlobalCharacter;
 /// text-extraction Status above; the concise spec is generated after extraction).
 Property ConciseStatus As %String(VALUELIST = ",PENDING,READY,ERROR") [ InitialExpression = "PENDING" ];
 
+/// Has concise-spec generation actually been DISPATCHED yet? Distinguishes a spec
+/// that is genuinely generating (ConciseStatus=PENDING because a worker is running)
+/// from one that was just uploaded and is sitting at the initial PENDING with no
+/// generation kicked off — the UI needs this so it shows "generating…" + polls only
+/// for the former, and "draft / needs review" for the latter.
+Property ConciseStarted As %Boolean [ InitialExpression = 0 ];
+
 /// Has the human reviewed + APPROVED the concise spec? Only an approved concise
 /// spec should drive generation without re-review.
 Property ConciseApproved As %Boolean [ InitialExpression = 0 ];
@@ -128,6 +135,7 @@ Storage Default
 <Value name="17"><Value>OrigMime</Value></Value>
 <Value name="18"><Value>OrigExt</Value></Value>
 <Value name="19"><Value>ConciseVerifyStatus</Value></Value>
+<Value name="20"><Value>ConciseStarted</Value></Value>
 </Data>
 <DataLocation>^DTL.Data.SpecDocD</DataLocation>
 <DefaultData>SpecDocDefaultData</DefaultData>

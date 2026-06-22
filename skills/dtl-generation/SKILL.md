@@ -1,6 +1,6 @@
 ---
 name: dtl-generation
-description: Generating, compiling, and verifying InterSystems DTL (Data Transformation Language) for HL7 v2 messages — including spec-driven generation and an LLM generate→compile→verify→auto-repair loop. Use when writing DTL classes, transforming HL7 v2, building/repairing an LLM prompt for DTL, escaping XML in DTL attributes, capturing the full compile-error log, comparing transform output, debugging silently-failing assigns, gating a candidate on SPEC CONFORMANCE (run-all-inputs + field-coverage + LLM-as-judge, not just compile+run), structuring/reviewing a spec before generating, scoring document-extraction confidence, or prompt-caching the static prefix to cut token cost. Captures DocType, segment-path, MSH-offset, repeating-field, grouped-segment and XML-entity gotchas proven against IRIS for Health.
+description: Generating, compiling, and verifying InterSystems DTL (Data Transformation Language) for HL7 v2 messages — including spec-driven generation and an LLM generate→compile→verify→auto-repair loop. Use when writing DTL classes, transforming HL7 v2, building/repairing an LLM prompt for DTL, escaping XML in DTL attributes, capturing the full compile-error log, comparing transform output, debugging silently-failing assigns, gating a candidate on SPEC CONFORMANCE (run-all-inputs + field-coverage + LLM-as-judge, not just compile+run), structuring/reviewing a spec before generating, scoring document-extraction confidence, prompt-caching the static prefix (build system prompt AND the spec-path source document) to cut token cost, tracking LLM cost across spec+DTL phases in a single reconciling ledger, or letting a user pick ANY HL7 message type to build (not just the spec's). Captures DocType, segment-path, MSH-offset, repeating-field, grouped-segment and XML-entity gotchas proven against IRIS for Health.
 ---
 
 # Generating & verifying HL7 v2 DTL
@@ -475,6 +475,20 @@ turn. Two moves:
   GateFix prompts — send only the error/finding delta. (Earlier this skill said to
   restate the full schema in the repair prompt; with a cached system prefix that is
   pure waste — the delta is enough.)
+- **Cache the SPEC path too, not just the build.** Concise-spec generation and its
+  audit/judge each read the WHOLE raw source document — and the document is identical
+  between them, on the length-escalation retry, and on every regeneration. Put the raw
+  document in a SHARED, byte-identical system block (the FIRST system turn, flagged as
+  the cache breakpoint), with the persona as a second system block and the task
+  instructions in the user message; have generate and audit build from the same prefix
+  helper. Then the document is billed once and re-read from cache on the audit + retries
+  + regenerations. The instinct to skip this ("spec stage isn't token-optimised,
+  completeness matters more") is wrong: caching doesn't change the content sent, only
+  the price — it's free accuracy-neutral savings on the largest payload in the system.
+  KEY PITFALL: cache hits require the prefix to be BYTE-identical — if you embed the
+  document inside differently-worded generate vs audit prompts, nothing caches. Move the
+  document OUT of the per-call prompt into the shared prefix and have the prompts say
+  "the SPECIFICATION in the system context above".
 
 ## Scale to a whole interface: the PROJECT workflow (many specs, many message types)
 A real interface project is MANY message types described across one or more spec
@@ -522,3 +536,44 @@ rather than rewriting it:
   can't generate or validate in isolation, so "review/test each subtransform" has no
   verification story yet. Until then, one self-contained DTL per type; duplicate shared
   logic rather than factor it.
+
+## Cost accounting — one ledger, or the numbers will lie
+
+When LLM calls happen on more than one path (spec generation, spec audit, DTL plan,
+DTL generate, DTL judge), DO NOT sum costs ad-hoc per screen — they drift. The trap
+that bit this project: DTL costs were summed from the job transcript while the
+spec-concise path **silently discarded its token usage**, so the account grand total
+undercounted by every spec ever generated, and "this job / all jobs" labels meant
+"within one transcript", not what users assumed.
+
+- **Record EVERY call to one ledger** (`DTL.Data.CostEntry` row per call:
+  seq/ts/category/refKind/refId/label/model/inTok/outTok/cost) at the single chokepoint
+  each path goes through. Categories: `spec.generate|spec.verify|dtl.plan|dtl.generate|
+  dtl.judge`. Compute the dollar amount AT RECORD TIME from tokens via ONE formula
+  (`Pricing.Cost(model,in,out)`) — never pass a pre-rounded cost in.
+- **Every displayed figure is a SUM of ledger rows** — per-spec, per-DTL, project total
+  (= enumerate the project's spec tokens + job ids, sum rows by refId), account grand
+  total (a running counter the SAME Record() maintains). Then they reconcile by
+  construction; don't keep a second tally.
+- **Capture usage on BOTH transports.** An interop host call returns it on the response
+  message (`LLMResponse.InputTokens/OutputTokens`); the inline one-shot returns it byref
+  (`LLM.Chat(...,.inTok,.outTok,...)`). The spec path used the byref form and ignored
+  the outputs — that's the bug. Record in the shared `CallLLM` so a length-escalation
+  retry is also counted.
+- **The ledger write is best-effort (try/catch swallow).** A cost-bookkeeping failure
+  must never break the actual generation — the call already happened and was billed.
+- **Verify by reconciliation, not by eye.** Drive a real run on the mock with a price
+  override (`^DTL.Config("price",<model>)="<in>,<out>"` USD/1M) so costs are non-zero,
+  then assert: Σperspec+Σperdtl==projectTotal; Σtimeline==projectTotal; timeline-per-ref
+  ==rollup-per-ref; per-DTL byCategory Σ==its cost; each stored row==Pricing.Cost(...);
+  and the job-view transcript sum==ledger ForRef(jobId) so two screens never disagree.
+
+## Generate for ANY message type, not just the spec's
+
+Partners often need DTLs for types the spec doesn't mention. Offer the spec-derived
+types (pinned, badged, pre-checked) AND the full catalogue: enumerate every structure
+under `^EnsHL7.Schema(ver,"MS",struct)` grouped by family (piece before `_`), in a
+searchable/collapsible picker. Keep the SELECTION in a Set (not read off the DOM) so
+search-filtering rows doesn't lose ticks. Guard expensive runs: confirm with an
+estimated cost/count when many types (esp. beyond-spec) are selected — see the cost
+ledger above for where the per-DTL average comes from.

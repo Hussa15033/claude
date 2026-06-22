@@ -582,7 +582,7 @@
   .ploader .psub{font-size:11.5px;color:var(--muted);max-width:280px}
 
   /* ---- projects (top-level screens) ---- */
-  .screen{display:flex;flex-direction:column;gap:18px}
+  .screen{display:flex;flex-direction:column;gap:14px}
   .screen.hidden{display:none}
   .screenhd{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   .screentitle{font-size:22px;font-weight:800;margin:0}
@@ -598,12 +598,114 @@
   .jobgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
   .specrow{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:var(--radius-md);padding:10px 12px}
   .specrow .sr-name{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .typeitem{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:var(--radius-md);padding:10px 14px;cursor:pointer}
-  .typeitem:hover{border-color:var(--iris-green)}
-  .typeitem input[type=checkbox]{flex:0 0 auto;width:16px;height:16px;margin:0}
-  .typeitem .ti-struct{font-weight:700;flex:0 0 auto}
-  .typeitem .ti-doc{font-size:12px;color:var(--muted);font-family:var(--mono,ui-monospace,Menlo,Consolas,monospace)}
-  .typeitem .ti-rules{font-size:11.5px;color:var(--muted);margin-left:auto;white-space:nowrap;flex:0 0 auto}
+  .specrow .sr-acts{display:flex;align-items:center;gap:4px;flex:0 0 auto}
+  .specrow .linkbtn{background:none;border:none;cursor:pointer;color:var(--iris-blue,#3a5a8c);font-size:11.5px;font-weight:600;padding:3px 7px;border-radius:var(--radius-sm)}
+  .specrow .linkbtn:hover{background:#eef3fb;text-decoration:underline}
+  .specrow .rm{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:30px;height:30px;background:none;border:none;cursor:pointer;color:var(--muted);border-radius:var(--radius-sm);transition:background .15s,color .15s}
+  .specrow .rm:hover{background:var(--bad-bg);color:var(--bad)}
+  .specrow .rm svg{width:16px;height:16px}
+  /* "in spec" pill — shared by the picker list, detail, and basket */
+  .ti-pin{font-size:10px;font-weight:700;color:var(--iris-green-700);background:var(--iris-green-100);border:1px solid #bfeeea;border-radius:999px;padding:1px 7px;flex:0 0 auto}
+  /* message-type picker: families | structures | basket */
+  .typepick{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:14px;margin-top:12px;height:380px}
+  .typepick>div{border:1px solid var(--line);border-radius:var(--radius-md);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .typesearch{font-size:12.5px;padding:7px 10px;border:none;border-bottom:1px solid var(--line);outline:none;width:100%}
+  .typesearch:focus{border-bottom-color:var(--iris-green)}
+  .tp-names{flex:1;overflow:auto;padding:6px}
+  .tp-name{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:none;cursor:pointer;padding:7px 9px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:var(--ink,#1a1f36)}
+  .tp-name:hover{background:var(--iris-blue-50,#f5f7fb)}
+  .tp-name.active{background:#eef3fb}
+  .tp-name-t{flex:1;font-family:var(--mono,monospace)}
+  .tp-seldot{font-size:10.5px;font-weight:700;color:var(--iris-green-700);flex:0 0 auto}
+  .tp-fc{font-size:11px;color:var(--muted);background:#eef1f6;border-radius:999px;padding:1px 8px;flex:0 0 auto}
+  /* middle pane header + structure rows */
+  .tp-midhd{padding:8px 11px;border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700}
+  .tp-struct{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--radius-sm);font-size:13px;font-weight:600}
+  .tp-struct:hover{background:var(--iris-blue-50,#f5f7fb)}
+  .tp-struct.sel{background:var(--iris-green-100)}
+  .tp-struct .tp-name-t{flex:0 0 auto}
+  .tp-struct .tp-doc{font-size:11px;color:var(--muted);font-family:var(--mono,monospace);margin-left:auto}
+  .tp-add{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid var(--line);background:none;cursor:pointer;color:var(--iris-green-700);border-radius:var(--radius-sm)}
+  .tp-add:hover{background:var(--iris-green-100);border-color:#bfeeea}
+  .tp-add.rm{color:var(--bad);border-color:#f3c9cb}
+  .tp-add.rm:hover{background:var(--bad-bg);border-color:var(--bad)}
+  .tp-add svg{width:15px;height:15px}
+  .tp-baskethd{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700}
+  .tp-bcount{background:var(--iris-blue,#3a5a8c);color:#fff;border-radius:999px;padding:1px 9px;font-size:11px}
+  .tp-basketlist{flex:1;overflow:auto;padding:8px}
+  .bk-row{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:var(--radius-sm)}
+  .bk-row:hover{background:var(--iris-blue-50,#f5f7fb)}
+  .bk-txt{flex:1;min-width:0}
+  .bk-struct{font-weight:700;font-size:13px;display:flex;align-items:center;gap:7px}
+  .bk-doc{font-size:11.5px;color:var(--muted);font-family:var(--mono,monospace)}
+  .bk-rm{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:none;background:none;cursor:pointer;color:var(--muted);border-radius:var(--radius-sm)}
+  .bk-rm:hover{background:var(--bad-bg);color:var(--bad)}
+  .bk-rm svg{width:15px;height:15px}
+  .empty-sm{font-size:12px;color:var(--muted);padding:10px}
+  .pv-genrow{margin-top:14px;display:flex;align-items:center;gap:12px}
+  .selcount{font-size:12.5px;color:var(--muted);font-weight:600}
+  .selcount.warn{color:#9a6a00}
+  @media(max-width:900px){.typepick{grid-template-columns:1fr;height:auto}.typepick>div{max-height:300px}}
+  /* cost chips on spec rows + job cards */
+  .specrow .sr-cost{display:inline-flex;align-items:center;gap:12px;flex:0 0 auto;margin-left:6px}
+  .specrow .sr-cost .scp{display:inline-flex;flex-direction:column;align-items:flex-end;line-height:1.25}
+  .specrow .sr-cost .scp-k{font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  .specrow .sr-cost .scp-v{font-family:var(--mono);font-size:11.5px;font-weight:700;color:#5a6478}
+  .specrow .sr-cost .scp.tot .scp-v{color:var(--ink,#1a1f36);font-weight:800}
+  .jobcard .jc-cost{font-family:var(--mono);font-weight:800;color:var(--iris-blue,#3a5a8c);margin-left:auto}
+  /* cost panel */
+  #pv-costpanel .grandcost{font-size:12.5px;font-weight:700;color:var(--iris-blue,#3a5a8c);background:#eef3fb;border-radius:999px;padding:3px 11px}
+  .costtotals{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
+  .costtotals .ct{flex:1 1 120px;border:1px solid var(--line);border-radius:var(--radius-md);padding:10px 14px}
+  .costtotals .ct.big{background:var(--iris-blue-50,#f5f7fb);border-color:#cdd9ec}
+  .costtotals .ct-k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .costtotals .ct-v{font-family:var(--mono);font-size:18px;font-weight:800;margin-top:3px}
+  .costtotals .ct.big .ct-v{color:var(--iris-blue,#3a5a8c)}
+  .costcols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .costcol h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 8px}
+  .costrow{display:flex;align-items:baseline;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .costrow .cr-name{font-weight:700;font-size:13px;flex:0 0 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .costrow .cr-bd{font-size:11px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .costrow .cr-amt{font-family:var(--mono);font-weight:800;margin-left:auto;flex:0 0 auto}
+  @media(max-width:760px){.costcols{grid-template-columns:1fr}}
+  /* project stats strip */
+  .statstrip{display:flex;gap:10px;flex-wrap:wrap}
+  .statstrip .stat{flex:1 1 120px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);padding:11px 14px}
+  .statstrip .stat.hl{background:var(--panel);border-color:#cdd9ec}
+  .statstrip .stat-v{font-family:var(--mono);font-size:19px;font-weight:800}
+  .statstrip .stat.hl .stat-v{color:var(--iris-blue,#3a5a8c)}
+  .statstrip .stat-k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+  /* project detail tabs */
+  .pvtabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+  .pvtab{background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-size:13.5px;font-weight:700;color:var(--muted);padding:9px 14px;margin-bottom:-1px}
+  .pvtab:hover{color:var(--ink,#1a1f36)}
+  .pvtab.active{color:var(--iris-blue,#3a5a8c);border-bottom-color:var(--iris-blue,#3a5a8c)}
+  .pvtab svg{width:15px;height:15px}
+  .pvtabpane{display:flex;flex-direction:column;gap:14px}
+  /* ledger table */
+  .ledgerfilter{font-size:12px;padding:5px 9px;border:1px solid var(--line);border-radius:var(--radius-sm);outline:none}
+  .ledgerhd,.tlrow{display:grid;grid-template-columns:140px 92px 1fr 92px 78px;gap:12px;align-items:center}
+  .ledgerhd{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;padding:8px 0 6px;border-bottom:2px solid var(--line)}
+  .ledgerhd .lh-tok,.ledgerhd .lh-amt{text-align:right}
+  .ledgerbody{max-height:460px;overflow:auto}
+  .tlrow{padding:6px 0;border-bottom:1px solid var(--line);font-size:12px}
+  .tlrow .tl-ts{font-family:var(--mono);color:var(--muted);font-size:11px}
+  .tlrow .tl-cat{font-size:10px;font-weight:700;border-radius:999px;padding:2px 8px;text-align:center;white-space:nowrap;background:#eef1f6;color:#5a6478}
+  .tlrow .tl-cat.cat-specgen{background:#eef3fb;color:#3a5a8c}
+  .tlrow .tl-cat.cat-specver{background:#e9f7f5;color:var(--iris-green-700,#1d7d74)}
+  .tlrow .tl-cat.cat-dtlplan{background:var(--warn-bg,#fdf3e0);color:#9a6a00}
+  .tlrow .tl-cat.cat-dtlgen{background:#eef3fb;color:#3a5a8c}
+  .tlrow .tl-cat.cat-dtljudge{background:#f2ecfb;color:#6b4b9a}
+  .tlrow .tl-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tlrow .tl-tok{font-family:var(--mono);color:var(--muted);font-size:11px;text-align:right}
+  .tlrow .tl-amt{font-family:var(--mono);font-weight:800;text-align:right}
+  .ledgerfoot{margin-top:10px;font-size:12px;font-weight:700;color:var(--muted);text-align:right}
+  /* projects-list card stats */
+  .projcard .pc-stats{display:flex;gap:14px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+  .projcard .pc-stat{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:700;color:var(--muted)}
+  .projcard .pc-stat svg{width:14px;height:14px}
+  .projcard .pc-stat.cost{color:var(--iris-blue,#3a5a8c)}
+  @media(max-width:680px){.ledgerhd,.tlrow{grid-template-columns:1fr 70px 70px}.ledgerhd .lh-ts,.tlrow .tl-ts,.ledgerhd .lh-cat,.tlrow .tl-cat{display:none}}
   .jobcard{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:var(--radius-md);padding:13px 14px;cursor:pointer;transition:border-color .12s}
   .jobcard:hover{border-color:var(--iris-green)}
   .jobcard .jc-type{font-weight:800;font-size:14px}
@@ -612,8 +714,10 @@
   .jobviewbar{display:flex;align-items:center;gap:12px;margin-bottom:4px}
   /* project-detail panels need their own inner padding (.panel alone has none —
      padding normally comes from .col/.rbody which these don't use) */
-  #projectview .panel{padding:20px 22px}
-  #projectview .panel .note{width:auto}
+  #projectview .panel{padding:16px 18px}
+  #projectview .panel .note{width:auto;margin-bottom:2px}
+  #projectview .lpanehd{margin-bottom:8px}
+  #projectview .speclist,#projectview .typelist,#projectview .jobgrid{margin-top:10px}
   /* in a project drill-down the standalone spec form is hidden, so the workspace
      collapses to a single full-width column (otherwise the empty 440px grid track
      squashes the review pane) */
@@ -668,6 +772,17 @@
         <span id="pv-statusbadge" class="vbadge"></span>
       </div>
 
+      <!-- Headline stats — always visible, both tabs share the project header above. -->
+      <div class="statstrip" id="pv-statstrip"></div>
+
+      <!-- Tabs: Overview (specs/types/DTLs) | Costs & ledger -->
+      <nav class="pvtabs" id="pv-tabs">
+        <button class="pvtab active" data-ptab="overview"><span class="iwrap"><i data-lucide="layout-grid"></i> Overview</span></button>
+        <button class="pvtab" data-ptab="costs"><span class="iwrap"><i data-lucide="receipt"></i> Costs &amp; ledger</span></button>
+      </nav>
+
+      <!-- ===== OVERVIEW TAB ===== -->
+      <div class="pvtabpane" id="pv-pane-overview">
       <!-- STAGE 1: specifications (editable only while DRAFT) -->
       <article class="panel" id="pv-specpanel">
         <div class="lpanehd"><h2 style="margin:0">Specifications</h2>
@@ -676,13 +791,32 @@
         <div id="pv-speclist" class="speclist"></div>
       </article>
 
-      <!-- STAGE 2: pick message types -->
+      <!-- STAGE 2: pick message types — three panes:
+           LHS = message FAMILIES (ADT, ACK, MSH…) searchable · MIDDLE = the structures
+           within the chosen family (ADT_A01…), each with a + to add · RHS = basket of
+           everything selected (with deselect). Search spans ALL structures. -->
       <article class="panel hidden" id="pv-typepanel">
-        <div class="lpanehd"><h2 style="margin:0">Message types</h2>
+        <div class="lpanehd"><h2 style="margin:0">Choose message types to build</h2>
           <div class="lpanetools"><button class="ghost" id="pv-refreshtypes" title="Reload from the approved specs"><i data-lucide="refresh-cw"></i></button></div></div>
-        <div class="note" style="font-size:12px">These message types were found in the approved specification(s), resolved against HL7 <b id="pv-ver"></b>. Tick the ones to build a DTL for.</div>
-        <div id="pv-typelist" class="typelist"></div>
-        <div class="row" style="margin-top:12px"><button class="primary" id="pv-generate"><span class="iwrap"><i data-lucide="wand-sparkles"></i> Generate all selected DTLs</span></button></div>
+        <div class="note" style="font-size:12px"><b>Step 2 of 2.</b> Pick which HL7 <b id="pv-ver"></b> message types to generate a DTL for. Types in your specification are added automatically (<b>in&nbsp;spec</b>). Choose a message family on the left, then click <b>+</b> on a structure to add it — or search any type directly. Each selected type becomes one reviewed DTL.</div>
+        <div class="typepick">
+          <!-- LHS: searchable list of message families -->
+          <div class="tp-list">
+            <input id="pv-typesearch" class="typesearch" type="search" placeholder="Search e.g. ADT, ACK, ADT_A09…" autocomplete="off"/>
+            <div id="pv-famlist" class="tp-names"></div>
+          </div>
+          <!-- MIDDLE: structures within the chosen family, each addable -->
+          <div class="tp-list">
+            <div class="tp-midhd" id="pv-midhd">Select a family</div>
+            <div id="pv-structlist" class="tp-names"></div>
+          </div>
+          <!-- RHS: basket of selected types -->
+          <div class="tp-basket">
+            <div class="tp-baskethd"><span>Selected</span><span id="pv-basketcount" class="tp-bcount">0</span></div>
+            <div id="pv-basket" class="tp-basketlist"></div>
+          </div>
+        </div>
+        <div class="row pv-genrow"><span id="pv-selcount" class="selcount"></span><button class="primary" id="pv-generate"><span class="iwrap"><i data-lucide="wand-sparkles"></i> Generate selected DTLs</span></button></div>
         <div id="pv-generr" class="err hidden"></div>
       </article>
 
@@ -696,6 +830,43 @@
         <div class="note" style="font-size:12px">One DTL per message type. Open any to review it, send live messages through it, or converse with the AI to change it.</div>
         <div id="pv-jobgrid" class="jobgrid"></div>
       </article>
+      </div><!-- /overview pane -->
+
+      <!-- ===== COSTS & LEDGER TAB ===== -->
+      <!-- Full transparency: per-spec + per-DTL subtotals, project total, and the complete
+           chronological LEDGER of every LLM call. Every figure is a sum of cost-ledger
+           rows (DTL.Data.CostEntry), so they reconcile exactly. -->
+      <div class="pvtabpane hidden" id="pv-pane-costs">
+      <article class="panel" id="pv-costpanel">
+        <div class="lpanehd"><h2 style="margin:0">Cost breakdown</h2>
+          <div class="lpanetools">
+            <span id="pv-grandcost" class="grandcost" title="Cumulative cost across every project on this account"></span>
+            <button class="ghost" id="pv-refreshcost" title="Refresh costs"><i data-lucide="refresh-cw"></i></button>
+          </div></div>
+        <div class="costtotals" id="pv-costtotals"></div>
+        <div class="costcols">
+          <div class="costcol"><h3>By specification</h3><div id="pv-costspecs"></div></div>
+          <div class="costcol"><h3>By DTL (message type)</h3><div id="pv-costdtls"></div></div>
+        </div>
+      </article>
+      <article class="panel" id="pv-ledgerpanel">
+        <div class="lpanehd"><h2 style="margin:0">Ledger — every LLM call, in order</h2>
+          <div class="lpanetools">
+            <select id="pv-ledgerfilter" class="ledgerfilter" title="Filter by what the call was for">
+              <option value="">All categories</option>
+              <option value="spec.generate">Spec · generation</option>
+              <option value="spec.verify">Spec · review (audit)</option>
+              <option value="dtl.plan">DTL · planning</option>
+              <option value="dtl.generate">DTL · generation</option>
+              <option value="dtl.judge">DTL · judging</option>
+            </select>
+          </div></div>
+        <div class="note" style="font-size:12px">Each row is a single call to the model, recorded the moment it returned. This is the authoritative record every cost above is summed from.</div>
+        <div class="ledgerhd"><span class="lh-ts">When</span><span class="lh-cat">For</span><span class="lh-label">Detail</span><span class="lh-tok">Tokens</span><span class="lh-amt">Cost</span></div>
+        <div id="pv-costtimeline" class="ledgerbody"></div>
+        <div class="ledgerfoot" id="pv-ledgerfoot"></div>
+      </article>
+      </div><!-- /costs pane -->
     </section>
 
     <!-- ============================ JOB DRILL-DOWN ============================ -->
@@ -1340,7 +1511,7 @@ function syncSpecSrc(){const m=specSrc();
   if(m==="saved")loadSavedSpecs();}
 $("#specchoice").querySelectorAll('input[name=specsrc]').forEach(r=>r.onchange=syncSpecSrc);
 // "Create a new specification" → open the builder on its Start step.
-$("#openbuilder").onclick=()=>openBuilderNew();
+$("#openbuilder").onclick=()=>{projectSpecMode=false;afterSpecApproved=null;openBuilderNew();};
 // The token of the spec currently chosen for the build (upload or saved). When set,
 // generate sends specToken so the backend reuses its APPROVED concise spec.
 let currentSpecToken=null;
@@ -1389,6 +1560,7 @@ $("#specfileinput").onchange=async e=>{const f=e.target.files[0];if(!f)return;cu
   const [ok,d]=await uploadWithProgress({filename:f.name,dataBase64:b64},p=>setLoader(2+p*0.38,"Uploading…",Math.round(p)+"% sent"));
   if(!ok){setLoader(0,"Upload failed",(d&&d.error)||"");return;}
   currentSpecToken=d.token;cmpState.token=d.token;
+  attachSpecToProject(d.token);   // attach NOW so closing the modal mid-build doesn't lose it
   // 3) Poll extraction; animate 40→95% on a gentle estimate while we wait.
   setLoader(42,"Extracting text & tables…","Parsing the document — this is the slow step.");
   let sp=null,est=42;const estTimer=setInterval(()=>{est=Math.min(94,est+1.3);setLoader(est);},900);
@@ -1591,8 +1763,10 @@ function cmpShowTab(t){
   });
   // Approved badge is DERIVED from state here (the one function every open path runs),
   // so it can never be left stale by an opener that forgot to reset it — e.g. opening
-  // the builder for a brand-new spec right after viewing an approved one.
-  $("#cmpapprovedbadge").classList.toggle("hidden",!cmpState.approved);
+  // the builder for a brand-new spec right after viewing an approved one. It reflects
+  // ACTUAL approval (cmpState.sp.conciseApproved), not read-only mode: a not-yet-approved
+  // spec opened view-only (from the project list) is read-only but shows NO lock badge.
+  $("#cmpapprovedbadge").classList.toggle("hidden",!(cmpState.sp&&cmpState.sp.conciseApproved));
   $("#cmpTabStart").classList.toggle("hidden",t!=="start");
   $("#cmpTabBuilding").classList.toggle("hidden",t!=="building");
   $("#cmpTabParse").classList.toggle("hidden",t!=="parse");
@@ -1664,6 +1838,7 @@ $("#cmptypecontinue").onclick=async()=>{
   $("#cmptypecontinue").disabled=false;
   if(!sp||sp.status!=="READY"){$("#cmpmsg").textContent="Could not save the typed specification.";cmpShowTab("start");return;}
   currentSpecToken=d.token;cmpState.token=d.token;cmpState.orig=sp.text||txt;cmpState.sp=sp;
+  attachSpecToProject(d.token);   // attach NOW so closing the modal mid-build doesn't lose it
   // generate concise straight away, then land on Review & resolve.
   setBuildLoader(20,"Generating specification…","Organising your text into reviewable rules.");
   const est=setInterval(()=>{const n=Math.min(92,(cmpState._tp=(cmpState._tp||20)+2));setBuildLoader(n);},700);
@@ -2009,7 +2184,8 @@ $("#cmpgenconcise").onclick=async()=>{
 // an approved spec is locked. Opens straight on the markdown tab.
 function openApprovedSpecView(sp){
   $("#cmptitle").innerHTML="";const tw=el("span","iwrap");tw.appendChild(licon("blocks"));tw.appendChild(document.createTextNode(" Specification — "+(sp.fileName||"")));$("#cmptitle").appendChild(tw);
-  $("#cmpapprovedbadge").classList.remove("hidden");
+  // The lock badge is derived in cmpShowTab from cmpState.sp.conciseApproved (called at
+  // the end of this function), so an unapproved spec viewed read-only shows no lock badge.
   $("#cmpverdict").innerHTML="";$("#cmpbanner").innerHTML="";
   $("#cmpgatehint").textContent="";$("#cmpmsg").textContent="";
   // force the markdown view; cmpShowTab handles hiding the parse/review tabs + footer.
@@ -2274,7 +2450,13 @@ function findTextEl(root,needle){
 // Once the user manually edits the markdown, stop auto-regenerating it from the
 // resolutions (their edits become the authority).
 $("#cmpEdit").addEventListener("input",()=>{cmpState.mdDirty=true;});
-function closeCmpModal(){if(judgePollTimer){clearTimeout(judgePollTimer);judgePollTimer=null;}$("#cmpmodal").classList.remove("show");}
+function closeCmpModal(){
+  if(judgePollTimer){clearTimeout(judgePollTimer);judgePollTimer=null;}
+  $("#cmpmodal").classList.remove("show");
+  // If we were adding/reviewing a spec inside a project, refresh the project list so a
+  // spec generated/abandoned mid-build is reflected (it was attached at token time).
+  if(projectSpecMode){projectSpecMode=false;afterSpecApproved=null;if(currentProject&&!$("#projectview").classList.contains("hidden"))renderProject();}
+}
 $("#cmpcloseft").onclick=closeCmpModal;
 $("#cmpclose").onclick=closeCmpModal;
 $("#cmpmodal").onclick=(e)=>{if(e.target===$("#cmpmodal"))closeCmpModal();};
@@ -2742,6 +2924,22 @@ $("#go").onclick=async()=>{
   }
 };
 function resetGo(){if(goTicker){goTicker();goTicker=null;}goBusy=false;$("#go").disabled=false;$("#go").innerHTML='<span class=iwrap><i data-lucide="arrow-right"></i> Plan &amp; Generate</span>';icons();}
+// Restore a review-gate's action buttons to their pristine (enabled, non-spinning)
+// state. busyBtn() only un-busies on EXCEPTION — on success it leaves the buttons
+// spinning/disabled and relies on the next render to rebuild them. The gates aren't
+// rebuilt from scratch each render, so without this an attempt that comes back to
+// AWAITING_ATTEMPT (after Reject & regenerate) would leave "Regenerating…" spinning
+// and "Accept & transform all inputs" disabled. We snapshot each button's original
+// HTML once, then reset on every gate render. ids: the gate's buttons.
+let _btnPristine={};
+function resetGateBtns(ids){
+  ids.forEach(id=>{
+    const b=$("#"+id);if(!b)return;
+    if(_btnPristine[id]==null)_btnPristine[id]=b.innerHTML;   // first sight = pristine
+    b.disabled=false;b.innerHTML=_btnPristine[id];
+  });
+  icons();
+}
 // Show a spinner + label inside a button while an async action runs.
 async function busyBtn(btn,label,fn,siblings){
   if(!btn)return fn&&fn();
@@ -2829,11 +3027,11 @@ function render(j){
   renderStatus(j);
   // SPEC review gate (earliest checkpoint).
   const ss=j.status==="AWAITING_SPEC";$("#specgate").classList.toggle("hidden",!ss);
-  if(ss){resetGo();renderSpecGate(j);}
+  if(ss){resetGo();resetGateBtns(["approvespec","rejectspec"]);renderSpecGate(j);}
   $("#plangate").classList.toggle("hidden",j.status!=="AWAITING_PLAN");
-  if(j.status==="AWAITING_PLAN"){renderPlan(j.plan||"");resetGo();}
+  if(j.status==="AWAITING_PLAN"){renderPlan(j.plan||"");resetGo();resetGateBtns(["approveplan","rejectplan"]);}
   const sa=j.status==="AWAITING_ATTEMPT";$("#attemptgate").classList.toggle("hidden",!sa);
-  if(sa){resetGo();renderAttempt(j);}
+  if(sa){resetGo();resetGateBtns(["acceptattempt","rejectattempt"]);renderAttempt(j);}
   if(REST_STATES[j.status]){stopPolling();resetGo();buildClockStop();loadLinks(currentJob);}
 }
 // Paint an immediate "work has started" state into the Progress tab the instant the
@@ -3062,12 +3260,12 @@ const money=x=>{x=+x||0;return x===0?"$0":(x<0.01?("$"+x.toFixed(5)):("$"+x.toFi
 const kt=n=>{n=+n||0;return n>=1000?((n/1000).toFixed(n>=10000?0:1)+"k"):(""+n);};
 function renderUsageBar(u){const bar=$("#usagebar");if(!u){bar.classList.add("hidden");return;}bar.classList.remove("hidden");bar.innerHTML="";
   const cell=(k,v,big)=>{const d=el("div","u");d.appendChild(el("div","k",k));const vv=el("div","v"+(big?" big":""),v);d.appendChild(vv);bar.appendChild(d);};
-  cell("This job — cost",money(u.cost),true);
-  cell("This job — tokens",(+u.inputTokens||0)+" in / "+(+u.outputTokens||0)+" out");
+  cell("This DTL — cost",money(u.cost),true);
+  cell("This DTL — tokens",(+u.inputTokens||0)+" in / "+(+u.outputTokens||0)+" out");
   cell("LLM calls",""+(+u.calls||0));
   cell("Model",u.model||"—");
-  cell("All jobs — cost",money(u.allTimeCost));
-  cell("All jobs — tokens",kt(u.allTimeTokens));
+  cell("Account total — cost",money(u.allTimeCost));
+  cell("Account total — tokens",kt(u.allTimeTokens));
 }
 let lastMsgSig=null;
 async function loadMessages(){$("#msgjob").textContent=currentJob?("Job "+currentJob):"";const box=$("#msglist");
@@ -3138,6 +3336,9 @@ $("#sample").onclick=()=>{
 let currentProject=null;       // active project token
 let projPollTimer=null;        // detail-screen poll while generating
 let afterSpecApproved=null;    // hook set while attaching a spec to a project
+let projectSpecMode=false;     // true while the spec builder is adding a spec TO a project
+                               // (so the spec is attached as soon as it has a token — see
+                               // attachSpecToProject — and survives closing the modal mid-build)
 
 function showScreen(s){
   $("#projectsview").classList.toggle("hidden",s!=="projects");
@@ -3146,6 +3347,26 @@ function showScreen(s){
   if(s!=="project"&&projPollTimer){clearInterval(projPollTimer);projPollTimer=null;}
   if(s==="projects")loadProjects();
 }
+
+// ---- browser-history navigation ----
+// Each top-level view pushes a history entry so the browser Back button works:
+// projects list ↔ project detail ↔ job drill-down. We render from popstate (going
+// back/forward) WITHOUT pushing again, so history stays consistent. histNav guards the
+// open* functions from double-pushing when they're called by the popstate handler itself.
+let histNav=false;
+function pushNav(state){
+  if(histNav)return;                       // restoring from popstate — don't re-push
+  try{history.pushState(state,"");}catch(e){}
+}
+window.addEventListener("popstate",(e)=>{
+  const st=e.state||{view:"projects"};
+  histNav=true;
+  try{
+    if(st.view==="job"&&st.jobId){openJobFromProject(st.jobId,st.type||"");}
+    else if(st.view==="project"&&st.project){openProject(st.project);}
+    else{currentProject=null;showScreen("projects");}
+  }finally{histNav=false;}
+});
 
 // ---- HL7 versions for the create modal (distinct versions from /schemas) ----
 async function loadVersions(){
@@ -3169,10 +3390,20 @@ async function loadProjects(){
     top.appendChild(el("span","vbadge st-"+p.status,(p.status||"").toLowerCase()));
     c.appendChild(top);
     const m=el("div","pc-meta");
+    const st=p.stats||{};
     m.appendChild(el("span",null,"HL7 "+p.hl7Version));
-    m.appendChild(el("span",null,(p.specs?p.specs.length:0)+" spec"+((p.specs&&p.specs.length===1)?"":"s")));
-    if(p.selectedTypes&&p.selectedTypes.length)m.appendChild(el("span",null,p.selectedTypes.length+" DTL"+(p.selectedTypes.length===1?"":"s")));
+    m.appendChild(el("span",null,(+st.specsCount||(p.specs?p.specs.length:0))+" spec"+(((+st.specsCount||0)===1)?"":"s")));
+    if(+st.dtlsTotal>0)m.appendChild(el("span",null,(+st.dtlsBuilt||0)+"/"+st.dtlsTotal+" DTL"+(st.dtlsTotal===1?"":"s")));
+    else if(p.selectedTypes&&p.selectedTypes.length)m.appendChild(el("span",null,p.selectedTypes.length+" DTL"+(p.selectedTypes.length===1?"":"s")));
     c.appendChild(m);
+    // Stats row — total cost (headline) + avg score + tokens, so cost is visible without
+    // opening the project (it's the same ledger rollup the detail page uses).
+    const sr=el("div","pc-stats");
+    const stat=(ic,v,cls)=>{const sp=el("span","pc-stat"+(cls?" "+cls:""));if(ic)sp.appendChild(licon(ic));sp.appendChild(el("span",null,v));sr.appendChild(sp);};
+    stat(null,money(st.totalCost||0),"cost");   // money() already prefixes "$" — no icon
+    if(st.avgScore!==""&&st.avgScore!=null)stat("star",Math.round((+st.avgScore)*100)+"%");
+    if(+st.totalTokens>0)stat("file-text",kt(+st.totalTokens)+" tok");
+    c.appendChild(sr);
     c.onclick=()=>openProject(p.token);
     box.appendChild(c);
   });
@@ -3195,15 +3426,21 @@ $("#np-create").onclick=async()=>{
 };
 
 // ---- project detail ----
-$("#backtoprojects").onclick=()=>{currentProject=null;showScreen("projects");};
+$("#backtoprojects").onclick=()=>{pushNav({view:"projects"});currentProject=null;showScreen("projects");};
 async function openProject(tok){
+  pushNav({view:"project",project:tok});
   currentProject=tok;showScreen("project");
+  showProjTab("overview");
   await renderProject();
   // Poll while generating so child-build progress + REVIEW transition show live.
   if(projPollTimer)clearInterval(projPollTimer);
   projPollTimer=setInterval(async()=>{
     const p=await fetchProject();if(!p)return;
-    if(p.status==="GENERATING"||p.status==="REVIEW")renderProject(p);
+    // Refresh while child jobs build, OR while any attached spec is still generating its
+    // concise spec in the background (so a spec built with the modal closed turns from
+    // "generating…" to "needs review" without a manual reload).
+    const specGenerating=(p.specs||[]).some(s=>!s.conciseApproved&&s.conciseStatus!=="ERROR"&&((s.status==="PENDING")||(s.conciseStarted&&s.conciseStatus==="PENDING")));
+    if(p.status==="GENERATING"||p.status==="REVIEW"||specGenerating)renderProject(p);
   },2500);
 }
 async function fetchProject(){if(!currentProject)return null;const [ok,j]=await jget("/projects/"+currentProject);return ok?j:null;}
@@ -3214,6 +3451,7 @@ async function renderProject(pre){
   $("#pv-meta").textContent="HL7 "+p.hl7Version+" · "+(p.provider||"")+(p.model?(" · "+p.model):"");
   $("#pv-ver").textContent=p.hl7Version;
   const sb=$("#pv-statusbadge");sb.className="vbadge st-"+p.status;sb.textContent=(p.status||"").toLowerCase();
+  renderStatStrip(p);
   // STAGE 1 — specifications
   $("#pv-addspec").style.display=p.specsEditable?"":"none";
   const sl=$("#pv-speclist");sl.innerHTML="";
@@ -3223,11 +3461,37 @@ async function renderProject(pre){
     row.appendChild(licon("file-text"));
     row.appendChild(el("span","sr-name",s.fileName||s.token));
     const ready=s.conciseApproved;
-    const b=el("span","vbadge "+(ready?"ok":""),ready?"approved":(s.conciseStatus==="READY"?"needs review":s.conciseStatus||s.status));
-    if(!ready)b.style.cssText="background:var(--warn-bg);color:#9a6a00";
+    const failed=(s.conciseStatus==="ERROR"||s.status==="ERROR");
+    // "generating" only when generation was actually dispatched (conciseStarted) and is
+    // still PENDING, or text extraction itself is still PENDING. A spec sitting at the
+    // initial PENDING with no generation started is a "draft" (uploaded, not yet built).
+    const generating=(!failed)&&((s.status==="PENDING")||(s.conciseStarted&&s.conciseStatus==="PENDING"));
+    const reviewable=(!failed)&&(s.conciseStatus==="READY");
+    let label,cls;
+    if(ready){label="approved";cls="ok";}
+    else if(failed){label="failed";cls="bad";}
+    else if(generating){label="generating…";cls="warn";}
+    else if(reviewable){label="needs review";cls="warn";}
+    else{label="draft";cls="";}   // uploaded but concise generation not started/finished
+    const b=el("span","vbadge "+cls,label);
+    if(generating){const sp=el("span","spinner");sp.style.marginRight="6px";b.insertBefore(sp,b.firstChild);}
     row.appendChild(b);
-    if(!ready){const rb=el("button","ghost");rb.style.cssText="padding:3px 9px;font-size:11px";rb.appendChild(el("span",null,"Review"));rb.onclick=()=>reviewProjectSpec(s.token);row.appendChild(rb);}
-    if(p.specsEditable){const x=el("button","rm");x.appendChild(licon("x"));x.title="Remove";x.onclick=()=>detachSpec(s.token);row.appendChild(x);}
+    // Action links. While editable + not yet approved → Review (opens the builder).
+    // Always (incl. after lock) → View (read-only concise/markdown) + Original download.
+    const acts=el("span","sr-acts");
+    if(p.specsEditable&&!ready&&!generating){
+      // Review (needs-review), Retry (failed), or Continue (draft — resume building).
+      const rb=el("button","linkbtn");rb.textContent=failed?"Retry":(reviewable?"Review":"Continue");rb.onclick=()=>reviewProjectSpec(s.token);acts.appendChild(rb);
+    }
+    if(ready||reviewable){
+      const vb=el("button","linkbtn");vb.textContent="View";vb.onclick=()=>viewProjectSpec(s.token);acts.appendChild(vb);
+    }
+    if(s.hasOriginal){
+      const ob=el("button","linkbtn");ob.textContent="Original";ob.title="Download the original uploaded document";ob.onclick=()=>downloadOriginalSpec(s.token,s.fileName);acts.appendChild(ob);
+    }
+    row.appendChild(acts);
+    if(+s.cost>0)row.appendChild(specCostEl(s));
+    if(p.specsEditable){const x=el("button","rm");x.appendChild(licon("trash-2"));x.title="Remove";x.onclick=()=>detachSpec(s.token);row.appendChild(x);}
     sl.appendChild(row);
   });
   // STAGE 2 — types (only once all specs approved and not yet generating)
@@ -3238,53 +3502,175 @@ async function renderProject(pre){
   const hasJobs=p.jobs&&p.jobs.length;
   $("#pv-jobspanel").classList.toggle("hidden",!hasJobs);
   if(hasJobs)renderJobGrid(p);
+  // COST — per-spec + per-DTL + project total + grand total + timeline.
+  loadProjectCosts();
   icons();
 }
 
-// Attach a spec by opening the builder; on approval the hook attaches it to the project.
+// Attach a spec to the active project AS SOON AS it has a token — not at approval.
+// This is what keeps a spec from being "lost" if the user closes the builder while the
+// concise spec is still generating: it's already on the project, so it shows up in the
+// list (as "generating" / "needs review") and can be reopened. Idempotent on the server
+// (de-duped), so calling it again on approval is harmless. No-op outside project mode.
+async function attachSpecToProject(tok){
+  if(!projectSpecMode||!currentProject||!tok)return;
+  if(attachSpecToProject._done===tok)return;   // already attached this token
+  attachSpecToProject._done=tok;
+  await jpost("/projects/"+currentProject+"/specs",{specToken:tok});
+  renderProject();
+}
+// Attach a spec by opening the builder. The spec is attached the moment it has a token
+// (attachSpecToProject, called from the upload/typed paths); the approval hook just
+// refreshes the project view and stops the single-DTL fall-through.
 $("#pv-addspec").onclick=()=>{
+  projectSpecMode=true;attachSpecToProject._done=null;
   afterSpecApproved=(tok)=>{
-    jpost("/projects/"+currentProject+"/specs",{specToken:tok}).then(()=>{afterSpecApproved=null;renderProject();});
+    attachSpecToProject(tok).then(()=>{afterSpecApproved=null;renderProject();});
     return true;   // handled — don't fall through to single-DTL behaviour
   };
   openBuilderNew();
 };
 function reviewProjectSpec(tok){
   // Re-open the builder on an existing spec; on (re)approval, refresh the project.
+  projectSpecMode=true;attachSpecToProject._done=tok;   // already attached
   afterSpecApproved=(t)=>{afterSpecApproved=null;renderProject();return true;};
   openCompareModal(tok);
+}
+// VIEW-ONLY: open a read-only modal of the concise/markdown specification. Works for any
+// spec whose concise spec is READY (approved or not) — including after the project locks,
+// when the builder is no longer offered. We don't enter project edit mode here.
+async function viewProjectSpec(tok){
+  projectSpecMode=false;afterSpecApproved=null;
+  const [ok,sp]=await jget("/specs/"+tok);
+  if(!ok){alert("Could not load the specification.");return;}
+  // openApprovedSpecView renders the read-only markdown + original panes; prime cmpState.
+  cmpState={token:tok,orig:sp.text||"",concise:sp.conciseSpec||"",prov:sp.conciseProvenance||null,segs:[],activeSeg:0,ambs:null,approved:true,mdDirty:false,sp:sp};
+  $("#cmpmsg").textContent="";$("#cmpbanner").innerHTML="";$("#cmpverdict").innerHTML="";$("#cmpgatehint").textContent="";
+  $("#cmpmodal").classList.add("show");
+  openApprovedSpecView(sp);
+}
+// Download the originally-uploaded specification document (PDF/docx/image/etc.). The
+// bytes are served base64-in-JSON by GET /specs/:token/original (the binary-safe path).
+async function downloadOriginalSpec(tok,fileName){
+  const [ok,doc]=await jget("/specs/"+tok+"/original");
+  if(!ok||!doc||!doc.dataBase64){alert("The original document isn't stored for this specification.");return;}
+  const bytes=b64ToBytes(doc.dataBase64);
+  const blob=new Blob([bytes],{type:doc.mime||"application/octet-stream"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=doc.fileName||fileName||("specification."+(doc.ext||"bin"));
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
 async function detachSpec(tok){
   await fetch(api("/projects/"+currentProject+"/specs/"+tok),{method:"DELETE"});
   renderProject();
 }
 
-// ---- message-type selection ----
-let projTypes=[];
+// ---- message-type selection (families → structures → basket) ----
+// LHS = message families (ADT, ACK, MSH…); MIDDLE = structures within the active family
+// (not yet selected), each addable; RHS = selectedTypes basket (single source of truth).
+// Search spans every structure: a match selects the structure's family on the left and
+// filters the middle list to it.
+let projTypes=[],projFamilies=[],selectedTypes=new Set(),projSpecRuleCount={},famMap={},famNames=[],activeFamily=null;
 async function loadProjectTypes(){
   const [ok,j]=await jget("/projects/"+currentProject+"/types");if(!ok)return;
   projTypes=j.types||[];
-  const box=$("#pv-typelist");box.innerHTML="";
-  if(j.wildcardOnly){box.appendChild(el("div","note","The specification rules aren't tied to specific message types. Pick the DocTypes to build below."));}
-  if(!projTypes.length){
-    // wildcard-only or none derived → let the user pick from all structures for the version.
-    box.appendChild(el("div","empty","No specific message types were derived from the specs."));
-    return;
-  }
-  projTypes.forEach((t,i)=>{
-    const it=el("label","typeitem");
-    const cb=el("input");cb.type="checkbox";cb.value=t.structure;cb.checked=true;cb.dataset.idx=i;
-    it.appendChild(cb);
-    it.appendChild(el("span","ti-struct",t.structure));
-    it.appendChild(el("span","ti-doc",t.docType));
-    it.appendChild(el("span","ti-rules",t.ruleCount+" rule"+(t.ruleCount===1?"":"s")));
+  projFamilies=j.families||[];
+  projSpecRuleCount={};projTypes.forEach(t=>{projSpecRuleCount[t.structure]=t.ruleCount;});
+  // family -> sorted structures. Ensure every spec-derived structure is in its family.
+  famMap={};
+  projFamilies.forEach(f=>{famMap[f.family]=[...(f.structures||[])];});
+  projTypes.forEach(t=>{const fam=famOf(t.structure);if(!famMap[fam])famMap[fam]=[];if(famMap[fam].indexOf(t.structure)<0)famMap[fam].push(t.structure);});
+  Object.keys(famMap).forEach(k=>famMap[k].sort());
+  famNames=Object.keys(famMap).sort();
+  // Pre-select the spec-derived types.
+  selectedTypes=new Set(projTypes.map(t=>t.structure));
+  activeFamily=null;
+  $("#pv-typesearch").value="";
+  renderFamilies();renderStructs();renderBasket();updateSelCount();
+}
+const specStructSet=()=>new Set(projTypes.map(t=>t.structure));
+function projVer(){return ($("#pv-ver").textContent||"").trim();}
+const isSpecType=s=>specStructSet().has(s);
+const famOf=s=>(s.indexOf("_")>=0?s.split("_")[0]:s);
+const tpSearch=()=>($("#pv-typesearch").value||"").trim().toUpperCase();
+// LHS: message families. A family shows if its name matches the search OR it contains a
+// structure that does. When searching, the first matching family becomes active so the
+// middle pane auto-populates (e.g. "ADT_A09" → ADT active, ADT_A09 in the middle).
+function renderFamilies(){
+  const q=tpSearch();
+  const box=$("#pv-famlist");box.innerHTML="";
+  const fams=famNames.filter(f=>!q||f.toUpperCase().indexOf(q)>=0||famMap[f].some(s=>s.toUpperCase().indexOf(q)>=0));
+  if(!fams.length){box.appendChild(el("div","empty-sm","No families match “"+q+"”."));return;}
+  if(q&&(!activeFamily||fams.indexOf(activeFamily)<0))activeFamily=fams[0];
+  fams.forEach(f=>{
+    const it=el("button","tp-name"+(activeFamily===f?" active":""));
+    it.appendChild(el("span","tp-name-t",f));
+    const sel=famMap[f].filter(s=>selectedTypes.has(s)).length;
+    if(sel)it.appendChild(el("span","tp-seldot",sel+" selected"));
+    it.appendChild(el("span","tp-fc",famMap[f].length+""));
+    it.onclick=()=>{activeFamily=f;renderFamilies();renderStructs();};
     box.appendChild(it);
   });
   icons();
 }
+// MIDDLE: ALL structures of the active family (filtered by search). Each row has a
+// toggle: unselected → "+" to add; selected → row is HIGHLIGHTED and the control is a
+// "−" to deselect. "in spec" pill on matching items.
+function renderStructs(){
+  const q=tpSearch();
+  const hd=$("#pv-midhd"),box=$("#pv-structlist");box.innerHTML="";
+  if(!activeFamily){hd.textContent="Structures";box.appendChild(el("div","empty-sm","Choose a message family on the left to see its structures."));return;}
+  hd.textContent=activeFamily+" — message structures";
+  let structs=famMap[activeFamily];
+  if(q)structs=structs.filter(s=>s.toUpperCase().indexOf(q)>=0);
+  if(!structs.length){box.appendChild(el("div","empty-sm","No structures match the search."));return;}
+  structs.forEach(s=>{
+    const on=selectedTypes.has(s);
+    const it=el("div","tp-struct"+(on?" sel":""));
+    it.appendChild(el("span","tp-name-t",s));
+    if(isSpecType(s))it.appendChild(el("span","ti-pin","in spec"));
+    it.appendChild(el("span","tp-doc",projVer()+":"+s));
+    const btn=el("button","tp-add"+(on?" rm":""));btn.appendChild(licon(on?"minus":"plus"));btn.title=on?"Remove from selection":"Add to selection";
+    btn.onclick=()=>{if(on)selectedTypes.delete(s);else selectedTypes.add(s);renderFamilies();renderStructs();renderBasket();updateSelCount();};
+    it.appendChild(btn);
+    box.appendChild(it);
+  });
+  icons();
+}
+// RHS: the basket of selected types, each with its DocType and a deselect control; spec
+// types carry an "in spec" pill. Sorted spec-first then alphabetically.
+function renderBasket(){
+  const box=$("#pv-basket");box.innerHTML="";
+  const sel=[...selectedTypes].sort((a,b)=>{const sa=isSpecType(a),sb=isSpecType(b);if(sa!==sb)return sa?-1:1;return a<b?-1:1;});
+  $("#pv-basketcount").textContent=sel.length;
+  if(!sel.length){box.appendChild(el("div","empty-sm","Nothing selected yet. Pick types on the left."));return;}
+  sel.forEach(s=>{
+    const row=el("div","bk-row");
+    const txt=el("div","bk-txt");
+    const top=el("div","bk-struct");top.appendChild(document.createTextNode(s));
+    if(isSpecType(s))top.appendChild(el("span","ti-pin","in spec"));
+    txt.appendChild(top);
+    txt.appendChild(el("div","bk-doc",projVer()+":"+s));
+    row.appendChild(txt);
+    const rm=el("button","bk-rm");rm.appendChild(licon("x"));rm.title="Remove from selection";
+    rm.onclick=()=>{selectedTypes.delete(s);renderFamilies();renderStructs();renderBasket();updateSelCount();};
+    row.appendChild(rm);
+    box.appendChild(row);
+  });
+  icons();
+}
+function updateSelCount(){
+  const n=selectedTypes.size,spec=specStructSet();
+  let extra=0;selectedTypes.forEach(s=>{if(!spec.has(s))extra++;});
+  const el2=$("#pv-selcount");
+  el2.textContent=n+" selected"+(extra?(" ("+extra+" beyond the spec)"):"");
+  el2.className="selcount"+(extra?" warn":"");
+}
+$("#pv-typesearch").oninput=()=>{renderFamilies();renderStructs();};
 $("#pv-refreshtypes").onclick=loadProjectTypes;
 $("#pv-generate").onclick=async()=>{
-  const sel=[...document.querySelectorAll("#pv-typelist input:checked")].map(c=>c.value);
+  const sel=[...selectedTypes];
   if(!sel.length){$("#pv-generr").textContent="Select at least one message type.";$("#pv-generr").className="err";return;}
   if(needsKey()&&!$("#apikey").value.trim()){$("#pv-generr").textContent="Enter your API key in Settings (or switch Provider to Mock).";$("#pv-generr").className="err";return;}
   $("#pv-generr").className="err hidden";
@@ -3292,10 +3678,12 @@ $("#pv-generate").onclick=async()=>{
   if(isBedrock())body.region=$("#bedrockregion").value.trim()||"us-east-1";
   $("#pv-generate").disabled=true;$("#pv-generate").innerHTML='<span class=spinner></span> Generating '+sel.length+' DTL'+(sel.length===1?"":"s")+'…';
   const [ok,j]=await jpost("/projects/"+currentProject+"/generate",body);
-  $("#pv-generate").disabled=false;$("#pv-generate").innerHTML="";{const w=el("span","iwrap");w.appendChild(licon("wand-sparkles"));w.appendChild(document.createTextNode(" Generate all selected DTLs"));$("#pv-generate").appendChild(w);icons();}
+  $("#pv-generate").disabled=false;$("#pv-generate").innerHTML="";{const w=el("span","iwrap");w.appendChild(licon("wand-sparkles"));w.appendChild(document.createTextNode(" Generate selected DTLs"));$("#pv-generate").appendChild(w);icons();}
   if(!ok){$("#pv-generr").textContent=j.error||"Generation failed.";$("#pv-generr").className="err";return;}
   renderProject(j);
 };
+// Cached project cost rollup (used by the Costs & ledger tab renderer).
+let lastProjCost=null;
 
 // ---- generated DTLs grid ----
 function renderJobGrid(p){
@@ -3311,6 +3699,7 @@ function renderJobGrid(p){
     const stLabel=jb.status==="AWAITING_ATTEMPT"?"ready to review":(jb.status||"").toLowerCase().replace(/_/g," ");
     const st=el("span","vbadge "+(settled?"ok":(jb.status==="FAILED"?"bad":"warn")),stLabel);foot.appendChild(st);
     if(jb.finalScore!=null&&jb.status!=="GENERATING"&&jb.status!=="QUEUED")foot.appendChild(el("span",null,"score "+Math.round((jb.finalScore||0)*100)+"%"));
+    if(+jb.cost>0)foot.appendChild(el("span","jc-cost",money(jb.cost)));
     c.appendChild(foot);
     if(jb.status==="GENERATING"||jb.status==="PLANNING"||jb.status==="JUDGING"||jb.status==="QUEUED"){
       const pb=el("div","jc-foot");pb.appendChild(el("span","spinner"));pb.appendChild(el("span",null," building…"));c.appendChild(pb);
@@ -3322,8 +3711,119 @@ function renderJobGrid(p){
   icons();
 }
 
+// ---- project stats strip (shared header under both tabs) ----
+function renderStatStrip(p){
+  const box=$("#pv-statstrip");if(!box)return;box.innerHTML="";
+  const s=p.stats||{};
+  const cell=(k,v,cls)=>{const d=el("div","stat"+(cls?" "+cls:""));d.appendChild(el("div","stat-v",v));d.appendChild(el("div","stat-k",k));box.appendChild(d);};
+  cell("Total cost",money(s.totalCost),"hl");
+  cell("DTLs built",(+s.dtlsBuilt||0)+(s.dtlsTotal?(" / "+s.dtlsTotal):""));
+  cell("Specifications",(+s.specsApproved||0)+" / "+(+s.specsCount||0)+" approved");
+  if(s.avgScore!==""&&s.avgScore!=null)cell("Avg score",Math.round((+s.avgScore)*100)+"%");
+  cell("Tokens",kt(+s.totalTokens||0));
+  cell("LLM calls",""+(+s.totalCalls||0));
+}
+// ---- project detail tabs ----
+function showProjTab(t){
+  document.querySelectorAll("#pv-tabs .pvtab").forEach(b=>b.classList.toggle("active",b.dataset.ptab===t));
+  $("#pv-pane-overview").classList.toggle("hidden",t!=="overview");
+  $("#pv-pane-costs").classList.toggle("hidden",t!=="costs");
+}
+document.querySelectorAll("#pv-tabs .pvtab").forEach(b=>b.onclick=()=>showProjTab(b.dataset.ptab));
+
+// ---- cost transparency ----
+const CATLABEL={"spec.generate":"Generation","spec.verify":"Review (audit)","dtl.plan":"Planning","dtl.generate":"Generation","dtl.judge":"Judging"};
+// Short "For" tag + colour class for the ledger's category column.
+const CATTAG={"spec.generate":["Spec gen","cat-specgen"],"spec.verify":["Spec review","cat-specver"],"dtl.plan":["DTL plan","cat-dtlplan"],"dtl.generate":["DTL gen","cat-dtlgen"],"dtl.judge":["DTL judge","cat-dtljudge"]};
+// Always-visible muted cost breakdown for a spec row: generation / judge / total.
+// (Replaces the old single blue figure whose meaning was hidden behind a tooltip.)
+function specCostEl(s){
+  const c=s.costByCategory||{};const g=(c["spec.generate"]||{}).cost||0,v=(c["spec.verify"]||{}).cost||0;
+  const wrap=el("span","sr-cost");
+  const part=(k,val)=>{const sp=el("span","scp");sp.appendChild(el("span","scp-k",k));sp.appendChild(el("span","scp-v",money(val)));return sp;};
+  wrap.appendChild(part("Generation",g));
+  wrap.appendChild(part("Judge",v));
+  const tot=part("Total",s.cost);tot.classList.add("tot");
+  wrap.appendChild(tot);
+  return wrap;
+}
+// Category breakdown line for a per-spec / per-DTL row in the cost panel.
+function catBreakdown(byCat){
+  const parts=[];Object.keys(byCat||{}).forEach(k=>{const c=byCat[k];if(+c.cost>0)parts.push(CATLABEL[k]+" "+money(c.cost));});
+  return parts.join(" · ");
+}
+async function loadProjectCosts(){
+  if(!currentProject)return;
+  const [ok,c]=await jget("/projects/"+currentProject+"/costs");
+  if(!ok||!c){$("#pv-costpanel").classList.add("hidden");return;}
+  lastProjCost=c;
+  const hasAny=(+c.projectTotal>0)||(c.timeline&&c.timeline.length);
+  $("#pv-costpanel").classList.toggle("hidden",!hasAny);
+  // Grand total chip (always meaningful once anything has run).
+  $("#pv-grandcost").textContent="Account total: "+money(c.grandTotal);
+  // Totals strip.
+  const tt=$("#pv-costtotals");tt.innerHTML="";
+  const totcell=(k,v,big)=>{const d=el("div","ct"+(big?" big":""));d.appendChild(el("div","ct-k",k));d.appendChild(el("div","ct-v",money(v)));tt.appendChild(d);};
+  totcell("Specifications",c.specsTotal);
+  totcell("DTLs",c.dtlsTotal);
+  totcell("Project total",c.projectTotal,true);
+  // Per-spec.
+  const ps=$("#pv-costspecs");ps.innerHTML="";
+  if(!c.perSpec.filter(r=>+r.cost>0).length)ps.appendChild(el("div","empty-sm","No specification costs yet."));
+  c.perSpec.forEach(r=>{
+    if(!(+r.cost>0))return;
+    const row=el("div","costrow");
+    row.appendChild(el("span","cr-name",r.fileName||r.refId));
+    const bd=catBreakdown(r.byCategory);if(bd)row.appendChild(el("span","cr-bd",bd));
+    row.appendChild(el("span","cr-amt",money(r.cost)));
+    ps.appendChild(row);
+  });
+  // Per-DTL.
+  const pd=$("#pv-costdtls");pd.innerHTML="";
+  if(!c.perDtl.filter(r=>+r.cost>0).length)pd.appendChild(el("div","empty-sm","No DTL costs yet."));
+  c.perDtl.forEach(r=>{
+    if(!(+r.cost>0))return;
+    const row=el("div","costrow");
+    row.appendChild(el("span","cr-name",r.messageType||r.refId));
+    const bd=catBreakdown(r.byCategory);if(bd)row.appendChild(el("span","cr-bd",bd));
+    row.appendChild(el("span","cr-amt",money(r.cost)));
+    pd.appendChild(row);
+  });
+  // Ledger — every call, in order. Rendered through renderLedger so the category
+  // filter can re-render without re-fetching.
+  renderLedger();
+}
+// Render (and filter) the ledger rows from the cached lastProjCost.timeline.
+function renderLedger(){
+  const tl=$("#pv-costtimeline");if(!tl)return;tl.innerHTML="";
+  const rows=(lastProjCost&&lastProjCost.timeline)||[];
+  const f=$("#pv-ledgerfilter")?$("#pv-ledgerfilter").value:"";
+  const shown=rows.filter(t=>!f||t.category===f);
+  shown.forEach(t=>{
+    const row=el("div","tlrow");
+    row.appendChild(el("span","tl-ts",(t.ts||"").replace("T"," ").replace(/\.\d+/,"")));
+    const tag=CATTAG[t.category]||[t.category,""];
+    row.appendChild(el("span","tl-cat "+tag[1],tag[0]));
+    row.appendChild(el("span","tl-label",t.label||CATLABEL[t.category]||t.category));
+    row.appendChild(el("span","tl-tok",(+t.inTok||0)+"↓ "+(+t.outTok||0)+"↑"));
+    row.appendChild(el("span","tl-amt",money(t.cost)));
+    tl.appendChild(row);
+  });
+  if(!rows.length)tl.appendChild(el("div","empty-sm","No LLM calls recorded yet. Generate a DTL and they'll appear here."));
+  else if(!shown.length)tl.appendChild(el("div","empty-sm","No calls in this category."));
+  // Footer: count + summed cost of the shown rows.
+  const foot=$("#pv-ledgerfoot");
+  if(foot){
+    const sum=shown.reduce((a,t)=>a+(+t.cost||0),0);
+    foot.textContent=shown.length+" call"+(shown.length===1?"":"s")+(f?" (filtered)":"")+" · "+money(sum);
+  }
+}
+$("#pv-refreshcost").onclick=loadProjectCosts;
+if($("#pv-ledgerfilter"))$("#pv-ledgerfilter").onchange=renderLedger;
+
 // Open a project's child job in the per-DTL workspace (the legacy single-DTL view).
 function openJobFromProject(jobId,type){
+  pushNav({view:"job",jobId:jobId,type:type,project:currentProject});
   currentJob=jobId;
   $("#jv-typelabel").textContent=type||"";
   showScreen("job");
@@ -3337,6 +3837,7 @@ function openJobFromProject(jobId,type){
 }
 $("#backtoproject").onclick=()=>{
   if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
+  pushNav({view:"project",project:currentProject});
   showScreen("project");
   renderProject();
 };
@@ -3369,6 +3870,8 @@ $("#pv-package").onclick=async()=>{
   // PROJECT-FIRST: the app opens on the Projects screen. The single-DTL workspace is
   // now a drill-down reached by opening a transformation inside a project.
   loadVersions();
+  // Seed the initial history entry so the first Back has somewhere to land.
+  try{history.replaceState({view:"projects"},"");}catch(e){}
   showScreen("projects");
   // Lucide is deferred; render icons once it's available (and once now in case it's cached).
   icons();window.addEventListener("load",icons);

@@ -223,6 +223,17 @@ Navigate by calling your own globals (`page.evaluate(t=>window.openProject(t), t
 `screenshot({fullPage:true})` each screen, and confirm a computed style when unsure
 (`getComputedStyle(el).paddingLeft`) — a cached page can lie, so re-deploy then re-shoot.
 
+**The stale-cache trap is real and WILL waste a debugging cycle.** After `docker cp`-ing
+a new `index.html`, Chrome (and Playwright's context) keep serving the OLD file from its
+HTTP cache keyed on the URL — you screenshot, see the old UI, and conclude your change
+didn't work when it did. Two safeguards: (1) before trusting any screenshot, confirm the
+SERVER has the new markup with `curl -s <url> | grep <new-marker>` — if curl shows new
+but the shot shows old, it's cache, not your code; (2) bust it by navigating to
+`<url>?cb=<timestamp>` (a fresh query string forces a re-fetch). A late
+`Network.setCacheDisabled` via CDP does NOT cover the initial navigation. Best permanent
+fix for users too: serve that one static file with `Cache-Control: no-cache` (or a build
+hash in its URL) so neither you nor they ever see a stale SPA after a deploy.
+
 ## Derive the REST base from the UI path (no hardcoded host)
 
 The page is served at `<app>/ui/` and the REST API is a sibling at `<app>/api`.
@@ -350,11 +361,23 @@ Reuse the same `.spinner` pattern already on the generate button: a `busyBtn(btn
 label, fn, siblings)` helper that swaps the button's innerHTML to
 `'<span class=spinner></span> '+label`, disables it AND its sibling (so you can't
 Approve then Reject the same gate), runs `fn`, and on a thrown error restores the
-saved innerHTML/disabled of all of them. No restore on success is needed when the
-action triggers a poll that re-renders the whole pane (`startPolling()`); the spinner
-just bridges the gap until the first tick repaints. Give each action a contextual
-label ("Building…", "Transforming all…", "Regenerating…", "Revising…") rather than a
+saved innerHTML/disabled of all of them. Give each action a contextual label
+("Building…", "Transforming all…", "Regenerating…", "Revising…") rather than a
 generic "Working…".
+
+**On success, busyBtn does NOT restore the buttons** — it relies on the poll
+re-rendering the pane. That is a TRAP when the action returns to the SAME gate. A
+"Reject & regenerate" on an attempt gate cycles GENERATING → back to
+`AWAITING_ATTEMPT`; if the gate's DOM is reused (not rebuilt from scratch each render),
+the Reject button stays stuck on "Regenerating…" and its sibling "Accept" stays
+disabled forever, because nothing ever restored them. The "poll repaints it" assumption
+only holds if the render path actually rewrites those buttons — and a gate that just
+fills inner panels (verdict card, diff, report) does NOT touch the action row. Fix:
+snapshot each gate button's pristine innerHTML once (`_btnPristine[id] ??= el.innerHTML`
+on first render) and call a `resetGateBtns([ids])` at the TOP of every gate's render
+branch (spec gate, plan gate, attempt gate), so each repaint re-enables + un-spins the
+row regardless of how the action ended. Don't rely on busyBtn's exception-only restore
+for same-gate cycles.
 
 ## Stop the poll from flashing the UI
 A `setInterval` poll that re-renders by `innerHTML=""`+rebuild every tick makes

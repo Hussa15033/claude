@@ -14,6 +14,10 @@ Property Content As %String(MAXLEN = 1000000);
 /// Token usage + cost for the LLM CALL that produced this turn. Only meaningful on
 /// "assistant" turns (the reply): InputTokens covers the whole prompt sent for this
 /// call, OutputTokens the reply, Cost the USD for this single request.
+/// DISPLAY-ONLY ECHO: these are shown next to the message in the conversation view but
+/// are NOT the authoritative cost. The cost ledger (DTL.Data.CostEntry / DTL.Util.Cost)
+/// is the sole source of truth — UsageSummary and every total sum ledger rows, not
+/// these fields. Kept here only so the LLM Messages tab can show a per-message pill.
 Property InputTokens As %Integer [ InitialExpression = 0 ];
 
 Property OutputTokens As %Integer [ InitialExpression = 0 ];

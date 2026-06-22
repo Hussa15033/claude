@@ -46,8 +46,10 @@ ClassMethod Start(pToken As %String, pProvider As %String, pModel As %String, pA
 	if '$isobject(tDoc) quit $$$ERROR($$$GeneralError, "No spec '" _ pToken _ "'")
 	if tDoc.Status '= "READY" quit $$$ERROR($$$GeneralError, "Spec text not extracted yet (status " _ tDoc.Status _ ").")
 	// Mark PENDING up front so an immediate poll sees "in progress", not the stale
-	// prior state. Clear any previous error.
-	set tDoc.ConciseStatus = "PENDING", tDoc.ConciseError = ""
+	// prior state. ConciseStarted records that generation was actually dispatched (so the
+	// UI can tell a genuinely-generating spec from one just sitting at the initial
+	// PENDING). Clear any previous error.
+	set tDoc.ConciseStatus = "PENDING", tDoc.ConciseStarted = 1, tDoc.ConciseError = ""
 	do tDoc.%Save()
 	quit ..DispatchAsync(pToken, pProvider, pModel, pApiKey, pRegion, "generate")
 }
@@ -90,19 +92,36 @@ ClassMethod DispatchAsync(pToken As %String, pProvider As %String, pModel As %St
 /// fallback / tests), use the one-shot DTL.Util.LLM.Chat. Returns the raw reply ("" on
 /// failure, pErr set) plus finish reason byref. Centralised so Generate and Verify
 /// share the exact same routing.
-ClassMethod CallLLM(pHost As Ens.Host, pProvider As %String, pModel As %String, pApiKey As %String, pSystem As %String, pUser As %String, pRegion As %String, pMaxTokens As %Integer, Output pErr As %String, Output pFinish As %String) As %String
+/// pCategory/pRefToken/pLabel feed the cost ledger: every spec LLM call (including a
+/// length-escalation retry) is recorded as one row, RefKind="spec", so per-spec cost
+/// is the sum of these rows. Token usage was previously DISCARDED on this path — that
+/// is the bug that made spec costs invisible and the grand total too low. We record
+/// here, at the single chokepoint both Generate and Verify go through, so the dollar
+/// amount comes from the same DTL.Util.Pricing formula the DTL side uses.
+/// pCachedPrefix is the large STATIC system block (the raw source document) that is
+/// IDENTICAL across the generate call, the audit call, the length-escalation retry and
+/// any regeneration — it is flagged as a prompt-cache breakpoint so it is billed once
+/// and re-read from cache thereafter (the spec doc is the dominant token cost on this
+/// path). pPersona is the small role line; pUser is the per-call task instruction.
+ClassMethod CallLLM(pHost As Ens.Host, pProvider As %String, pModel As %String, pApiKey As %String, pCachedPrefix As %String, pPersona As %String, pUser As %String, pRegion As %String, pMaxTokens As %Integer, Output pErr As %String, Output pFinish As %String, pCategory As %String = "", pRefToken As %String = "", pLabel As %String = "") As %String
 {
-	set pErr = "", pFinish = ""
+	set pErr = "", pFinish = "", tInTok = 0, tOutTok = 0
+	set tReq = ##class(DTL.Util.LLM).BuildRequestCached(pProvider, pModel, pApiKey, pCachedPrefix, pPersona, pUser, pRegion, pMaxTokens)
 	if '$isobject(pHost) {
-		quit ##class(DTL.Util.LLM).Chat(pProvider, pModel, pApiKey, pSystem, pUser, .pErr, pRegion, , , , pMaxTokens, .pFinish)
+		set tRaw = ##class(DTL.Util.LLM).ChatReq(tReq, .pErr, .tInTok, .tOutTok, , .pFinish)
+	} else {
+		set tSC = pHost.SendRequestSync(..#LLMTARGET, tReq, .tResp, ..#LLMTIMEOUT)
+		if $$$ISERR(tSC) { set pErr = $system.Status.GetErrorText(tSC) quit "" }
+		if '$isobject(tResp) { set pErr = "no response" quit "" }
+		set pFinish = tResp.FinishReason
+		set tInTok = +tResp.InputTokens, tOutTok = +tResp.OutputTokens
+		set tRaw = ##class(DTL.Data.Job).StreamStr(tResp.RawContent)
+		if tRaw = "" { set pErr = $select(tResp.ErrorText'="":tResp.ErrorText, 1:"empty response") }
 	}
-	set tReq = ##class(DTL.Util.LLM).BuildRequest(pProvider, pModel, pApiKey, pSystem, pUser, pRegion, pMaxTokens)
-	set tSC = pHost.SendRequestSync(..#LLMTARGET, tReq, .tResp, ..#LLMTIMEOUT)
-	if $$$ISERR(tSC) { set pErr = $system.Status.GetErrorText(tSC) quit "" }
-	if '$isobject(tResp) { set pErr = "no response" quit "" }
-	set pFinish = tResp.FinishReason
-	set tRaw = ##class(DTL.Data.Job).StreamStr(tResp.RawContent)
-	if tRaw = "" { set pErr = $select(tResp.ErrorText'="":tResp.ErrorText, 1:"empty response") }
+	// Record the call's cost (only when the provider reported usage). Best-effort.
+	if (pCategory '= ""), ((+tInTok) || (+tOutTok)) {
+		do ##class(DTL.Util.Cost).Record(pCategory, "spec", pRefToken, pLabel, pModel, tInTok, tOutTok)
+	}
 	quit tRaw
 }
 
@@ -117,7 +136,7 @@ ClassMethod Generate(pHost As Ens.Host, pToken As %String, pProvider As %String,
 	set tDoc = ##class(DTL.Data.SpecDoc).OpenByToken(pToken, .sc)
 	if '$isobject(tDoc) quit $$$ERROR($$$GeneralError, "No spec '" _ pToken _ "'")
 	if tDoc.Status '= "READY" quit $$$ERROR($$$GeneralError, "Spec text not extracted yet (status " _ tDoc.Status _ ").")
-	set tDoc.ConciseStatus = "PENDING", tDoc.ConciseError = ""
+	set tDoc.ConciseStatus = "PENDING", tDoc.ConciseStarted = 1, tDoc.ConciseError = ""
 	do tDoc.%Save()
 	set tSC = $$$OK
 	try {
@@ -127,14 +146,19 @@ ClassMethod Generate(pHost As Ens.Host, pToken As %String, pProvider As %String,
 		// silently truncates it mid-object (invalid JSON). If the model still reports it
 		// hit the length limit, retry ONCE with a bigger budget before giving up.
 		set tSys = "You reorganise interface specifications into clear, concise, grouped rule lists. You output only the requested JSON and never invent requirements."
+		// The source document goes in a CACHEABLE system prefix (shared, byte-identical,
+		// with the audit call below + the length-retry + any regeneration); the task
+		// instructions go in the user message. Caches the dominant token cost.
+		set tPrefix = ##class(DTL.Util.PromptBuilder).SpecSourcePrefix(tRaw)
 		set tUser = ##class(DTL.Util.PromptBuilder).ConciseSpecPrompt(tRaw)
 		// Token budget is INTENTIONALLY large at the specification stage — we do NOT
 		// optimise tokens here; completeness matters more than cost. Start high and, if
 		// the model still reports it hit the length limit, escalate further before
 		// giving up. ..#SPECMAXTOKENS is the cap that almost never truncates real specs.
-		set tReply = ..CallLLM(pHost, pProvider, pModel, pApiKey, tSys, tUser, pRegion, ..#SPECMAXTOKENS, .tErr, .tFinish)
+		set tGenLabel = "Generation of specification " _ $select(tDoc.FileName'="":tDoc.FileName, 1:pToken)
+		set tReply = ..CallLLM(pHost, pProvider, pModel, pApiKey, tPrefix, tSys, tUser, pRegion, ..#SPECMAXTOKENS, .tErr, .tFinish, "spec.generate", pToken, tGenLabel)
 		if (tReply '= ""), (tFinish = "length") {
-			set tReply = ..CallLLM(pHost, pProvider, pModel, pApiKey, tSys, tUser, pRegion, ..#SPECMAXTOKENSHI, .tErr, .tFinish)
+			set tReply = ..CallLLM(pHost, pProvider, pModel, pApiKey, tPrefix, tSys, tUser, pRegion, ..#SPECMAXTOKENSHI, .tErr, .tFinish, "spec.generate", pToken, tGenLabel)
 		}
 		if tReply = "" {
 			// LLM call failed (bad key, rate limit, bad model, transport). Record the
@@ -205,7 +229,11 @@ ClassMethod Verify(pHost As Ens.Host, pToken As %String, pProvider As %String, p
 	set tSC = $$$OK
 	try {
 		set tRaw = tDoc.TextStr()
-		set tVer = ..CallLLM(pHost, pProvider, pModel, pApiKey, "You are a strict, fair specification auditor. You output only the requested JSON.", ##class(DTL.Util.PromptBuilder).ConciseVerifyPrompt(tRaw, tDoc.ConciseStr()), pRegion, ..#SPECMAXTOKENS, .tVErr, .tVFinish)
+		set tVerLabel = "Review (audit) of specification " _ $select(tDoc.FileName'="":tDoc.FileName, 1:pToken)
+		// Same cacheable source-document prefix as generation, so the audit re-reads the
+		// (identical) document from cache instead of paying full input price again.
+		set tVPrefix = ##class(DTL.Util.PromptBuilder).SpecSourcePrefix(tRaw)
+		set tVer = ..CallLLM(pHost, pProvider, pModel, pApiKey, tVPrefix, "You are a strict, fair specification auditor. You output only the requested JSON.", ##class(DTL.Util.PromptBuilder).ConciseVerifyPrompt(tRaw, tDoc.ConciseStr()), pRegion, ..#SPECMAXTOKENS, .tVErr, .tVFinish, "spec.verify", pToken, tVerLabel)
 		if tVer '= "" {
 			set tVObj = ##class(DTL.Util.LLM).ParseJSON(tVer)
 			if $isobject(tVObj) {

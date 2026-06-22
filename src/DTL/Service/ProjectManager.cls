@@ -146,6 +146,49 @@ ClassMethod DeriveTypes(pProjectToken As %String, Output pSC As %Status) As %Dyn
 	quit tRes
 }
 
+/// Enumerate EVERY message structure installed for the project's HL7 version, grouped
+/// by message family (the part before the underscore: ADT, ORU, SIU, …). Used by the
+/// UI's "add other message types" picker so a partner can build a DTL for a type the
+/// specification doesn't explicitly mention. Returns
+///   {hl7Version, families:[{family, structures:["ADT_A01","ADT_A02",...]}]}
+/// sorted by family then structure. The spec-derived subset (from DeriveTypes) is the
+/// pinned/pre-checked set on top; this is the full catalogue to opt into.
+ClassMethod AllTypes(pProjectToken As %String, Output pSC As %Status) As %DynamicObject
+{
+	set pSC = $$$OK, tRes = {}
+	set tRes.families = []
+	set tPrj = ##class(DTL.Data.Project).OpenByToken(pProjectToken, .sc)
+	if '$isobject(tPrj) { set pSC = $$$ERROR($$$GeneralError, "No project")  quit tRes }
+	set tVer = tPrj.HL7Version
+	set tRes.hl7Version = tVer
+	// Walk ^EnsHL7.Schema(ver,"MS",struct); bucket by family (piece before "_").
+	kill tFam
+	set tStruct = ""
+	for {
+		set tStruct = $order(^EnsHL7.Schema(tVer, "MS", tStruct))
+		quit:tStruct=""
+		set tFamily = $piece(tStruct, "_", 1)
+		set:tFamily="" tFamily = tStruct
+		set tFam(tFamily, tStruct) = ""
+	}
+	set tFamily = ""
+	for {
+		set tFamily = $order(tFam(tFamily))
+		quit:tFamily=""
+		set fo = {}
+		set fo.family = tFamily
+		set fo.structures = []
+		set tS = ""
+		for {
+			set tS = $order(tFam(tFamily, tS))
+			quit:tS=""
+			do fo.structures.%Push(tS)
+		}
+		do tRes.families.%Push(fo)
+	}
+	quit tRes
+}
+
 /// Resolve a candidate message-type token (e.g. "ADT^A01", "ADT_A01", or a group type
 /// like "ADT^A01 / MSH") to a real structure in pVer and, if valid, bump tCount. Sets
 /// pHit=1 when it resolved to a real structure. Generic segment-only group types

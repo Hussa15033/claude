@@ -37,18 +37,54 @@ ClassMethod BuildRequest(pProvider As %String, pModel As %String, pApiKey As %St
 	quit tReq
 }
 
+/// Like BuildRequest, but with a large STATIC, CACHEABLE prefix as the first system
+/// block (flagged CacheBreakpoint) followed by a small persona system block and the
+/// per-call user message. The prefix is billed at full input price once and re-read
+/// from cache on subsequent calls that share the identical prefix (Anthropic/Bedrock
+/// cache_control via LLMConnector; OpenAI auto-caches a stable ≥1024-token prefix).
+/// Used by the spec generate/audit path, where the (big) source document is identical
+/// across both calls, the length-escalation retry, and any regeneration.
+ClassMethod BuildRequestCached(pProvider As %String, pModel As %String, pApiKey As %String, pCachedPrefix As %String, pPersona As %String, pUser As %String, pRegion As %String = "", pMaxTokens As %Integer = 0) As DTL.Msg.LLMRequest
+{
+	set tReq = ##class(DTL.Msg.LLMRequest).%New()
+	set tReq.Provider = pProvider, tReq.Model = pModel, tReq.ApiKey = pApiKey, tReq.BedrockRegion = pRegion
+	if pMaxTokens > 0 set tReq.MaxTokens = pMaxTokens
+	if pCachedPrefix '= "" {
+		set tP = ##class(DTL.Msg.ChatTurn).%New()
+		set tP.Role = "system", tP.Content = pCachedPrefix, tP.CacheBreakpoint = 1
+		do tReq.Transcript.Insert(tP)
+	}
+	if pPersona '= "" {
+		set tS = ##class(DTL.Msg.ChatTurn).%New()
+		set tS.Role = "system", tS.Content = pPersona
+		do tReq.Transcript.Insert(tS)
+	}
+	set tU = ##class(DTL.Msg.ChatTurn).%New()
+	set tU.Role = "user", tU.Content = pUser
+	do tReq.Transcript.Insert(tU)
+	quit tReq
+}
+
 ClassMethod Chat(pProvider As %String, pModel As %String, pApiKey As %String, pSystem As %String, pUser As %String, Output pErr As %String, pRegion As %String = "", Output pInTok As %Integer, Output pOutTok As %Integer, Output pCost As %Numeric, pMaxTokens As %Integer = 0, Output pFinishReason As %String) As %String
+{
+	set tReq = ..BuildRequest(pProvider, pModel, pApiKey, pSystem, pUser, pRegion, pMaxTokens)
+	quit ..ChatReq(tReq, .pErr, .pInTok, .pOutTok, .pCost, .pFinishReason)
+}
+
+/// Send a PRE-BUILT request in-process (no interop host) and return the raw reply,
+/// with token usage/cost/finish reason byref. Shared by Chat and the cached-prefix
+/// spec path so both go through one place.
+ClassMethod ChatReq(pReq As DTL.Msg.LLMRequest, Output pErr As %String, Output pInTok As %Integer, Output pOutTok As %Integer, Output pCost As %Numeric, Output pFinishReason As %String) As %String
 {
 	set pErr = "", pInTok = 0, pOutTok = 0, pCost = 0, pFinishReason = ""
 	set sc = ##class(Ens.Director).CreateBusinessService("DTL.Svc.ApiService", .tSvc)
 	if $$$ISERR(sc) { set pErr = $system.Status.GetErrorText(sc) quit "" }
-	set tReq = ..BuildRequest(pProvider, pModel, pApiKey, pSystem, pUser, pRegion, pMaxTokens)
-	set sc = tSvc.LLM(tReq, .tResp)
+	set sc = tSvc.LLM(pReq, .tResp)
 	if $$$ISERR(sc) { set pErr = $system.Status.GetErrorText(sc) quit "" }
 	if '$isobject(tResp) { set pErr = "no response" quit "" }
 	set pFinishReason = tResp.FinishReason
 	set pInTok = +tResp.InputTokens, pOutTok = +tResp.OutputTokens
-	set pCost = ##class(DTL.Util.Pricing).Cost(pModel, pInTok, pOutTok)
+	set pCost = ##class(DTL.Util.Pricing).Cost(pReq.Model, pInTok, pOutTok)
 	set tRaw = ##class(DTL.Data.Job).StreamStr(tResp.RawContent)
 	if tRaw = "" { set pErr = $select(tResp.ErrorText'="":tResp.ErrorText, 1:"empty response") quit "" }
 	quit tRaw

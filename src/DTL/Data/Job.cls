@@ -211,25 +211,23 @@ Method TranscriptDynamic() As %DynamicArray
 	quit arr
 }
 
-/// Token + cost totals for THIS job (summed over its assistant turns), plus the
-/// running grand total across all jobs (kept in ^DTL.Usage). Returns a dynamic
-/// object {inputTokens, outputTokens, totalTokens, cost, calls, model,
-/// allTimeCost, allTimeTokens}.
+/// Token + cost totals for THIS job, plus the running grand total across all jobs.
+/// The cost LEDGER (DTL.Data.CostEntry, via DTL.Util.Cost) is the SOLE authority for
+/// money: this reads ForRef(JobId) rather than re-summing the transcript, so the
+/// job-view bar, the cost-cap circuit-breaker (OverCostCap) and the project cost panel
+/// can never disagree. The per-turn tokens/cost still on each ChatTurn are a
+/// display-only echo for the conversation view — they are NOT summed here. Returns
+/// {inputTokens, outputTokens, totalTokens, cost, calls, model, allTimeCost,
+/// allTimeTokens}.
 Method UsageSummary() As %DynamicObject
 {
-	set tIn = 0, tOut = 0, tCost = 0, tCalls = 0
-	for i = 1:1:..Transcript.Count() {
-		set t = ..Transcript.GetAt(i)
-		continue:t.Role'="assistant"
-		set tIn = tIn + (+t.InputTokens), tOut = tOut + (+t.OutputTokens), tCost = tCost + (+t.Cost)
-		if (+t.InputTokens) || (+t.OutputTokens) || (+t.Cost) set tCalls = tCalls + 1
-	}
+	set tAgg = ##class(DTL.Util.Cost).ForRef(..JobId)
 	set o = {}
-	set o.inputTokens = tIn
-	set o.outputTokens = tOut
-	set o.totalTokens = tIn + tOut
-	set o.cost = tCost
-	set o.calls = tCalls
+	set o.inputTokens = tAgg.inTok
+	set o.outputTokens = tAgg.outTok
+	set o.totalTokens = tAgg.inTok + tAgg.outTok
+	set o.cost = tAgg.cost
+	set o.calls = tAgg.calls
 	set o.model = ..Model
 	set o.allTimeCost = +$get(^DTL.Usage("cost"))
 	set o.allTimeTokens = +$get(^DTL.Usage("tokens"))
