@@ -60,11 +60,4 @@ Method SubmitForge(pReq As DTL.Msg.ForgeRequest) As %Status
 	quit ..SendRequestAsync(..#ORCHESTRATOR, pReq)
 }
 
-/// Run a forge request SYNCHRONOUSLY through the orchestrator (used by the installer's
-/// ForgeExample demo helper).
-Method Forge(pReq As DTL.Msg.ForgeRequest, Output pResp As Ens.Response) As %Status
-{
-	quit ..SendRequestSync(..#ORCHESTRATOR, pReq, .pResp, 300)
-}
-
 }

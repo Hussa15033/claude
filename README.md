@@ -208,7 +208,7 @@ the whole loop in one shot for the file-drop / test flows.
 | `DTL.Service.JobManager` | Bridges REST → production: creates a `Job`, dispatches into the production. |
 | `DTL.Data.Job` / `Attempt` | Persistent job record + per-attempt log (the live progress the UI polls). |
 | `DTL.Data.SpecDoc` | Persistent uploaded-spec record: extracted text, concise spec, provenance, approval state. |
-| `DTL.Msg.*` | `ConciseRequest`, `ForgeRequest`/`Response`, `LLMRequest`/`Response`, `ChatTurn`, `FieldDiff`, `SamplePair`. |
+| `DTL.Msg.*` | `ConciseRequest`, `ForgeRequest`/`Response`, `LLMRequest`/`Response`, `ChatTurn`, `SamplePair`. |
 | `DTL.REST.Dispatch` | `%CSP.REST` API for the UI. |
 | `DTL.Setup.Production` / `Installer` | Production wiring; load + compile + data dirs + web apps + start. |
 | `DTL.Test.HealthCheck` / `MockTest` / `UtilTest` / `SecurityTest` | Init hook + regression suites. |
@@ -356,7 +356,7 @@ src/DTL/       the framework:
                  Test/     HealthCheck (init hook), MockTest, UtilTest, SecurityTest
 ui/            the single-file browser SPA (index.html)
 mock/          offline OpenAI-compatible mock LLM (mock_llm.py)
-scripts/       demo.sh, sync.sh, mock.sh
+scripts/       sync.sh, mock.sh
 skills/        IRIS production-architecture + interop-REST authoring skills
 IRIS/          operator control panel: run.sh, compile.sh, test.sh + README
 docs/          DESIGN.md

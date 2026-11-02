@@ -344,66 +344,6 @@ ClassMethod CopyDir(pFrom As %String, pTo As %String)
 	}
 }
 
-/// Convenience: run one forge job for a named example pair by injecting a
-/// ForgeRequest into the RUNNING production's orchestrator via the built-in
-/// EnsLib.Testing.Service, and print the result. pSrcDir defaults to the source
-/// dir resolved by the last Run() (stored in ^DTL.Config), else auto-discovery.
-ClassMethod ForgeExample(pName As %String, pSrcDir As %String = "", pMaxAttempts As %Integer = 5, pPolicy As %String = "CompileMatch") As %Status
-{
-	if pSrcDir = "" set pSrcDir = $get(^DTL.Config("srcDir"))
-	set pSrcDir = ..ResolveSrcDir(pSrcDir)
-	set tIn = ..ReadFile(##class(%File).NormalizeFilename(pName _ ".hl7", ..JoinDir(pSrcDir, "inputs")))
-	set tOut = ..ReadFile(##class(%File).NormalizeFilename(pName _ ".hl7", ..JoinDir(pSrcDir, "outputs")))
-	if (tIn = "") || (tOut = "") {
-		write "Missing input/output for ", pName, " under ", pSrcDir, !
-		quit $$$ERROR($$$GeneralError, "missing pair")
-	}
-	set tReq = ##class(DTL.Msg.ForgeRequest).%New()
-	set tReq.JobId = pName
-	set tReq.InputName = pName
-	do tReq.SourceHL7.Write(tIn)
-	do tReq.TargetHL7.Write(tOut)
-	set tReq.SourceDocType = ##class(DTL.Util.HL7).DeriveDocType(tIn)
-	set tReq.TargetDocType = ##class(DTL.Util.HL7).DeriveDocType(tOut)
-	set tReq.MaxAttempts = pMaxAttempts
-	set tReq.SuccessPolicy = pPolicy
-
-	quit ..Dispatch(tReq)
-}
-
-/// Inject a ForgeRequest into the orchestrator BP through the inbound business
-/// service DTL.Svc.ApiService and print the ForgeResponse. Requires the production
-/// to be running.
-ClassMethod Dispatch(pReq As DTL.Msg.ForgeRequest, pTarget As %String = "DTL.Proc.Orchestrator") As %Status
-{
-	set tSC = ##class(Ens.Director).CreateBusinessService("DTL.Svc.ApiService", .tSvc)
-	if $$$ISERR(tSC) {
-		write "Could not create the inbound service (is the production running?): ", $system.Status.GetErrorText(tSC), !
-		quit tSC
-	}
-	set tSC = tSvc.Forge(pReq, .tResp)
-	if $$$ISERR(tSC) {
-		write "Dispatch failed: ", $system.Status.GetErrorText(tSC), !
-		quit tSC
-	}
-	if $isobject($get(tResp)) {
-		write "Job ", tResp.JobId, ": success=", tResp.Success, " verdict=", tResp.Verdict, " attempts=", tResp.AttemptsUsed, " score=", $fnumber(tResp.FinalScore, "", 3), !
-		write "  generated class: ", tResp.GeneratedClassName, !
-		set tDiff = ..StreamStr(tResp.DiffSummary)
-		if tDiff '= "" write "  remaining diffs:", !, tDiff, !
-	}
-	quit tSC
-}
-
-ClassMethod StreamStr(pStream As %Stream.Object) As %String
-{
-	quit:'$isobject(pStream) ""
-	do pStream.Rewind()
-	set s = ""
-	while 'pStream.AtEnd { set s = s _ pStream.Read(16000) }
-	quit s
-}
-
 ClassMethod ReadFile(pPath As %String) As %String
 {
 	quit:'##class(%File).Exists(pPath) ""

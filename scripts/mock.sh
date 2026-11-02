@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Ensure the offline mock LLM is running and ACCEPTING CONNECTIONS in the
 # container, deploying the script if needed. Robust against a stale/dead process
-# that still matches pgrep. Called by run.sh / test.sh / demo.sh.
+# that still matches pgrep. Called by run.sh / test.sh.
 #
 # Usage: scripts/mock.sh [container-name] [port]
 #

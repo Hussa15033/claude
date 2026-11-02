@@ -33,7 +33,7 @@ internals.
 From the **project root** (the parent of this folder):
 
 ```bash
-scripts/demo.sh            # bring up IRIS, compile, start production + mock, run sample jobs
+IRIS/run.sh                # bring up IRIS, compile, start production + mock LLM
 ```
 
 Then open the UI: **http://localhost:52773/dtl/ui/index.html**
