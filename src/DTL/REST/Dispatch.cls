@@ -58,6 +58,8 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
   <Route Url="/projects/:tok/package"  Method="GET"  Call="ProjectPackage" Cors="true"/>
   <Route Url="/projects/:tok/export"   Method="GET"  Call="ProjectExport"  Cors="true"/>
   <Route Url="/projects/:tok/complete" Method="POST" Call="ProjectComplete" Cors="true"/>
+  <Route Url="/projects/:tok/settings" Method="GET"  Call="GetProjectSettings" Cors="true"/>
+  <Route Url="/projects/:tok/settings" Method="POST" Call="SaveProjectSettings" Cors="true"/>
   <Route Url="/classes"         Method="GET"  Call="Classes"  Cors="true"/>
   <Route Url="/history"         Method="GET"  Call="History"  Cors="true"/>
   <Route Url="/links"           Method="GET"  Call="Links"    Cors="true"/>
@@ -184,7 +186,7 @@ ClassMethod BedrockModels() As %Status
 	// Fallback to a sane built-in list if the listing produced nothing. The global
 	// cross-region inference profile is the preferred default (highest availability).
 	if tIds.%Size() = 0 {
-		for id = "global.anthropic.claude-opus-4-8","us.anthropic.claude-opus-4-8-v1:0","us.anthropic.claude-opus-4-7-v1:0","us.anthropic.claude-sonnet-4-6-v1:0","us.anthropic.claude-haiku-4-5-v1:0" { do tIds.%Push(id) }
+		for id = "global.anthropic.claude-opus-5-5","global.anthropic.claude-sonnet-5-5","global.anthropic.claude-opus-4-8","us.anthropic.claude-opus-4-8-v1:0","us.anthropic.claude-opus-4-7-v1:0","us.anthropic.claude-sonnet-4-6-v1:0","us.anthropic.claude-haiku-4-5-v1:0" { do tIds.%Push(id) }
 		do ..Json({"models": (tIds), "note": "Could not list from Bedrock (check key/region/permissions) — showing common inference-profile ids."})
 		quit $$$OK
 	}
@@ -405,19 +407,37 @@ ClassMethod OrigDoc(pToken As %String) As %Status
 	quit $$$OK
 }
 
-/// POST /specs/:token/concise - body {provider, model, apiKey, region}. Kicks off
-/// generation (and LLM-verify) of the concise, grouped, referenced specification in
-/// the BACKGROUND and returns 202 immediately. Generation can require several large,
-/// slow LLM calls; running it synchronously timed out the web gateway (504) on big
-/// specs. The UI polls GET /specs/:token until conciseStatus is READY or ERROR.
+/// POST /specs/:token/concise - body {provider, model, apiKey, region, projectToken?}.
+/// Kicks off generation (and LLM-verify) of the concise, grouped, referenced specification
+/// in the BACKGROUND and returns 202 immediately. If projectToken is provided, uses the
+/// project's stored settings (API key, model, etc.).
 ClassMethod ConciseSpec(pToken As %String) As %Status
 {
 	set tPayload = ..ReadBody(.tSC)
 	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
-	set tProvider = tPayload.provider, tModel = tPayload.model, tKey = tPayload.apiKey, tRegion = tPayload.region
-	// Optional dedicated summarisation model for the concise/verify calls (cheaper +
-	// faster than the build model). Falls back to the build model when not supplied.
-	set tConciseModel = tPayload.conciseModel
+
+	// Check if this spec belongs to a project and should use project settings
+	set tProjectToken = tPayload.projectToken
+	if $zstrip(tProjectToken, "<>W") '= "" {
+		// Load settings from project
+		set tPrj = ##class(DTL.Data.Project).OpenByToken(tProjectToken, .psc)
+		if $isobject(tPrj) {
+			set tProvider = tPrj.Provider
+			set tModel = tPrj.Model
+			set tConciseModel = $select(tPrj.ConciseModel'="":tPrj.ConciseModel, 1:tPrj.Model)
+			set tKey = tPrj.ApiKey
+			set tRegion = $select(tPrj.Region'="":tPrj.Region, 1:"us-east-1")
+		} else {
+			// Project not found, fall back to request body
+			set tProvider = tPayload.provider, tModel = tPayload.model, tKey = tPayload.apiKey, tRegion = tPayload.region
+			set tConciseModel = tPayload.conciseModel
+		}
+	} else {
+		// No project token, use request body settings
+		set tProvider = tPayload.provider, tModel = tPayload.model, tKey = tPayload.apiKey, tRegion = tPayload.region
+		set tConciseModel = tPayload.conciseModel
+	}
+
 	if $zstrip(tConciseModel, "<>W") = "" set tConciseModel = tModel
 	// Fail fast with a clear message when config is missing (a live provider needs a
 	// key + model). Saves a wasted round-trip and tells the user exactly what to fix.
@@ -435,11 +455,28 @@ ClassMethod ConciseSpec(pToken As %String) As %Status
 /// POST /specs/:token/verify-concise — run (or re-run) the completeness/faithfulness
 /// AUDIT of the concise spec in the background. Returns 202; the UI polls
 /// conciseVerifyStatus -> READY (verdict in conciseVerdict) / ERROR.
+/// If projectToken is provided, uses the project's stored settings.
 ClassMethod VerifyConcise(pToken As %String) As %Status
 {
 	set tPayload = ..ReadBody(.tSC)
 	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
-	set tProvider = tPayload.provider, tModel = tPayload.model, tKey = tPayload.apiKey, tRegion = tPayload.region
+
+	// Check if this spec belongs to a project and should use project settings
+	set tProjectToken = tPayload.projectToken
+	if $zstrip(tProjectToken, "<>W") '= "" {
+		set tPrj = ##class(DTL.Data.Project).OpenByToken(tProjectToken, .psc)
+		if $isobject(tPrj) {
+			set tProvider = tPrj.Provider
+			set tModel = tPrj.ConciseModel
+			if $zstrip(tModel, "<>W") = "" set tModel = tPrj.Model
+			set tKey = tPrj.ApiKey
+			set tRegion = $select(tPrj.Region'="":tPrj.Region, 1:"us-east-1")
+		} else {
+			set tProvider = tPayload.provider, tModel = tPayload.model, tKey = tPayload.apiKey, tRegion = tPayload.region
+		}
+	} else {
+		set tProvider = tPayload.provider, tModel = tPayload.model, tKey = tPayload.apiKey, tRegion = tPayload.region
+	}
 	set tConciseModel = tPayload.conciseModel
 	if $zstrip(tConciseModel, "<>W") = "" set tConciseModel = tModel
 	if (tProvider = "openai") || (tProvider = "bedrock") {
@@ -643,13 +680,22 @@ ClassMethod ProjectTypes(pTok As %String) As %Status
 	quit $$$OK
 }
 
-/// POST /projects/:tok/generate - body {types:[structure,...], apiKey, region}. Locks
-/// the project and fans out one child job per selected type. Returns the project doc.
+/// POST /projects/:tok/generate - body {types:[structure,...]}. Locks the project and
+/// fans out one child job per selected type using the project's stored settings.
+/// Returns the project doc.
 ClassMethod ProjectGenerate(pTok As %String) As %Status
 {
 	set tPayload = ..ReadBody(.tSC)
 	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
-	set tKey = tPayload.apiKey, tRegion = tPayload.region
+
+	// Load project settings
+	set tPrj = ##class(DTL.Data.Project).OpenByToken(pTok, .sc)
+	if '$isobject(tPrj) quit ..ErrJson(404, "No project '" _ pTok _ "'")
+
+	// Use stored settings (apiKey and region are now stored in the project)
+	set tKey = tPrj.ApiKey
+	set tRegion = $select(tPrj.Region'="":tPrj.Region, 1:"us-east-1")
+
 	set tSC = ##class(DTL.Service.ProjectManager).Generate(pTok, tPayload.types, tKey, tRegion, .tcSC)
 	if $$$ISERR(tSC) || $$$ISERR(tcSC) quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
 	set %response.Status = "202 Accepted"
@@ -690,6 +736,56 @@ ClassMethod ProjectComplete(pTok As %String) As %Status
 	set tSC = ##class(DTL.Service.ProjectManager).Complete(pTok, .tcSC)
 	if $$$ISERR(tSC) || $$$ISERR(tcSC) quit ..ErrJson(400, $system.Status.GetErrorText($select($$$ISERR(tSC):tSC, 1:tcSC)))
 	quit ..GetProject(pTok)
+}
+
+/// GET /projects/:tok/settings - retrieve project settings (provider, model, etc.).
+/// Returns masked settings (never exposes the full API key, only hasApiKey flag).
+ClassMethod GetProjectSettings(pTok As %String) As %Status
+{
+	set tPrj = ##class(DTL.Data.Project).OpenByToken(pTok, .sc)
+	if '$isobject(tPrj) quit ..ErrJson(404, "No project '" _ pTok _ "'")
+
+	set tSettings = {}
+	set tSettings.provider = $select(tPrj.Provider'="":tPrj.Provider, 1:"openai")
+	set tSettings.model = tPrj.Model
+	set tSettings.conciseModel = tPrj.ConciseModel
+	set tSettings.region = $select(tPrj.Region'="":tPrj.Region, 1:"us-east-1")
+	set tSettings.maxAttempts = $select(tPrj.MaxAttempts>0:tPrj.MaxAttempts, 1:5)
+	set tSettings.costCap = tPrj.CostCap
+	set tSettings.hasApiKey = $select(tPrj.ApiKey'="":1, 1:0)
+
+	do ..Json(tSettings)
+	quit $$$OK
+}
+
+/// POST /projects/:tok/settings - save project settings.
+/// Body: {provider, model, conciseModel, apiKey, region, maxAttempts, costCap}
+ClassMethod SaveProjectSettings(pTok As %String) As %Status
+{
+	set tPayload = ..ReadBody(.tSC)
+	if $$$ISERR(tSC) quit ..ErrJson(400, "Invalid JSON body")
+
+	set tPrj = ##class(DTL.Data.Project).OpenByToken(pTok, .sc)
+	if '$isobject(tPrj) quit ..ErrJson(404, "No project '" _ pTok _ "'")
+
+	// On %DynamicObject, missing properties return "" — the frontend always sends all
+	// fields, so we can assign directly. API key is an exception: an empty string means
+	// "keep the existing one" (the frontend never sends the stored key back).
+	set tPrj.Provider = tPayload.provider
+	set tPrj.Model = tPayload.model
+	set tPrj.ConciseModel = tPayload.conciseModel
+	set tPrj.Region = tPayload.region
+	if +tPayload.maxAttempts > 0 set tPrj.MaxAttempts = +tPayload.maxAttempts
+	set tPrj.CostCap = +tPayload.costCap
+	// Only update the API key if a non-empty one was provided
+	if $zstrip(tPayload.apiKey, "<>W") '= "" set tPrj.ApiKey = tPayload.apiKey
+
+	set tPrj.UpdatedAt = ##class(DTL.Data.Project).Now()
+	set tSC = tPrj.%Save()
+	if $$$ISERR(tSC) quit ..ErrJson(500, $system.Status.GetErrorText(tSC))
+
+	do ..Json({"ok": 1, "message": "Settings saved"})
+	quit $$$OK
 }
 
 /// GET /classes - all DTL classes generated this session, with source.

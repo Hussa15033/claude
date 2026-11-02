@@ -58,28 +58,90 @@ IMAGE="$IRIS_IMAGE"
 
 say(){ printf '\n== %s ==\n' "$*"; }
 
-# 1. Ensure the container exists and is healthy. IRIS always listens on 1972/52773
-#    INSIDE the container; we publish them to the configurable HOST ports above.
+# 1. Ensure the container exists, is running and healthy; fail loudly (with the
+#    container's log tail) otherwise. IRIS always listens on 1972/52773 INSIDE the
+#    container; we publish them to the configurable HOST ports above.
+#
+#    WHY WE BYPASS THE IMAGE'S INIT HOOK:
+#      The intersystemsdc/irishealth-community 2026.1 images (rebuilt 2026-09-09) run a
+#      first-start hook (docker-entrypoint.sh iris-after-start) that uses irissqlcli
+#      -> iris.dbapi.connect. In 2026.1 the DB-API driver is no longer part of the
+#      embedded `iris` module (it ships separately as /usr/irissys/dev/python/
+#      intersystems_irispython-*.whl, not installed), so the hook dies with
+#      "Cannot call an iris.package wrapper ... dbapi.connect" and the entrypoint
+#      SHUTS IRIS DOWN -- the container exits(1) on first start. Installing that wheel
+#      into mgr/python is NOT a fix: it shadows the embedded `iris` module and breaks
+#      iris.cls(), which DTL.Util.Py relies on.
+#      So we start IRIS directly (/iris-main) and do the only parts of that hook we
+#      need ourselves: enable %Service_CallIn and set the account passwords. The USER
+#      namespace already exists in IRIS for Health, and we have no initdb scripts.
+die(){
+  echo "ERROR: $*" >&2
+  echo "--- last container log lines ---" >&2
+  docker logs --tail 15 "$CTR" >&2 2>&1 || true
+  exit 1
+}
+
+CREATED=0
+# A container created by an older run.sh under Git Bash got a Windows-mangled
+# entrypoint (e.g. "C:/Program Files/Git/tini") and can never start. It never ran,
+# so it holds no data -- say so plainly instead of failing with an OCI error.
+if docker ps -a --format '{{.Names}}' | grep -qx "$CTR" \
+   && docker inspect --format '{{json .Config.Entrypoint}}' "$CTR" 2>/dev/null | grep -qE '[A-Za-z]:/'; then
+  echo "ERROR: container '$CTR' was created with a Windows-mangled entrypoint ($(docker inspect --format '{{json .Config.Entrypoint}}' "$CTR"))." >&2
+  echo "It never started and holds no data; remove it and re-run:   docker rm $CTR" >&2
+  exit 1
+fi
+
 if ! docker ps -a --format '{{.Names}}' | grep -qx "$CTR"; then
   say "Starting IRIS for Health container '$CTR' (host ports ${IRIS_WEB_PORT}->52773, ${IRIS_SUPERSERVER_PORT}->1972)"
-  docker run -d --name "$CTR" \
+  # MSYS_NO_PATHCONV / MSYS2_ARG_CONV_EXCL: on Windows Git Bash, stop MSYS rewriting
+  # the in-container paths /tini and /iris-main into "C:/Program Files/Git/...".
+  # Ignored on Linux/macOS.
+  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run -d --name "$CTR" \
     -p "${IRIS_SUPERSERVER_PORT}:1972" -p "${IRIS_WEB_PORT}:52773" \
-    -e IRIS_PASSWORD="$IRIS_PASSWORD" "$IMAGE" >/dev/null
+    --entrypoint /tini "$IMAGE" -- /iris-main --ISCAgent false >/dev/null
+  CREATED=1
 fi
-docker start "$CTR" >/dev/null 2>&1 || true
+
+if ! docker start "$CTR" >/dev/null 2>&1 \
+   || ! [ "$(docker inspect --format '{{.State.Running}}' "$CTR")" = "true" ]; then
+  if docker logs "$CTR" 2>&1 | grep -q "Error executing post-startup command"; then
+    die "container '$CTR' was created with the image's broken init hook and never initialised.
+It holds no data; remove it and re-run:   docker rm $CTR"
+  fi
+  die "container '$CTR' would not start"
+fi
+
 say "Waiting for IRIS to be healthy"
 for i in $(seq 1 40); do
   st="$(docker inspect --format '{{.State.Health.Status}}' "$CTR" 2>/dev/null || echo none)"
-  [ "$st" = "healthy" ] && { echo "healthy"; break; }
+  [ "$st" = "healthy" ] && break
+  [ "$(docker inspect --format '{{.State.Running}}' "$CTR")" = "true" ] || die "container '$CTR' exited while starting"
   sleep 5
 done
+[ "$st" = "healthy" ] || die "IRIS in '$CTR' not healthy after 200s (status: $st)"
+echo "healthy"
 
-# 2. Sync sources + deploy mock.
+# First-start init (replaces the image hook -- see above). Only on create, so a
+# password you later change in the Portal isn't reset on every run. The password
+# is passed via the environment so no quoting can break the session script.
+if [ "$CREATED" = 1 ]; then
+  say "Initialising instance (CallIn + passwords)"
+  docker exec -i -e DTL_PW="$IRIS_PASSWORD" "$CTR" iris session IRIS -U%SYS <<'OS'
+set pw=$SYSTEM.Util.GetEnviron("DTL_PW")
+set prop("Enabled")=1 set sc=##class(Security.Services).Modify("%Service_CallIn",.prop) write "callin: ok=",+sc,!
+kill prop set prop("Password")=pw,prop("ChangePassword")=0,prop("PasswordNeverExpires")=1
+for u="SuperUser","_SYSTEM","Admin" set sc=##class(Security.Users).Modify(u,.prop) write "password ",u,": ok=",+sc,!
+halt
+OS
+fi
+
+# 2. Sync sources.
 say "Syncing sources"
 bash "$HERE/scripts/sync.sh" "$CTR"
 CHOME="$(docker exec "$CTR" bash -lc 'printf %s "${HOME:-/home/irisowner}"' | tr -d '\r')"
 SRC="$CHOME/dtlsrc"
-docker cp "$HERE/mock/mock_llm.py" "$CTR:$CHOME/mock_llm.py"
 
 # 3. Start the mock LLM (robust, idempotent — see scripts/mock.sh). Runs INSIDE the
 #    container; the production connects to it on this port via localhost.

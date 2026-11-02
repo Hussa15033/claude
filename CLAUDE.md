@@ -57,7 +57,7 @@ Source is `src/DTL/` (package `DTL.*`). Key classes:
 - `ui/index.html` — the entire front end: a single-file vanilla-JS SPA (~280 KB), served
   same-origin by IRIS at `/dtl/ui/index.html`. No build step.
 - `mock/mock_llm.py` — offline OpenAI-compatible LLM (port 8085) for key-free demos/CI.
-- `IRIS/` — operator scripts (`run.sh`, `compile.sh`, `test.sh`) + its own README.
+- `IRIS/` — operator scripts (`run.sh`, `test.sh`) + its own README.
 - `local_llm_test/` — standalone Python benchmark of the concise-spec step on a local model.
 
 ## Build / run / test / deploy
@@ -66,8 +66,8 @@ Live dev container is `iris-dtl` (IRIS for Health 2026.1; creds SuperUser / SYS)
 
 - **`IRIS/run.sh`** — canonical deploy: sync source, start mock, **purge `DTL.*` code
   then reload** (clean-slate; `/deleteextent=0` keeps data), start production, copy the
-  SPA, print URLs. Use after DELETING a class/member.
-- **`IRIS/compile.sh`** — fast incremental compile while editing (does NOT evict deleted members).
+  SPA, print URLs. The ONLY compile path — run it after every source change (it
+  stops/restarts the production so pool jobs pick up new code).
 - **`IRIS/test.sh`** — HealthCheck (expect `8/8`) + Util/Mock/Security suites.
 - UI: `http://localhost:52773/dtl/ui/index.html` · API: `http://localhost:52773/dtl/api/…`
 - Quick health: `curl -s localhost:52773/dtl/api/health`.
@@ -75,7 +75,8 @@ Live dev container is `iris-dtl` (IRIS for Health 2026.1; creds SuperUser / SYS)
 **Iterating fast against the live container** (without a full `run.sh`):
 - ObjectScript: copy `.cls` into the container and `$system.OBJ.Load(file,"ck")`. Use
   FRESH `/tmp/dtlcN_*.cls` names with `chmod 666` (a `docker cp` over a file owned by
-  another user fails silently).
+  another user fails silently). Production hosts (`Op.*`, `Proc.*`) keep running the OLD
+  code until the production restarts — use `run.sh` for those.
 - UI: `docker cp ui/index.html iris-dtl:/usr/irissys/mgr/csp/dtlui/index.html` then
   **`docker exec -u root iris-dtl chown irisowner:irisowner … && chmod 644 …`** — skipping
   the chown makes IRIS serve a 404 with NO page error (all JS silently absent).

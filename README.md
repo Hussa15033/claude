@@ -227,7 +227,7 @@ Then open **http://localhost:52773/dtl/ui/index.html**.
 
 `IRIS/run.sh` does a **clean-slate recompile** (purges the `DTL.*` code, keeping
 persistent data, then reloads) so a deleted class member can never linger as
-stale compiled code. Use `IRIS/compile.sh` for a fast incremental edit loop.
+stale compiled code. Re-run it after every source change.
 
 ### Using the UI
 
@@ -358,7 +358,7 @@ ui/            the single-file browser SPA (index.html)
 mock/          offline OpenAI-compatible mock LLM (mock_llm.py)
 scripts/       sync.sh, mock.sh
 skills/        IRIS production-architecture + interop-REST authoring skills
-IRIS/          operator control panel: run.sh, compile.sh, test.sh + README
+IRIS/          operator control panel: run.sh, test.sh + README
 docs/          DESIGN.md
 ```
 

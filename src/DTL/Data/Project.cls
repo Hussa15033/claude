@@ -58,6 +58,13 @@ Property Model As %String(MAXLEN = 128);
 /// Optional cheaper/faster model for the concise-spec calls (falls back to Model).
 Property ConciseModel As %String(MAXLEN = 128);
 
+/// API key for the provider. Stored in PLAIN TEXT (not yet encrypted); never returned
+/// by the REST API (GET /projects/:tok/settings only reports hasApiKey).
+Property ApiKey As %String(MAXLEN = 512);
+
+/// AWS region for Bedrock provider.
+Property Region As %String(MAXLEN = 32) [ InitialExpression = "us-east-1" ];
+
 /// Per-job cost ceiling (USD) propagated to each child job; 0 = no cap.
 Property CostCap As %Numeric [ InitialExpression = 0 ];
 

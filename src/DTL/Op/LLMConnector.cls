@@ -50,7 +50,7 @@ Property BedrockSSLConfig As %String [ InitialExpression = "DTLOpenAISSL" ];
 
 /// Default Bedrock Anthropic model id — the GLOBAL cross-region INFERENCE PROFILE
 /// (on-demand invoke of a bare foundation-model id is not supported for these models).
-Property BedrockModel As %String [ InitialExpression = "global.anthropic.claude-opus-4-8" ];
+Property BedrockModel As %String [ InitialExpression = "global.anthropic.claude-opus-5-5" ];
 
 Parameter SETTINGS = "Mode:Basic,ChatPath:Basic,Model:Basic,OpenAIHost:Basic,OpenAIPort:Basic,OpenAISSLConfig:Basic,MockHost:Basic,MockPort:Basic,BedrockRegion:Basic,BedrockSSLConfig:Basic,BedrockModel:Basic,ApiKeyCredentials:Basic:credentialsSelector";
 
@@ -242,7 +242,9 @@ Method ChatCompletion(pReq As DTL.Msg.LLMRequest, Output pResp As DTL.Msg.LLMRes
 				while tIt.%GetNext(.k, .blk) {
 					if $isobject(blk), (blk.type = "text") set tContent = tContent _ blk.text
 				}
-				set pResp.FinishReason = tJson."stop_reason"
+				// Normalise Anthropic's "max_tokens" to the OpenAI-style "length" so every
+				// caller's truncation/escalation check (tFinish = "length") works on both.
+				set pResp.FinishReason = $select(tJson."stop_reason"="max_tokens":"length", 1:tJson."stop_reason")
 			} catch {
 				set tContent = ""
 			}
@@ -269,6 +271,9 @@ Method ChatCompletion(pReq As DTL.Msg.LLMRequest, Output pResp As DTL.Msg.LLMRes
 
 		if tContent = "" {
 			set pResp.ErrorText = "The model returned no content (HTTP " _ pResp.HttpStatus _ ", finish_reason '" _ pResp.FinishReason _ "')."
+			// Thinking-by-default models (Claude 5 family) can spend the whole output
+			// budget reasoning and stop before writing any answer text.
+			if pResp.FinishReason = "length" set pResp.ErrorText = pResp.ErrorText _ " The model used its entire output-token budget (" _ tMaxTokens _ ") before writing any answer — typically on internal reasoning. Use a model with a larger output limit or retry."
 			set pResp.Ok = 0
 			quit
 		}
@@ -367,14 +372,17 @@ ClassMethod ClampMaxTokens(pRequested As %Integer, pProvider As %String, pModel 
 		// then burns the transient-retry budget) and, when accepted, invites the model
 		// to generate a needlessly huge reply (output tokens are serial -> slow). So cap
 		// PER MODEL, not with a blanket 64K:
-		//   - Haiku (3 / 3.5): 8192 max output.
-		//   - Sonnet/Opus 3.x: 8192 (4096 for legacy 3.0); 4.x: 64K.
-		if tLower [ "haiku" {
-			set tCap = 8192
-		} elseif (tLower [ "claude-3-5") || (tLower [ "claude-3.5") {
-			set tCap = 8192
-		} elseif (tLower [ "sonnet-4") || (tLower [ "opus-4") || (tLower [ "sonnet4") || (tLower [ "opus4") {
-			set tCap = 65536
+		//   - Claude 5 family (Opus/Sonnet/Haiku 5.x, Fable, Mythos), Opus 4.6-4.8,
+		//     Sonnet 4.6: 128K. These models THINK BY DEFAULT and the reasoning counts
+		//     against max_tokens, so a low cap can leave no room for any answer text.
+		//   - Opus 4.5, Sonnet 4 / 4.5, Haiku 4.5: 64K.   - Opus 4 / 4.1: 32K.
+		//   - Claude 3.x and anything unrecognised: 8192.
+		if (tLower ? .e1(1"opus-",1"sonnet-",1"haiku-")1"5".e) || (tLower [ "fable") || (tLower [ "mythos") || (tLower ? .e1"opus-4-"1(1"6",1"7",1"8").e) || (tLower ? .e1"sonnet-4-6".e) {
+			set tCap = 128000
+		} elseif (tLower ? .e1"opus-4-5".e) || (tLower ? .e1"sonnet-4".e) || (tLower ? .e1"haiku-4".e) {
+			set tCap = 64000
+		} elseif (tLower ? .e1"opus-4".e) {
+			set tCap = 32000
 		} else {
 			// Unknown/other Claude: a safe, widely-supported ceiling.
 			set tCap = 8192

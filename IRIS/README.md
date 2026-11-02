@@ -9,8 +9,8 @@ internals.
 
 ```
                     ┌─────────────── you are here (IRIS/) ───────────────┐
-   compile.sh ─┐    │  wraps →  DTL.Setup.Installer  (load+compile+wire)  │
-   run.sh ─────┼──► │           DTL.Setup.Production (the production)     │
+   run.sh ─────┬──► │  wraps →  DTL.Setup.Installer  (load+compile+wire)  │
+               │    │           DTL.Setup.Production (the production)     │
    test.sh ────┘    │           DTL.Test.HealthCheck (init test hook)     │
                     └────────────────────────────────────────────────────┘
         UI  http://localhost:52773/dtl/ui/index.html
@@ -38,42 +38,18 @@ IRIS/run.sh                # bring up IRIS, compile, start production + mock LLM
 
 Then open the UI: **http://localhost:52773/dtl/ui/index.html**
 
-Everything below is the same thing, broken into the three verbs you asked for.
+Everything below is the same thing, broken into its two verbs: run (which compiles)
+and test.
 
 ---
 
-## 1 · Compile
+## 1 · Run (and compile)
 
-Loads every framework class from source and compiles it (the bootstrap compile +
-the Installer). Use this after editing any `.cls` file.
-
-```bash
-IRIS/compile.sh            # [container]  default: iris-dtl
-```
-
-> **Incremental only.** `compile.sh` adds/updates classes but does **not** evict
-> compiled code for members or classes you *deleted* from source. If you removed a
-> property/method or a whole `.cls`, run `IRIS/run.sh` instead — it purges `DTL.*`
-> (keeping data) for a clean-slate recompile. See **Clean-slate recompile** under
-> §2 · Run.
-
-What it does: `scripts/sync.sh` copies `src/` into the container, then runs
-`$system.OBJ.LoadDir(...)` followed by `DTL.Setup.Installer.Run(srcDir, 0)`
-(load + prepare dirs + wire web apps, **without** starting the production).
-
-Manual equivalent (inside the container):
-
-```objectscript
-zn "USER"
-do $system.OBJ.LoadDir("/home/irisowner/dtlsrc/DTL","ck/recurse=1",.err,1)
-do ##class(DTL.Setup.Installer).Run("/home/irisowner/dtlsrc", 0)   ; 0 = don't start
-```
-
----
-
-## 2 · Run
-
-Starts the production + the offline mock LLM, then serves the UI and REST API.
+Compiles every framework class from source, starts the production + the offline
+mock LLM, then serves the UI and REST API. There is no separate compile script:
+run this after **every** source change. It stops the production, recompiles from a
+clean slate and restarts it, so long-running hosts (e.g. `DTL.Op.LLMConnector`) can
+never keep executing the previous compiled code.
 
 ```bash
 IRIS/run.sh                # [container]  default: iris-dtl
@@ -112,9 +88,6 @@ readable. Generated transforms in `DTL.Generated.*` are not touched either
 (they're regenerated on demand). This is verified on every run: data row counts
 are unchanged and the health hook reports `8/8`.
 
-> Use `IRIS/compile.sh` for a fast **incremental** compile while editing; use
-> `IRIS/run.sh` when you've **deleted** a member/class and need the stale compiled
-> artifact gone.
 
 Manual equivalents:
 
@@ -165,7 +138,7 @@ curl -s http://localhost:52773/dtl/api/projects/<tok>/export > project-dtls.xml
 
 ---
 
-## 3 · Test
+## 2 · Test
 
 Runs the **initialization test hook** (`DTL.Test.HealthCheck`) plus the unit /
 mock / security suites. This is the "ensure all components of IRIS have been

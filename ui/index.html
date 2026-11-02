@@ -775,10 +775,11 @@
       <!-- Headline stats — always visible, both tabs share the project header above. -->
       <div class="statstrip" id="pv-statstrip"></div>
 
-      <!-- Tabs: Overview (specs/types/DTLs) | Costs & ledger -->
+      <!-- Tabs: Overview (specs/types/DTLs) | Costs & ledger | Settings -->
       <nav class="pvtabs" id="pv-tabs">
         <button class="pvtab active" data-ptab="overview"><span class="iwrap"><i data-lucide="layout-grid"></i> Overview</span></button>
         <button class="pvtab" data-ptab="costs"><span class="iwrap"><i data-lucide="receipt"></i> Costs &amp; ledger</span></button>
+        <button class="pvtab" data-ptab="settings"><span class="iwrap"><i data-lucide="settings-2"></i> Settings</span></button>
       </nav>
 
       <!-- ===== OVERVIEW TAB ===== -->
@@ -867,6 +868,31 @@
         <div class="ledgerfoot" id="pv-ledgerfoot"></div>
       </article>
       </div><!-- /costs pane -->
+
+      <!-- ===== SETTINGS TAB ===== -->
+      <div class="pvtabpane hidden" id="pv-pane-settings">
+      <article class="panel">
+        <div class="lpanehd"><h2 style="margin:0">Project Settings</h2><span id="pv-setsaved" class="savedbar hidden"><span class="iwrap"><i data-lucide="check"></i> saved</span></span></div>
+        <p style="color:var(--muted);font-size:13px">LLM provider, model and run limits for this project. These settings are stored server-side per project and used for all DTL generation jobs.</p>
+        <div class="setgrid">
+          <div class="setsec full">LLM provider</div>
+          <div><label>Provider</label><select id="pv-provider"><option value="openai" selected>OpenAI (live API)</option><option value="bedrock">AWS Bedrock (Claude)</option><option value="mock">Mock (offline demo)</option></select></div>
+          <div><label>Build model</label><div style="display:flex;gap:6px"><select id="pv-model" disabled style="flex:1"><option value="">Enter a valid API key</option></select><button class="ghost" id="pv-refreshmodels" title="Load your account's models" style="padding:9px 11px"><i data-lucide="refresh-cw"></i></button></div><div style="color:var(--muted);font-size:11px;margin-top:4px">Writes &amp; auto-repairs the DTL and judges spec conformance — use your most capable model here.</div></div>
+          <div><label>Concise-spec model</label><select id="pv-concisemodel" disabled style="width:100%"><option value="">Enter a valid API key</option></select><div style="color:var(--muted);font-size:11px;margin-top:4px">Summarises the uploaded spec into the reviewable specification. A cheaper/faster model is ideal — defaults to one automatically.</div></div>
+          <div class="full" id="pv-openaibox">
+            <label id="pv-keylabel">OpenAI API key <span class="opt">(stored server-side for this project)</span></label>
+            <div style="display:flex;gap:6px"><input id="pv-apikey" type="password" placeholder="sk-..." autocomplete="off" style="flex:1"/></div>
+            <div id="pv-bedrockregionbox" class="hidden"><label>AWS region</label><input id="pv-bedrockregion" placeholder="us-east-1" value="us-east-1"/></div>
+            <div id="pv-modelhint" style="color:var(--muted);font-size:11px;margin-top:4px"></div>
+          </div>
+          <div class="setsec full">Run limits</div>
+          <div><label>Max attempts <span class="opt">(auto-repair budget)</span></label><input id="pv-maxattempts" type="number" min="1" max="20" value="5"/></div>
+          <div><label>Cost cap (USD) <span class="opt">(0 = none)</span></label><input id="pv-costcap" type="number" min="0" step="0.10" value="0"/></div>
+        </div>
+        <div class="row" style="margin-top:18px"><button class="primary" id="pv-savesettings"><span class="iwrap"><i data-lucide="save"></i> Save settings</span></button></div>
+        <div id="pv-setterr" class="err hidden"></div>
+      </article>
+      </div><!-- /settings pane -->
     </section>
 
     <!-- ============================ JOB DRILL-DOWN ============================ -->
@@ -1583,7 +1609,7 @@ $("#specfileinput").onchange=async e=>{const f=e.target.files[0];if(!f)return;cu
 // the gateway 504 a long synchronous request would hit. Returns a normalized object
 // {ok, error, conciseStatus, conciseError, ...spec} the call sites already expect.
 async function generateConcise(token){
-  const [sok,start]=await jpost("/specs/"+token+"/concise",providerBody());
+  const [sok,start]=await jpost("/specs/"+token+"/concise",await providerBody());
   // A synchronous validation failure (missing key/model) comes back non-2xx now.
   if(!sok)return{ok:false,error:(start&&start.error)||"Could not start concise-spec generation."};
   // Poll until READY/ERROR. NO fixed client ceiling: as long as the server reports the
@@ -1668,7 +1694,29 @@ function conciseErrBox(box,msg,retryFn,rawReply){
 }
 function fileToB64(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.readAsDataURL(f);});}
 // Provider/model/key payload from Settings, for spec-side LLM calls.
-function providerBody(){const cm=$("#concisemodel");const b={provider:$("#provider").value,model:$("#model").value,conciseModel:(cm&&cm.value)?cm.value:$("#model").value,apiKey:needsKey()?$("#apikey").value.trim():""};if(isBedrock())b.region=$("#bedrockregion").value.trim()||"us-east-1";return b;}
+// If we're in project mode and have project settings available, use those.
+// Otherwise fall back to the single-job form settings.
+async function providerBody(){
+  // If in project context, fetch and use project settings
+  if(projectSpecMode && currentProject){
+    const [ok,settings]=await jget("/projects/"+currentProject+"/settings");
+    if(ok && settings){
+      return {
+        provider:settings.provider||"openai",
+        model:settings.model||"",
+        conciseModel:settings.conciseModel||settings.model||"",
+        apiKey:settings.hasApiKey?"":(""), // API key is stored server-side for projects
+        region:settings.region||"us-east-1",
+        projectToken:currentProject  // Signal to backend to use project's stored API key
+      };
+    }
+  }
+  // Fall back to single-job form settings
+  const cm=$("#concisemodel");
+  const b={provider:$("#provider").value,model:$("#model").value,conciseModel:(cm&&cm.value)?cm.value:$("#model").value,apiKey:needsKey()?$("#apikey").value.trim():""};
+  if(isBedrock())b.region=$("#bedrockregion").value.trim()||"us-east-1";
+  return b;
+}
 // Confidence badge text for an extracted spec (0..1).
 function confClass(c){return c>=0.8?"hi":(c>=0.5?"mid":"lo");}
 function confLabel(c){return c>=0.8?"high confidence":(c>=0.5?"review recommended":"LOW confidence — review carefully");}
@@ -1957,7 +2005,7 @@ function renderJudge(sp){
 }
 // Kick off (or re-run) the audit on the server, then reflect PENDING + start polling.
 async function startJudge(tok){
-  const [ok]=await jpost("/specs/"+tok+"/verify-concise",providerBody());
+  const [ok]=await jpost("/specs/"+tok+"/verify-concise",await providerBody());
   if(!ok)return;
   cmpState.sp=cmpState.sp||{};cmpState.sp.conciseVerifyStatus="PENDING";cmpState.sp.token=tok;
   renderJudge(cmpState.sp);
@@ -2738,8 +2786,18 @@ function applyAdvancedTabs(){
   const active=document.querySelector(".rtab.active");
   if(active&&((active.dataset.view==="messages"&&!showMsg)||(active.dataset.view==="history"&&!showHist)))showView("progress");
 }
-// Preferred default model per provider when the user hasn't picked one yet.
-const BEDROCK_DEFAULT_MODEL="global.anthropic.claude-opus-4-8";
+// Preferred Bedrock defaults when the user hasn't picked one yet, in order (first
+// family present in the account wins). Build: Opus 5.5 (fewest repair loops on DTL
+// code). Concise spec: Sonnet 5.5 (faithful long-document extraction at half the price).
+const BEDROCK_BUILD_PREFS=["claude-opus-5-5","claude-opus-4-8"];
+const BEDROCK_CONCISE_PREFS=["claude-sonnet-5-5","claude-sonnet-4-6"];
+// First id matching a preferred family, favouring the global cross-region inference
+// profile (highest availability), then any other profile/id for that family.
+function pickBedrockDefault(ids,prefs){
+  for(const f of prefs){const c=(ids||[]).filter(id=>id.toLowerCase().indexOf(f)>=0);
+    if(c.length)return c.find(id=>/^global\./i.test(id))||c[0];}
+  return "";
+}
 const provider=()=>$("#provider").value;
 const isOpenAI=()=>provider()==="openai";
 const isBedrock=()=>provider()==="bedrock";
@@ -2819,7 +2877,7 @@ function setModels(ids){const m=$("#model");m.innerHTML="";(ids||[]).forEach(id=
   const want=localStorage.getItem(LS_MODEL);
   // Prefer the remembered model; else the Bedrock default if present; else the first.
   if(want&&(ids||[]).indexOf(want)>=0)m.value=want;
-  else if(isBedrock()&&(ids||[]).indexOf(BEDROCK_DEFAULT_MODEL)>=0)m.value=BEDROCK_DEFAULT_MODEL;
+  else if(isBedrock()&&pickBedrockDefault(ids,BEDROCK_BUILD_PREFS))m.value=pickBedrockDefault(ids,BEDROCK_BUILD_PREFS);
   else if((ids||[]).length)m.value=ids[0];
   syncQuickModel();
   // Concise-spec model: remembered choice if still available; else auto-pick a
@@ -2828,7 +2886,7 @@ function setModels(ids){const m=$("#model");m.innerHTML="";(ids||[]).forEach(id=
   if(cm){cm.innerHTML="";(ids||[]).forEach(id=>{const o=document.createElement("option");o.value=id;o.textContent=id;cm.appendChild(o)});
     const cwant=localStorage.getItem(LS_CONCISEMODEL);
     if(cwant&&(ids||[]).indexOf(cwant)>=0)cm.value=cwant;
-    else{const auto=pickConciseDefault(ids);cm.value=auto||m.value;}
+    else{const auto=isBedrock()?pickBedrockDefault(ids,BEDROCK_CONCISE_PREFS):pickConciseDefault(ids);cm.value=auto||m.value;}
   }}
 $("#model").addEventListener("change",()=>{localStorage.setItem(LS_MODEL,$("#model").value);syncQuickModel();});
 $("#concisemodel").addEventListener("change",()=>{localStorage.setItem(LS_CONCISEMODEL,$("#concisemodel").value);flashSaved();});
@@ -3356,7 +3414,54 @@ function showScreen(s){
 let histNav=false;
 function pushNav(state){
   if(histNav)return;                       // restoring from popstate — don't re-push
-  try{history.pushState(state,"");}catch(e){}
+  try{
+    const hash=stateToHash(state);
+    const url=window.location.pathname+window.location.search+(hash?"#"+hash:"");
+    history.pushState(state,"",url);
+  }catch(e){console.error("pushNav failed",e);}
+}
+// Replace current history entry without adding a new one (for tab switches).
+function replaceNav(state){
+  try{
+    const hash=stateToHash(state);
+    const url=window.location.pathname+window.location.search+(hash?"#"+hash:"");
+    history.replaceState(state,"",url);
+  }catch(e){console.error("replaceNav failed",e);}
+}
+
+// Parse state from URL hash (e.g., #project=abc123&tab=settings or #job=xyz789&project=abc123)
+function parseHashState(){
+  const hash=window.location.hash.slice(1); // Remove #
+  if(!hash)return null;
+  const params=new URLSearchParams(hash);
+  const state={};
+  if(params.has("project")){
+    state.view="project";
+    state.project=params.get("project");
+    if(params.has("tab"))state.tab=params.get("tab");
+  }
+  if(params.has("job")){
+    state.view="job";
+    state.jobId=params.get("job");
+    state.type=params.get("type")||"";
+    if(params.has("project"))state.project=params.get("project");
+  }
+  return Object.keys(state).length>0?state:null;
+}
+
+// Build a URL hash string from a state object (used for shareable URLs).
+function stateToHash(state){
+  if(!state)return "";
+  const params=new URLSearchParams();
+  if(state.view==="project"&&state.project){
+    params.set("project",state.project);
+    if(state.tab&&state.tab!=="overview")params.set("tab",state.tab);
+  }else if(state.view==="job"&&state.jobId){
+    params.set("job",state.jobId);
+    if(state.type)params.set("type",state.type);
+    if(state.project)params.set("project",state.project);
+  }
+  return params.toString();
 }
 window.addEventListener("popstate",(e)=>{
   const st=e.state||{view:"projects"};
@@ -3428,9 +3533,11 @@ $("#np-create").onclick=async()=>{
 // ---- project detail ----
 $("#backtoprojects").onclick=()=>{pushNav({view:"projects"});currentProject=null;showScreen("projects");};
 async function openProject(tok){
-  pushNav({view:"project",project:tok});
+  const state=history.state||{};
+  const tab=state.tab||"overview";
+  pushNav({view:"project",project:tok,tab:tab});
   currentProject=tok;showScreen("project");
-  showProjTab("overview");
+  showProjTab(tab);
   await renderProject();
   // Poll while generating so child-build progress + REVIEW transition show live.
   if(projPollTimer)clearInterval(projPollTimer);
@@ -3672,10 +3779,9 @@ $("#pv-refreshtypes").onclick=loadProjectTypes;
 $("#pv-generate").onclick=async()=>{
   const sel=[...selectedTypes];
   if(!sel.length){$("#pv-generr").textContent="Select at least one message type.";$("#pv-generr").className="err";return;}
-  if(needsKey()&&!$("#apikey").value.trim()){$("#pv-generr").textContent="Enter your API key in Settings (or switch Provider to Mock).";$("#pv-generr").className="err";return;}
   $("#pv-generr").className="err hidden";
-  const body={types:sel,apiKey:needsKey()?$("#apikey").value.trim():""};
-  if(isBedrock())body.region=$("#bedrockregion").value.trim()||"us-east-1";
+  // API key and settings are now stored per-project, no need to pass them here
+  const body={types:sel};
   $("#pv-generate").disabled=true;$("#pv-generate").innerHTML='<span class=spinner></span> Generating '+sel.length+' DTL'+(sel.length===1?"":"s")+'…';
   const [ok,j]=await jpost("/projects/"+currentProject+"/generate",body);
   $("#pv-generate").disabled=false;$("#pv-generate").innerHTML="";{const w=el("span","iwrap");w.appendChild(licon("wand-sparkles"));w.appendChild(document.createTextNode(" Generate selected DTLs"));$("#pv-generate").appendChild(w);icons();}
@@ -3728,8 +3834,145 @@ function showProjTab(t){
   document.querySelectorAll("#pv-tabs .pvtab").forEach(b=>b.classList.toggle("active",b.dataset.ptab===t));
   $("#pv-pane-overview").classList.toggle("hidden",t!=="overview");
   $("#pv-pane-costs").classList.toggle("hidden",t!=="costs");
+  $("#pv-pane-settings").classList.toggle("hidden",t!=="settings");
+  // Load project settings when switching to settings tab
+  if(t==="settings" && currentProject){loadProjectSettings(currentProject);}
+  // Update URL to include tab (replace so tab changes don't create history entries)
+  if(currentProject && !histNav){
+    replaceNav({view:"project",project:currentProject,tab:t});
+  }
 }
 document.querySelectorAll("#pv-tabs .pvtab").forEach(b=>b.onclick=()=>showProjTab(b.dataset.ptab));
+
+// ---- project settings ----
+let pvModelReqSeq=0; // sequence counter for model refresh requests
+
+async function loadProjectSettings(projectToken){
+  const [ok,p]=await jget("/projects/"+projectToken+"/settings");
+  if(!ok||!p){console.error("Failed to load project settings");return;}
+  // Populate form fields with project settings
+  $("#pv-provider").value=p.provider||"openai";
+  $("#pv-apikey").value=""; // Never pre-fill API key for security
+  $("#pv-bedrockregion").value=p.region||"us-east-1";
+  $("#pv-maxattempts").value=p.maxAttempts||5;
+  $("#pv-costcap").value=p.costCap||0;
+  pvSyncProvider();
+  // If we have saved model values, populate them
+  if(p.model){
+    pvSetModelEnabled(true,"model id");
+    const m=$("#pv-model");
+    m.innerHTML="";
+    const opt=document.createElement("option");
+    opt.value=p.model;
+    opt.textContent=p.model;
+    m.appendChild(opt);
+    m.value=p.model;
+  }
+  if(p.conciseModel){
+    const cm=$("#pv-concisemodel");
+    cm.innerHTML="";
+    const opt=document.createElement("option");
+    opt.value=p.conciseModel;
+    opt.textContent=p.conciseModel;
+    cm.appendChild(opt);
+    cm.value=p.conciseModel;
+  }
+  // If API key exists (indicated by hasApiKey flag), show prompt to enter it
+  if(p.hasApiKey){
+    $("#pv-modelhint").textContent="API key is configured. Enter it to refresh available models, or keep existing model selection.";
+  }else{
+    $("#pv-modelhint").textContent="Enter your "+(p.provider==="bedrock"?"AWS Bedrock":"OpenAI")+" API key and refresh models.";
+  }
+}
+
+function pvSyncProvider(){
+  const prov=$("#pv-provider").value;const isBR=(prov==="bedrock");const needsK=(prov!=="mock");
+  $("#pv-bedrockregionbox").classList.toggle("hidden",!isBR);
+  $("#pv-keylabel").innerHTML=(isBR?"AWS Bedrock API key":"OpenAI API key")+" <span class=\"opt\">(stored server-side for this project)</span>";
+  $("#pv-apikey").placeholder=isBR?"Bedrock API key (bearer token)":"sk-...";
+  if(!needsK){
+    pvSetModelEnabled(false,"Enter a valid API key");
+    $("#pv-modelhint").textContent="Mock provider uses the bundled scripted model — no API key or model needed.";
+  }else{
+    const key=$("#pv-apikey").value.trim();
+    if(!key){
+      pvSetModelEnabled(false,"Enter a valid API key");
+      $("#pv-modelhint").textContent="Enter your "+(isBR?"AWS Bedrock":"OpenAI")+" API key — models load once it's valid.";
+    }
+  }
+}
+
+function pvSetModelEnabled(on,placeholder){
+  const m=$("#pv-model"),cm=$("#pv-concisemodel");
+  m.disabled=!on;if(cm)cm.disabled=!on;
+  if(!on){m.innerHTML="<option value=\"\">"+(placeholder||"Enter a valid API key")+"</option>";if(cm)cm.innerHTML="<option value=\"\">"+(placeholder||"Enter a valid API key")+"</option>";}
+}
+
+function pvSetModels(list){
+  const m=$("#pv-model"),cm=$("#pv-concisemodel");
+  m.innerHTML="";list.forEach(mid=>{const opt=document.createElement("option");opt.value=mid;opt.textContent=mid;m.appendChild(opt);});
+  if(cm){cm.innerHTML="";list.forEach(mid=>{const opt=document.createElement("option");opt.value=mid;opt.textContent=mid;cm.appendChild(opt);});}
+  if(list.length){m.selectedIndex=0;if(cm)cm.selectedIndex=Math.min(1,list.length-1);}
+}
+
+async function pvRefreshModels(){
+  const prov=$("#pv-provider").value;
+  if(prov==="mock")return;
+  const key=$("#pv-apikey").value.trim();
+  if(!key){pvSetModelEnabled(false,"Enter a valid API key");$("#pv-modelhint").textContent="Enter your "+(prov==="bedrock"?"AWS Bedrock":"OpenAI")+" API key — models load once it's valid.";return;}
+  const seq=++pvModelReqSeq;
+  if(prov==="bedrock"){
+    $("#pv-modelhint").innerHTML="<span class=spinner></span> Validating key &amp; loading models…";
+    const [ok,j]=await jpost("/bedrock-models",{apiKey:key,region:($("#pv-bedrockregion").value.trim()||"us-east-1")});
+    if(seq!==pvModelReqSeq)return;
+    if(!ok||!j.models||!j.models.length){pvSetModelEnabled(false,"Enter a valid API key");$("#pv-modelhint").textContent="Invalid key or no models available"+(j&&j.error?(": "+j.error):"")+".";return;}
+    pvSetModelEnabled(true,"model id");pvSetModels(j.models);$("#pv-modelhint").textContent=(j.models?j.models.length:0)+" chat models available.";return;
+  }
+  $("#pv-modelhint").innerHTML="<span class=spinner></span> Validating key &amp; loading models…";
+  const [ok,j]=await jpost("/models",{apiKey:key});
+  if(seq!==pvModelReqSeq)return;
+  if(!ok||!j.models||!j.models.length){pvSetModelEnabled(false,"Enter a valid API key");$("#pv-modelhint").textContent="Invalid key or no models available"+(j&&j.error?(": "+j.error):"")+".";return;}
+  pvSetModelEnabled(true,"model id");pvSetModels(j.models);$("#pv-modelhint").textContent=(j.models?j.models.length:0)+" chat models available.";
+}
+
+async function pvSaveSettings(){
+  if(!currentProject){showErr("No active project");return;}
+  const model=$("#pv-model").value.trim();
+  const conciseModel=$("#pv-concisemodel").value.trim();
+  const apiKey=$("#pv-apikey").value.trim();
+
+  // Validate required fields
+  const prov=$("#pv-provider").value;
+  if(prov!=="mock" && !model){
+    $("#pv-setterr").textContent="Please select a build model";
+    $("#pv-setterr").classList.remove("hidden");
+    return;
+  }
+
+  const body={
+    provider:prov,
+    model:model,
+    conciseModel:conciseModel||model, // Default to build model if not specified
+    apiKey:apiKey,
+    region:$("#pv-bedrockregion").value.trim()||"us-east-1",
+    maxAttempts:+$("#pv-maxattempts").value||5,
+    costCap:+$("#pv-costcap").value||0
+  };
+  const [ok,res]=await jpost("/projects/"+currentProject+"/settings",body);
+  if(!ok){$("#pv-setterr").textContent=res.error||"Failed to save settings";$("#pv-setterr").classList.remove("hidden");return;}
+  $("#pv-setterr").classList.add("hidden");
+  // Clear API key field after save for security
+  $("#pv-apikey").value="";
+  // Show saved indicator
+  $("#pv-setsaved").classList.remove("hidden");
+  setTimeout(()=>$("#pv-setsaved").classList.add("hidden"),2000);
+}
+
+// Wire up project settings event handlers
+$("#pv-provider").onchange=()=>pvSyncProvider();
+$("#pv-apikey").oninput=()=>pvSyncProvider();
+$("#pv-refreshmodels").onclick=()=>pvRefreshModels();
+$("#pv-savesettings").onclick=()=>pvSaveSettings();
 
 // ---- cost transparency ----
 const CATLABEL={"spec.generate":"Generation","spec.verify":"Review (audit)","dtl.plan":"Planning","dtl.generate":"Generation","dtl.judge":"Judging"};
@@ -3870,9 +4113,30 @@ $("#pv-package").onclick=async()=>{
   // PROJECT-FIRST: the app opens on the Projects screen. The single-DTL workspace is
   // now a drill-down reached by opening a transformation inside a project.
   loadVersions();
-  // Seed the initial history entry so the first Back has somewhere to land.
-  try{history.replaceState({view:"projects"},"");}catch(e){}
-  showScreen("projects");
+
+  // Restore state from URL hash or history state, or seed initial history entry.
+  // Priority: URL hash (survives page refresh) > history.state > default (projects view).
+  const initialState=parseHashState()||history.state;
+  if(initialState&&(initialState.view==="project"||initialState.view==="job")){
+    // Seed history with restored state (so Back has a landing).
+    try{
+      const hash=stateToHash(initialState);
+      const url=window.location.pathname+window.location.search+(hash?"#"+hash:"");
+      history.replaceState(initialState,"",url);
+    }catch(e){}
+    // Set histNav=true so open* functions don't double-push.
+    histNav=true;
+    try{
+      if(initialState.view==="job"&&initialState.jobId){openJobFromProject(initialState.jobId,initialState.type||"");}
+      else if(initialState.view==="project"&&initialState.project){openProject(initialState.project);}
+      else{currentProject=null;showScreen("projects");}
+    }finally{histNav=false;}
+  }else{
+    // Default to projects view
+    try{history.replaceState({view:"projects"},"",window.location.pathname+window.location.search);}catch(e){}
+    showScreen("projects");
+  }
+
   // Lucide is deferred; render icons once it's available (and once now in case it's cached).
   icons();window.addEventListener("load",icons);
 })();

@@ -157,7 +157,9 @@ ClassMethod Generate(pHost As Ens.Host, pToken As %String, pProvider As %String,
 		// giving up. ..#SPECMAXTOKENS is the cap that almost never truncates real specs.
 		set tGenLabel = "Generation of specification " _ $select(tDoc.FileName'="":tDoc.FileName, 1:pToken)
 		set tReply = ..CallLLM(pHost, pProvider, pModel, pApiKey, tPrefix, tSys, tUser, pRegion, ..#SPECMAXTOKENS, .tErr, .tFinish, "spec.generate", pToken, tGenLabel)
-		if (tReply '= ""), (tFinish = "length") {
+		// Retry even on an EMPTY reply: a thinking model can exhaust the budget before
+		// writing any text (no content + finish "length").
+		if tFinish = "length" {
 			set tReply = ..CallLLM(pHost, pProvider, pModel, pApiKey, tPrefix, tSys, tUser, pRegion, ..#SPECMAXTOKENSHI, .tErr, .tFinish, "spec.generate", pToken, tGenLabel)
 		}
 		if tReply = "" {
